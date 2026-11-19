@@ -145,6 +145,15 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Nhân vật mới:**
   - Thêm một mục vào `CHARACTERS` trong `shared/characters.js`, gồm `look` (ngoại hình) và 5 chiêu theo combo `J`, `K`, `JK`, `KL`, `JKL`.
   - Kiểu chiêu (`type`) có sẵn: `melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`. Hiệu ứng chọn qua `fx.kind`.
+  - `fx.kind` có sẵn theo từng kiểu chiêu:
+    - `projectile`: `shuriken`, `crescent`, `iceShard`, `thorn`, `bolt`, `rock`, `bigBomb`; kiểu khác thì hiện quả cầu năng lượng.
+    - `aoe`: `tornado`, `bladeStorm`, `flameRise`, `frostNova`, `bloom`, `quake`, `thunderRing`, `shadowMist`.
+    - `line`: `firePillar`, `iceSpike`, `vineSpike`.
+    - `rain`: `icicleRain`, `lightning`, `meteor`, `petalRain`.
+  - Kiểu mượn hình của kiểu khác được khai báo ở `FX_ALIAS` trong `effects.js`. Màu chỉnh qua `fx.crystal`/`fx.crystalGlow` (vòng tinh thể), `fx.spike`/`fx.spikeGlow` (chuỗi gai); `fx.noCircle` tắt vòng phép.
+  - Chiêu `aoe` có thể có `healSelf` để hồi máu cho người ra chiêu.
+  - Thêm nhiều tia sét hay đèn chớp cùng lúc rất dễ trắng xoá màn hình: dùng `fx.bolt(..., light = false)` cho các tia phụ.
+  - Chạy lại các test chiêu: mỗi chiêu phải trúng được đối thủ đứng đúng tầm.
   - Kiểu chiêu mới cần sửa cả 3 nơi: mô phỏng ở `server/room.js`, hiệu ứng ở `client/js/effects.js`, thời gian tồn tại ở `skillLifetime`.
 - **Súng mới:** thêm vào `WEAPONS` và `BUY_MENU` trong `shared/weapons.js`. Mô hình súng thêm trong `client/js/shooter/guns.js`.
 - **Map đối kháng mới:**

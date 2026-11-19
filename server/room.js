@@ -506,6 +506,7 @@ export class Room {
           let cx = px, cy = py, cz = pz;
           if (s.at === 'front') { cx = px + hx * s.offset; cz = pz + hz * s.offset; cy = 0; }
           if (e.st) { cx = e.st.c[0]; cz = e.st.c[2]; }
+          if (n === 0 && s.healSelf && src && !src.dead) src.hp = Math.min(GAME.maxHp, src.hp + s.healSelf);
           for (const q of this.targets(e)) {
             const d = Math.hypot(q.x - cx, q.z - cz);
             if (d < s.radius + BODY_R && q.y - cy > -1.5 && q.y - cy < 5) {

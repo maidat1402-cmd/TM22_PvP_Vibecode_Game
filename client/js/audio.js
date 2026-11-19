@@ -108,7 +108,9 @@ export function sfx(name, dist = 0) {
 export function skillSound(skill) {
   const k = skill.fx.kind;
   if (skill.type === 'melee') return skill.fx.kind === 'impact' ? 'punch' : 'swing';
-  if (k === 'beam') return 'beam';
+  if (k === 'beam' || /bolt|lightning|thunder/i.test(k)) return 'beam';
+  if (/rock|quake|meteor/i.test(k)) return k === 'rock' ? 'throw' : 'blast';
+  if (/thorn|vine|bloom|petal|mist/i.test(k)) return 'wind';
   if (/fire|flame|phoenix|crescent/i.test(k)) return 'fire';
   if (/ice|frost|icicle/i.test(k)) return 'ice';
   if (/tornado|blade|shuriken/i.test(k)) return k === 'shuriken' ? 'throw' : 'wind';

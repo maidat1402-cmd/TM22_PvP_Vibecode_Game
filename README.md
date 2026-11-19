@@ -170,12 +170,16 @@ Các nhân vật là **nhân vật nguyên bản** theo các hình mẫu quen th
 | **Raiga** — Khí Công Quyền Vương | Võ sĩ tóc vàng dựng đứng | Khí đạn liên thanh, Chưởng Phong Ba (tia năng lượng), Tinh Cầu Hủy Diệt |
 | **Homura** — Hỏa Kiếm Cơ | Nữ kiếm sĩ lửa | Sóng lửa trăng khuyết, Thăng Long Hỏa, Hỏa Trụ Liên Hoàn, Phượng Hoàng Giáng Thế |
 | **Yuki** — Băng Tuyết Pháp Sư | Pháp sư băng | Băng tiễn làm chậm, gai băng, kết giới đóng băng, mưa băng |
+| **Shiden** — Lôi Thương Kỵ Sĩ | Kỵ sĩ cầm thương sét, tầm đánh xa | Lôi tiễn xuyên thấu, lướt sét, Lôi Võng Trận (sét đánh quanh mình, choáng), Thiên Lôi Giáng (mưa sét) |
+| **Midori** — Mộc Linh Sư | Pháp sư cây cỏ, khống chế + tự hồi máu | Gai độc làm chậm, rễ cây trói (choáng), hoa nở hồi 30 máu, mưa cánh hoa |
+| **Gantetsu** — Thiết Quyền Hộ Vệ | Võ sĩ đá to con, chậm nhưng đấm nặng | Ném đá tảng (nổ), húc vai, Địa Chấn Quyền (choáng diện rộng), mưa thiên thạch |
+| **Kage** — Ảnh Sát Thủ | Sát thủ bóng tối, chạy nhanh nhất | Phi đao đôi, lướt xa 12 m, màn sương làm chậm, vòng xoáy hắc đao lái theo tâm |
 
 ### Thêm / sửa nhân vật
 
 Mọi thứ nằm trong [shared/characters.js](shared/characters.js):
 
-- `look`: màu da, tóc, kiểu tóc (`spiky`, `superSpiky`, `ponytail`, `long`), trang phục, phụ kiện (`scarf`, `belt`, `sash`, `hat`), vũ khí (`kunai`, `katana`, `staff`, `none`).
+- `look`: màu da, tóc, kiểu tóc (`spiky`, `superSpiky`, `ponytail`, `long`, `short`, `braids`, `mohawk`, `hooded`), trang phục, phụ kiện (`scarf`, `belt`, `sash`, `hat`, `pauldrons`, `flowerCrown`, `mask`), vũ khí (`kunai`, `katana`, `staff`, `spear`, `gauntlet`, `branch`, `dagger`, `none`), `scale` (to/nhỏ, chỉ đổi hình).
 - `skills`: mỗi chiêu có `combo`, `mana`, `cd` (hồi chiêu), `dmg`, `type` (`melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`) và `fx` (màu + kiểu hiệu ứng).
 
 Thông số chung (máu, mana, tốc độ hồi, tốc độ chạy, đấu trường...) ở [shared/config.js](shared/config.js).

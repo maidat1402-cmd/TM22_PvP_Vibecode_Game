@@ -100,6 +100,46 @@ function buildHair(look, head) {
       spike(-0.4, -0.05, 0.15, 0.1, -0.25, 0.1, 0.5).rotation.x = Math.PI;
       break;
     }
+    case 'short':
+      // tóc ngắn gọn: vài chỏm nhỏ phía sau + mái lệch
+      for (let i = 0; i < 5; i++) {
+        const a = Math.PI * 0.6 + (i / 4) * Math.PI * 0.8;
+        spike(Math.sin(a) * 0.36, 0.18, Math.cos(a) * 0.36 - 0.05, Math.cos(a) * 1.2, -Math.sin(a) * 1.2, 0.11, 0.3);
+      }
+      spike(0.18, 0.4, 0.3, 0.9, -0.5, 0.12, 0.42);
+      break;
+    case 'braids':
+      // hai bím tóc dài hai bên
+      for (const sx of [-1, 1]) {
+        for (let i = 0; i < 5; i++) {
+          const b = mesh(G.sphere(0.1 - i * 0.008), hm, 0.015);
+          b.position.set(sx * (0.42 + i * 0.02), -0.12 - i * 0.16, -0.05);
+          head.add(b);
+        }
+        const tie = mesh(G.sphere(0.06), toon(look.accColor || 0xffffff), 0.01);
+        tie.position.set(sx * 0.5, -0.86, -0.05);
+        head.add(tie);
+      }
+      break;
+    case 'mohawk':
+      // dải tóc dựng giữa đỉnh đầu từ trước ra sau
+      for (let i = 0; i < 6; i++) {
+        const z = 0.3 - i * 0.14;
+        spike(0, 0.42 + Math.sin((i / 5) * Math.PI) * 0.08, z, -0.2 - i * 0.18, 0, 0.11, 0.48);
+      }
+      break;
+    case 'hooded': {
+      // mũ trùm đầu có chóp nhọn phía sau
+      const hood = mesh(new THREE.SphereGeometry(0.6, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.62), toon(look.outfit), 0.03);
+      hood.rotation.x = -0.45;
+      hood.position.set(0, 0.02, -0.06);
+      head.add(hood);
+      const tip = mesh(G.cone(0.2, 0.5, 8), toon(look.outfit), 0.02);
+      tip.position.set(0, 0.25, -0.5);
+      tip.rotation.x = -2.2;
+      head.add(tip);
+      break;
+    }
     case 'long': {
       const back = mesh(G.sphere(0.5), hm, 0.03);
       back.scale.set(1.02, 1.35, 0.6);
@@ -147,6 +187,40 @@ function buildAccessory(look, rig) {
         knot.rotation.z = 0.3;
         rig.body.add(knot);
       }
+      break;
+    }
+    case 'pauldrons': {
+      // giáp vai
+      for (const sx of [-1, 1]) {
+        const p = mesh(G.sphere(0.17, 12, 8), am, 0.02);
+        p.scale.set(1.2, 0.7, 1.1);
+        p.position.set(sx * 0.31, 0.92, 0);
+        rig.body.add(p);
+      }
+      const chest = mesh(G.box(0.34, 0.2, 0.06), am, 0.015);
+      chest.position.set(0, 0.72, 0.21);
+      rig.body.add(chest);
+      break;
+    }
+    case 'flowerCrown': {
+      // vòng hoa trên đầu
+      const ring = mesh(G.torus(0.42, 0.05), toon(0x52b788), 0.01);
+      ring.rotation.x = Math.PI / 2 - 0.2;
+      ring.position.set(0, 0.28, 0);
+      rig.head.add(ring);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const fl = mesh(G.sphere(0.075, 8, 6), toon(i % 2 ? am.color.getHex() : 0xfff3b0), 0.01);
+        fl.position.set(Math.sin(a) * 0.42, 0.28 + Math.cos(a) * 0.08, Math.cos(a) * 0.42);
+        rig.head.add(fl);
+      }
+      break;
+    }
+    case 'mask': {
+      // khăn che nửa mặt dưới
+      const m = mesh(new THREE.SphereGeometry(0.505, 20, 10, Math.PI * 0.05, Math.PI * 0.9, Math.PI * 0.62, Math.PI * 0.22), am, 0);
+      m.position.set(0, 0, 0.02);
+      rig.head.add(m);
       break;
     }
     case 'hat': {
@@ -202,6 +276,60 @@ function buildWeapon(look, hand) {
       w.add(blade, guard, grip);
       w.rotation.x = Math.PI / 2 + 0.2;
       w.userData.tip = new THREE.Vector3(0, 1.1, 0);
+      break;
+    }
+    case 'spear': {
+      // thương dài: cán, mũi thương phát sáng, tua vàng
+      const rod = mesh(G.cyl(0.03, 0.03, 1.9), toon(0x3d3b5a), 0.012);
+      rod.position.y = 0.45;
+      const tip = new THREE.Mesh(G.cone(0.08, 0.38, 4), new THREE.MeshBasicMaterial({ color: 0xe0d4ff }));
+      tip.position.y = 1.58;
+      const guard = mesh(G.cyl(0.07, 0.07, 0.05, 8), toon(0xffd23f), 0.01);
+      guard.position.y = 1.38;
+      const tassel = mesh(G.cone(0.06, 0.22, 6), toon(0xffd23f), 0.01);
+      tassel.position.y = 1.27; tassel.rotation.x = Math.PI;
+      w.add(rod, tip, guard, tassel);
+      w.rotation.x = Math.PI / 2 - 0.1;
+      w.userData.tip = new THREE.Vector3(0, 1.7, 0);
+      break;
+    }
+    case 'gauntlet': {
+      // găng tay sắt to bao nắm đấm
+      const fist = mesh(G.box(0.27, 0.25, 0.27), toon(0x8d99ae), 0.02);
+      const knuckle = mesh(G.box(0.29, 0.08, 0.1), toon(0xbc6c25), 0.01);
+      knuckle.position.set(0, -0.06, 0.12);
+      const cuff = mesh(G.cyl(0.13, 0.15, 0.12, 10), toon(0x5c677d), 0.01);
+      cuff.position.y = 0.16;
+      w.add(fist, knuckle, cuff);
+      break;
+    }
+    case 'branch': {
+      // gậy cành cây có lá và hạt mầm phát sáng
+      const rod = mesh(G.cyl(0.035, 0.045, 1.2), toon(0x7f5539), 0.012);
+      rod.position.y = 0.25;
+      rod.rotation.z = 0.06;
+      const seed = new THREE.Mesh(G.sphere(0.11, 10, 8), new THREE.MeshBasicMaterial({ color: 0xc7f9cc }));
+      seed.position.y = 0.95;
+      w.add(rod, seed);
+      for (let i = 0; i < 4; i++) {
+        const leaf = mesh(G.sphere(0.09, 6, 4), toon(0x52b788), 0.01);
+        leaf.scale.set(0.5, 0.2, 1);
+        const a = i * Math.PI / 2;
+        leaf.position.set(Math.cos(a) * 0.12, 0.85 + i * 0.03, Math.sin(a) * 0.12);
+        leaf.rotation.y = -a;
+        w.add(leaf);
+      }
+      w.userData.gem = seed;
+      break;
+    }
+    case 'dagger': {
+      // đoản đao cầm ngược
+      const blade = mesh(G.box(0.04, 0.5, 0.08), toon(0x9d8cc2, { params: { emissive: 0x2a1040 } }), 0.01);
+      blade.position.y = -0.3;
+      const grip = mesh(G.cyl(0.03, 0.03, 0.15), toon(0x1b1b2f), 0.01);
+      grip.position.y = -0.02;
+      w.add(blade, grip);
+      w.rotation.x = Math.PI / 2;
       break;
     }
     case 'staff': {
@@ -318,6 +446,7 @@ export function buildChibi(look) {
 
   buildAccessory(look, rig);
   rig.weapon = buildWeapon(look, rig.handR);
+  if (look.weapon === 'gauntlet') buildWeapon(look, rig.handL);   // găng cả hai tay
 
   // Bóng tròn dưới chân (rẻ hơn shadow map rất nhiều)
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20),
@@ -331,7 +460,7 @@ export function buildChibi(look) {
   root.traverse(o => { if (o.isMesh && o.material.isMeshToonMaterial) flashables.push(o); });
   rig.flashables = flashables;
 
-  root.scale.setScalar(1.0);
+  root.scale.setScalar(look.scale || 1);   // nhân vật to con trông lớn hơn (không đổi va chạm)
   return new ChibiAnimator(rig);
 }
 
