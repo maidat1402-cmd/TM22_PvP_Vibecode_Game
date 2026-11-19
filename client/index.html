@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#120f24">
+  <title>Chibi Clash</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <script type="importmap">
+  { "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ================= MENU ================= -->
+  <div id="menu">
+    <header class="logo">
+      <h1>CHIBI <span>CLASH</span></h1>
+      <p>Đấu trường chibi 3D — tạo phòng, rủ bạn bè, tung chiêu!</p>
+    </header>
+    <div class="menu-grid">
+      <section class="panel" id="charPanel">
+        <h2>1. Chọn nhân vật</h2>
+        <label class="field">Tên của bạn
+          <input id="nameInput" maxlength="16" placeholder="Nhập tên...">
+        </label>
+        <div class="char-wrap">
+          <div id="charList" class="char-list"></div>
+          <div class="preview-box">
+            <canvas id="preview"></canvas>
+            <div id="charInfo"></div>
+          </div>
+        </div>
+        <div id="skillList" class="skill-list"></div>
+      </section>
+
+      <section class="panel" id="roomPanel">
+        <h2>2. Vào phòng</h2>
+        <div class="modes" id="modeSelect">
+          <label><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, chibi anime</small></span></label>
+          <label><input type="radio" name="mode" value="bomb"><span>💣 Đặt bom<small>Bắn súng 2 phe, theo vòng</small></span></label>
+          <label><input type="radio" name="mode" value="dm"><span>🔫 Sinh tử<small>Bắn súng tự do, hồi sinh nhanh</small></span></label>
+        </div>
+        <div class="map-pick" id="mapPick">
+          <span>Map bắn súng:</span>
+          <label><input type="radio" name="map" value="lantern" checked><span>🏮 Phố Lồng Đèn</span></label>
+          <label><input type="radio" name="map" value="temple"><span>❄ Đền Tuyết Sơn</span></label>
+        </div>
+        <div class="create">
+          <input id="roomNameInput" maxlength="24" placeholder="Tên phòng (tuỳ chọn)">
+          <button id="createBtn" class="btn primary">＋ Tạo phòng</button>
+        </div>
+        <div class="rooms-head">
+          <span>Phòng đang mở</span>
+          <button id="refreshBtn" class="btn small">⟳ Làm mới</button>
+        </div>
+        <div id="roomList" class="room-list"></div>
+        <div id="serverInfo" class="server-info"></div>
+        <div class="menu-foot">
+          <button id="settingsBtn" class="btn small">⚙ Cài đặt</button>
+          <button id="helpBtn" class="btn small">❔ Cách chơi</button>
+          <span id="connState" class="conn">Đang kết nối...</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud" hidden>
+    <div class="top-left">
+      <div id="roomName"></div>
+      <div class="meta"><span id="playerCount"></span> · <span id="ping"></span> · <span id="fps"></span></div>
+    </div>
+    <div id="killfeed"></div>
+    <div id="crosshair"></div>
+    <div id="hitmark"></div>
+    <div id="combo"></div>
+    <div id="stunned" hidden>❄ BỊ ĐÓNG BĂNG ❄</div>
+
+    <div class="status">
+      <div id="portrait"><span id="portraitName"></span></div>
+      <div class="bars">
+        <div class="bar hp"><div id="hpGhost"></div><div id="hpFill"></div><span id="hpText"></span></div>
+        <div class="bar mp"><div id="mpFill"></div><span id="mpText"></span></div>
+      </div>
+    </div>
+    <div id="skillbar"></div>
+
+    <div id="chat">
+      <div id="chatlog"></div>
+      <input id="chatInput" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden>
+    </div>
+    <div class="hint">Enter: chat · Tab: bảng điểm · F1: hướng dẫn · Esc: menu</div>
+  </div>
+  <div id="plates" hidden></div>
+  <div id="dmgnums" hidden></div>
+  <div id="hurt"></div>
+
+  <div id="scoreboard" class="modal-lite" hidden>
+    <h3>Bảng tỉ số</h3>
+    <table><thead><tr><th>#</th><th>Người chơi</th><th>Nhân vật</th><th>Hạ</th><th>Gục</th></tr></thead><tbody id="sbBody"></tbody></table>
+  </div>
+
+  <div id="death" hidden>
+    <div class="dbox"><h2>K.O!</h2><p id="deathBy"></p><p>Hồi sinh sau <b id="deathT"></b>s</p></div>
+  </div>
+
+  <div id="clickToPlay" hidden>🖱 Click vào màn hình để điều khiển</div>
+
+  <!-- ================= PAUSE ================= -->
+  <div id="pause" class="overlay" hidden>
+    <div class="panel pause-box">
+      <h2>Tạm dừng</h2>
+      <button id="resumeBtn" class="btn primary">▶ Tiếp tục</button>
+      <button id="changeCharBtn" class="btn">👤 Đổi nhân vật</button>
+      <button id="switchTeamBtn" class="btn" hidden>⇄ Đổi phe</button>
+      <button id="fullscreenBtn" class="btn">⛶ Toàn màn hình</button>
+      <button id="pauseSettingsBtn" class="btn">⚙ Cài đặt</button>
+      <button id="pauseHelpBtn" class="btn">❔ Cách chơi</button>
+      <button id="inviteBtn" class="btn">🔗 Copy link mời bạn</button>
+      <button id="leaveBtn" class="btn danger">⟵ Rời phòng</button>
+      <p class="muted">Lưu ý: trận đấu vẫn tiếp diễn khi bạn mở menu.</p>
+    </div>
+  </div>
+
+  <div id="charModal" class="overlay" hidden>
+    <div class="panel">
+      <h2>Đổi nhân vật</h2>
+      <div id="charModalList" class="char-list big"></div>
+      <button id="charModalClose" class="btn">Đóng</button>
+    </div>
+  </div>
+
+  <div id="settings" class="overlay" hidden>
+    <div class="panel settings-box">
+      <h2>Cài đặt</h2>
+      <label>Chất lượng đồ hoạ
+        <select id="setQuality">
+          <option value="low">Thấp (máy yếu)</option>
+          <option value="medium">Trung bình</option>
+          <option value="high">Cao</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" id="setBloom"> Hiệu ứng phát sáng (bloom)</label>
+      <label>Độ nhạy chuột <input type="range" id="setSens" min="0.3" max="2.5" step="0.1"></label>
+      <label class="row"><input type="checkbox" id="setInvert"> Đảo trục Y chuột</label>
+      <label>Rung màn hình <input type="range" id="setShake" min="0" max="1.5" step="0.1"></label>
+      <label>Âm lượng <input type="range" id="setVol" min="0" max="1" step="0.05"></label>
+      <label>Điều khiển cảm ứng
+        <select id="setTouch">
+          <option value="auto">Tự động (theo thiết bị)</option>
+          <option value="on">Luôn bật</option>
+          <option value="off">Tắt</option>
+        </select>
+      </label>
+      <button id="settingsClose" class="btn primary">Xong</button>
+    </div>
+  </div>
+
+  <div id="help" class="overlay" hidden>
+    <div class="panel help-box">
+      <h2>Cách chơi</h2>
+      <div class="help-cols">
+        <div>
+          <h3>Di chuyển</h3>
+          <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Di chuyển (theo hướng camera)</p>
+          <p><kbd>Chuột</kbd> Xoay camera · <kbd>Lăn</kbd> Zoom</p>
+          <p><kbd>Space</kbd> Nhảy · bấm lần 2 trên không: <b>nhảy đôi</b></p>
+          <p>Sau nhảy đôi, <b>giữ</b> <kbd>Space</kbd>: <b>bay</b> (tốn mana)</p>
+          <p><kbd>Shift</kbd> Lướt né (bất tử ngắn) · giữ <kbd>Shift</kbd>: chạy nhanh</p>
+        </div>
+        <div>
+          <h3>Chiến đấu</h3>
+          <p><kbd>J</kbd> / <kbd>Chuột trái</kbd> Đánh thường (miễn phí, hồi mana khi trúng)</p>
+          <p><kbd>K</kbd> / <kbd>Chuột phải</kbd> Chiêu 1</p>
+          <p><kbd>J</kbd>→<kbd>K</kbd> Chiêu 2 · <kbd>K</kbd>→<kbd>L</kbd> Chiêu 3</p>
+          <p><kbd>J</kbd>→<kbd>K</kbd>→<kbd>L</kbd> <b>Tuyệt kỹ</b> (bấm liên tiếp nhanh) — trong lúc tuyệt kỹ chạy, xoay chuột để lái chiêu theo vòng tâm</p>
+          <p><kbd>H</kbd> Hồi máu (tốn mana) · giữ <kbd>U</kbd> Vận khí: hồi mana rất nhanh nhưng đứng yên</p>
+          <p>Chiêu tự khóa mục tiêu gần tâm màn hình.</p>
+        </div>
+      </div>
+      <p class="muted">Máu tự hồi chậm khi không bị đánh 5 giây. Mana tự hồi nhanh hơn, đánh trúng đối thủ cũng được cộng mana.</p>
+      <h3>Chế độ bắn súng (Đặt bom / Sinh tử)</h3>
+      <div class="help-cols">
+        <div>
+          <p><kbd>Chuột trái</kbd> Bắn · <kbd>Chuột phải</kbd> Ngắm (súng bắn tỉa)</p>
+          <p><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> / <kbd>Q</kbd> / <kbd>Lăn</kbd> Đổi súng · <kbd>R</kbd> Nạp đạn</p>
+          <p><kbd>Ctrl</kbd>/<kbd>C</kbd> Ngồi (bắn chính xác hơn) · <kbd>Shift</kbd> Đi chậm, không có tiếng bước chân</p>
+          <p><kbd>B</kbd> Mua đồ · <kbd>E</kbd> (giữ) Cài / gỡ bom</p>
+          <p><kbd>4</kbd> Cầm lựu đạn (bấm tiếp để đổi loại: 💥 nổ, ⚡ choáng, ☁ khói), click để ném</p>
+          <p><kbd>F</kbd> Nhặt / đổi súng dưới đất · <kbd>G</kbd> Vứt súng đang cầm (cho đồng đội)</p>
+        </div>
+        <div>
+          <p><b>Đặt bom:</b> phe Công mang bom tới điểm A hoặc B và cài; phe Thủ ngăn chặn hoặc gỡ bom. Thắng 7 vòng là thắng trận, đổi phe sau 6 vòng.</p>
+          <p><b>Sinh tử:</b> ai cũng là đối thủ, hồi sinh sau 2 giây, súng miễn phí. Đạt 30 mạng hạ trước thì thắng.</p>
+          <p>Chạy hoặc nhảy khi bắn sẽ làm đạn tản rộng; bắn liên tục thì súng giật lên.</p>
+        </div>
+      </div>
+      <h3>Trên điện thoại</h3>
+      <p>Chạm nửa trái màn hình để hiện joystick di chuyển, vuốt nửa phải để xoay camera. Giữ nút Bắn và kéo để vừa bắn vừa ngắm. Nên xoay ngang máy và bật toàn màn hình (menu ☰).</p>
+      <button id="helpClose" class="btn primary">Đã hiểu</button>
+    </div>
+  </div>
+
+  <div id="disconnected" class="overlay" hidden>
+    <div class="panel pause-box"><h2>Mất kết nối tới server</h2><button class="btn primary" onclick="location.reload()">Kết nối lại</button></div>
+  </div>
+
+  <!-- ================= HUD BẮN SÚNG ================= -->
+  <div id="shud" hidden>
+    <div class="s-top">
+      <div class="s-score t"><b id="sScT">0</b><small id="sAliveT"></small></div>
+      <div class="s-timer"><div id="sTimer">0:00</div><div id="sPhase"></div></div>
+      <div class="s-score ct"><b id="sScCT">0</b><small id="sAliveCT"></small></div>
+    </div>
+    <div class="s-tl"><div id="sRoom"></div><div class="meta"><span id="sPing"></span> · <span id="sFps"></span></div><div id="sMoney"></div></div>
+    <div id="sFeed"></div>
+    <div id="sCross"><i></i><i></i><i></i><i></i><b></b></div>
+    <div id="sHitmark"></div>
+    <div id="sDmgDir"></div>
+    <div id="sCenter"></div>
+    <div id="sBanner" hidden></div>
+    <div id="sHint"></div>
+    <div id="sProg" hidden><div id="sProgFill"></div><span id="sProgText"></span></div>
+    <div id="sSpec" hidden></div>
+    <div class="s-bl">
+      <div class="s-hp"><span>✚</span><b id="sHp">100</b></div>
+      <div class="s-ar"><span>⛨</span><b id="sArmor">0</b></div>
+      <div id="sTeamTag"></div>
+    </div>
+    <div class="s-br">
+      <div id="sSlots"></div>
+      <div class="s-ammo"><b id="sMag">0</b><span>/</span><span id="sRes">0</span></div>
+      <div id="sWname"></div>
+    </div>
+    <div id="sChat"><div id="sChatlog"></div><input id="sChatInput" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden></div>
+    <div class="hint">B: mua · 1/2/3/Q: đổi súng · 4: lựu đạn · R: nạp · F: nhặt · G: vứt súng · E: cài/gỡ bom · Ctrl: ngồi · Shift: đi chậm · Tab: điểm</div>
+  </div>
+  <div id="sScope" hidden></div>
+  <div id="sFlash"></div>
+  <div id="sBuy" class="overlay" hidden>
+    <div class="panel buy-box">
+      <div class="buy-head"><h2 id="sBuyTitle">Mua đồ</h2><button id="sBuyClose" class="btn small">✕ Đóng (B)</button></div>
+      <div id="sBuyList"></div>
+      <p class="muted">Chỉ mua được trong khu xuất phát, ở đầu mỗi vòng. Súng giữ lại nếu bạn sống sót qua vòng.</p>
+    </div>
+  </div>
+  <div id="sScore" class="modal-lite" hidden><h3>Bảng tỉ số</h3><div id="sScoreBody"></div></div>
+
+  <!-- ================= CẢM ỨNG ================= -->
+  <div id="touch" hidden>
+    <div id="joyBase" hidden><div id="joyKnob"></div></div>
+    <div id="tbtns"></div>
+  </div>
+  <div id="rotateHint">📱↻ Xoay ngang điện thoại để chơi tốt hơn</div>
+
+  <div id="toast"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
