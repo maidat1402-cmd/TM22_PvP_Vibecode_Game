@@ -1,5 +1,7 @@
 # Chibi Clash ⚔
 
+> **TM22 PvP Vibecode Game** — Your go-to vibe-coded game for post-work relaxation.
+
 Game 3D nhân vật chibi, chơi nhiều người qua phòng (room), chạy trên trình duyệt máy tính **và điện thoại**. Server Node.js rất nhẹ.
 
 Có 3 chế độ, chọn khi tạo phòng:
