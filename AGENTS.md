@@ -143,7 +143,10 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 ## 8. Thêm nội dung
 
 - **Nhân vật mới:**
-  - Thêm một mục vào `CHARACTERS` trong `shared/characters.js`, gồm `look` (ngoại hình) và 5 chiêu theo combo `J`, `K`, `JK`, `KL`, `JKL`.
+  - Thêm một mục vào `CHARACTERS` trong `shared/characters.js`, gồm `hp` (máu tối đa), `speedMul`, `look` (ngoại hình) và 5 chiêu theo combo `J`, `K`, `JK`, `KL`, `JKL`.
+  - Máu luôn đọc qua `charMaxHp()` (server lưu ở `p.maxHp`, client ở `av.char.hp`). Không dùng `GAME.maxHp` cho người chơi đối kháng.
+  - **Cân bằng:** mục tiêu là chỉ số sức mạnh (sát thương/giây khi đánh bia đứng yên × máu) nằm trong khoảng ±15% so với trung bình. Nhân vật khống chế nhiều hoặc phải áp sát được thấp hơn một chút. Sau khi đổi số, đo lại sát thương thật ở server; đừng chỉ ước lượng trên giấy.
+  - Bảng chỉ số ở menu (`STAT_DEFS` trong `client/js/main.js`) tự tính từ dữ liệu chiêu, không cần nhập tay.
   - Kiểu chiêu (`type`) có sẵn: `melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`. Hiệu ứng chọn qua `fx.kind`.
   - `fx.kind` có sẵn theo từng kiểu chiêu:
     - `projectile`: `shuriken`, `crescent`, `iceShard`, `thorn`, `bolt`, `rock`, `bigBomb`; kiểu khác thì hiện quả cầu năng lượng.
@@ -152,6 +155,12 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
     - `rain`: `icicleRain`, `lightning`, `meteor`, `petalRain`.
   - Kiểu mượn hình của kiểu khác được khai báo ở `FX_ALIAS` trong `effects.js`. Màu chỉnh qua `fx.crystal`/`fx.crystalGlow` (vòng tinh thể), `fx.spike`/`fx.spikeGlow` (chuỗi gai); `fx.noCircle` tắt vòng phép.
   - Chiêu `aoe` có thể có `healSelf` để hồi máu cho người ra chiêu.
+  - Kiểu chiêu đặc biệt: `trap` (bẫy tồn tại lâu), `summon` (vật triệu hồi có `obstacle` chắn đạn và `aura` hồi máu), `leap` (nhảy tới điểm tâm ngắm, client gửi `a` trong gói `cast`; `walls` dựng cột đá), `blink` (dịch chuyển, tới dấu phi đao nếu có), `buff` (`dmgTaken`, `noKb`, `stealth`, `nextHitMul`). Đạn có thể có `teleport` (người ném dịch chuyển tới chỗ đạn dừng) và `mark` (để lại dấu bóng).
+  - Đòn kết chuỗi J: chiêu thứ 6 có `chain: true`, combo `JJJ`. Bảng combo bỏ qua nó; `doCast(0)` tự nâng thành đòn kết khi đã có 2 đòn J trong 1.2 s. Server kiểm tra lại bằng `p.jn`/`p.jLast`.
+  - Nội tại nhân vật: `passive` (hiện có `charge` của Shiden, xử lý trong `addCharge()` ở `server/room.js`). Đòn có `noMark` không cộng dấu. Đòn kết có thể có `marks` (cộng nhiều dấu) hoặc `backstab` (nhân sát thương khi đứng sau lưng mục tiêu, dựa vào `yaw`).
+  - Chướng ngại vật tạm thời: server giữ `room.dyn`, client giữ `fx.dynObs` (hiệu ứng tự thêm/bớt). Đạn ở cả hai phía phải truyền `dyn` vào `hitsObstacle()`.
+  - Dịch chuyển do server quyết định và gửi gói `tp`; trong 0.35 s sau đó server bỏ qua vị trí cũ client gửi lên (`p.tpUntil`).
+  - Gói tin mới: `tp`, `buff`, `mark`, `chain`, `kmark`; `cast` có thể kèm `tg` (điểm đích) và `pend` có thể kèm `fire` (bẫy sập).
   - Thêm nhiều tia sét hay đèn chớp cùng lúc rất dễ trắng xoá màn hình: dùng `fx.bolt(..., light = false)` cho các tia phụ.
   - Chạy lại các test chiêu: mỗi chiêu phải trúng được đối thủ đứng đúng tầm.
   - Kiểu chiêu mới cần sửa cả 3 nơi: mô phỏng ở `server/room.js`, hiệu ứng ở `client/js/effects.js`, thời gian tồn tại ở `skillLifetime`.

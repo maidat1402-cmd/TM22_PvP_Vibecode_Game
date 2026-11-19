@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { NET, Ticker, GAME, MOVE, ARENA, TEAM, arenaGround, arenaCollide } from '/shared/config.js';
+import { NET, Ticker, GAME, MOVE, ARENA, TEAM, arenaGround, arenaCollide, dynCollide } from '/shared/config.js';
 import { getArena } from '/shared/arenas.js';
 import { getChar, skillLifetime } from '/shared/characters.js';
 import { STEER_SEND_HZ } from '/shared/steer.js';
@@ -120,12 +120,41 @@ class Avatar {
     m.rig.shadow.position.set(this.pos.x, gy + 0.03, this.pos.z);
     const hgt = Math.max(0, this.pos.y - gy);
     m.rig.shadow.scale.setScalar(Math.max(0.3, 1 - hgt * 0.08));
-    m.rig.shadow.visible = !this.dead;
+    const t = now();
+    const stealth = !!(this.buff?.stealth && t < this.buff.until);
+    // đối thủ đang tàng hình: ẩn hẳn (đồng đội và chính mình vẫn thấy, có khói tím)
+    this.hidden = stealth && !this.isMe && !this.game.isAlly(this);
+    m.root.visible = !this.hidden;
+    m.rig.shadow.visible = !this.dead && !this.hidden;
+    const fx = this.game.fx;
+    if (stealth && !this.hidden && Math.random() < 0.5) {
+      fx.parts.emit(this.pos.x + (Math.random() - 0.5), this.pos.y + Math.random() * 1.8, this.pos.z + (Math.random() - 0.5), 0, 0.6, 0, 0x3c096c, 0.7, 0.6, { drag: 1 });
+    }
+    if (this.hidden && Math.random() < 0.04) {
+      // dấu vết rất mờ để người chơi tinh mắt vẫn đoán được
+      fx.parts.emit(this.pos.x, this.pos.y + 0.2, this.pos.z, 0, 0.3, 0, 0x5a189a, 0.25, 0.5);
+    }
+    // giáp đá: bụi đá rơi lả tả
+    if (this.buff?.kind === 'stoneSkin' && t < this.buff.until && Math.random() < 0.3) {
+      fx.parts.emit(this.pos.x + (Math.random() - 0.5) * 1.2, this.pos.y + 1 + Math.random(), this.pos.z + (Math.random() - 0.5) * 1.2, 0, -1, 0, 0xb08968, 0.25, 0.6, { grav: 6 });
+    }
+    // dấu điện Shiden: các tia nhỏ quay quanh đầu
+    const mk = this.marks;
+    if (mk && t < mk.until && !this.dead && !this.hidden) {
+      for (let i = 0; i < mk.n; i++) {
+        const a = t * 6 + i * Math.PI * 2 / mk.n;
+        fx.parts.emit(this.pos.x + Math.cos(a) * 0.7, this.pos.y + 2.3, this.pos.z + Math.sin(a) * 0.7, 0, 0, 0, 0xfff3a0, 0.28, 0.08);
+      }
+    } else if (mk) this.marks = null;
   }
 }
 
 // Độ cao mặt đất tại (x,z) – tính cả mặt trên chướng ngại vật
 let curArena = ARENA;   // map của phòng hiện tại
+function clampArena(x, z) {
+  const R = curArena.radius - 1.2, d = Math.hypot(x, z);
+  return d > R ? [x / d * R, z / d * R] : [x, z];
+}
 function groundHeight(x, z, y) {
   return arenaGround(curArena, x, z, y, BR);
 }
@@ -174,6 +203,7 @@ export class Game {
     this.touch = null;        // TouchControls (gán từ main.js)
     this.suspended = false;   // true khi đang ở chế độ bắn súng (dùng chung renderer)
 
+    this.kmarks = new Map();   // dấu phi đao đang hiện: id người chơi -> hiệu ứng
     this.bindNet();
     this.bindInput();
     this.bindTeamUi();
@@ -307,7 +337,7 @@ export class Game {
       if (this.L) this.L.cds[m.sk] = 0;
       if (this.me) this.me.mp = m.mp;
     });
-    n.on('pend', m => this.effects.get(m.eid)?.endSub?.(m.k, m.at));
+    n.on('pend', m => this.effects.get(m.eid)?.endSub?.(m.k, m.at, m.fire));
     n.on('steer', m => { const st = this.effects.get(m.eid)?.steer; if (st) st.aim = m.a; });
     n.on('boom', m => {
       const e = this.effects.get(m.eid);
@@ -330,7 +360,8 @@ export class Game {
     n.on('respawn', m => {
       const av = this.avatars.get(m.id);
       if (!av) return;
-      av.dead = false; av.hp = GAME.maxHp;
+      av.dead = false; av.hp = av.char.hp || GAME.maxHp;
+      av.buff = null; av.marks = null;
       av.pos.set(...m.p);
       av.buf.length = 0;
       av.pushSnap(...m.p, av.yaw);
@@ -348,6 +379,49 @@ export class Game {
     });
     n.on('healno', () => sfx('error'));
     n.on('tstate', m => { if (this.active && this.teamMode) this.onTeamState(m); });
+    // dịch chuyển tức thời (Thuấn Ảnh, Lôi Long Xuyên)
+    n.on('tp', m => {
+      const av = this.avatars.get(m.id);
+      if (!av) return;
+      const from = v3(...m.from), to = v3(...m.p);
+      const s = av.char.skills.find(q => q.type === 'blink' || q.teleport) || av.char.skills[2];
+      this.fx.blinkFx(from, to, s.fx.color, s.fx.core || 0xffffff);
+      av.pos.copy(to);
+      av.buf.length = 0; av.pushSnap(to.x, to.y, to.z, av.yaw);
+      av.forced = null;
+      if (av.isMe) { this.L.vel.set(0, 0, 0); this.L.skillDash = null; }
+    });
+    // tăng chỉ số tạm thời: giáp đá, tàng hình
+    n.on('buff', m => {
+      const av = this.avatars.get(m.id);
+      if (!av) return;
+      if (m.kind) av.buff = { kind: m.kind, until: now() + m.dur, stealth: !!m.stealth };
+      else {
+        if (av.buff?.stealth) this.fx.parts.burst(v3(av.pos.x, av.pos.y + 1, av.pos.z), 24, 0x7b2cbf, { speed: 4, size: 0.5, life: 0.5 });
+        av.buff = null;
+        // tắt hiệu ứng giáp đá còn đang chạy
+        for (const e of this.fx.list) if (e.buffOf === av.id) e.done = true;
+      }
+    });
+    // dấu điện của Shiden trên mục tiêu
+    n.on('mark', m => {
+      const av = this.avatars.get(m.tid);
+      if (av) av.marks = m.n ? { n: m.n, until: now() + m.dur } : null;
+    });
+    n.on('chain', m => {
+      for (let i = 0; i < m.pts.length; i++) {
+        const b = v3(...m.pts[i]);
+        const a = i ? v3(...m.pts[i - 1]) : v3(b.x, b.y + 9, b.z);
+        this.fx.bolt(a, b, m.c, 0xfff7c2, 0.08, i === 0);
+      }
+      sfx('beam', this.distToCam(m.pts[0]));
+    });
+    // dấu phi đao của Kage
+    n.on('kmark', m => {
+      const old = this.kmarks.get(m.id);
+      if (old) { old.done = true; this.kmarks.delete(m.id); }
+      if (m.p) this.kmarks.set(m.id, this.fx.groundMarker(v3(m.p[0], 0.05, m.p[1]), 0x9d4edd, m.dur));
+    });
     n.on('chat', m => this.hud.chat(m.name, m.msg));
     n.on('sys', m => this.hud.chat('', m.msg, true));
   }
@@ -365,7 +439,8 @@ export class Game {
     if (av.isMe) {
       // chiêu của mình: đã hiện trước rồi, chỉ cần gắn eid để nhận sự kiện kết thúc
       const e = this.predicted.get(m.cs);
-      if (e) { this.effects.set(m.eid, e); this.predicted.delete(m.cs); }
+      if (e) { this.effects.set(m.eid, e); this.predicted.delete(m.cs); if (m.tg) e.retarget?.(m.tg); }
+      if (m.tg && this.L.skillLeap) this.L.skillLeap.to.set(m.tg[0], 0, m.tg[1]);
       av.mp = m.mp;
       return;
     }
@@ -375,9 +450,9 @@ export class Game {
     av.faceUntil = now() + s.lock;
     av.model.play(s.pose, s.lock);
     if (s.type === 'dash') av.forced = { p, h, dist: s.dist, delay: s.delay, dur: s.dur, t0: now(), steer: !!s.steer };
-    const e = this.fx.castSkill({ skill: s, p, d, h, seed: m.seed, caster: av.casterApi });
-    if (e) this.effects.set(m.eid, e);
-    setTimeout(() => this.effects.delete(m.eid), 8000);
+    const e = this.fx.castSkill({ skill: s, p, d, h, seed: m.seed, tg: m.tg, caster: av.casterApi });
+    if (e) { this.effects.set(m.eid, e); if (s.type === 'buff') e.buffOf = av.id; }
+    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
   }
 
@@ -660,6 +735,7 @@ export class Game {
     const skills = this.me.char.skills;
     let best = -1;
     for (let i = 0; i < skills.length; i++) {
+      if (skills[i].chain) continue;   // đòn kết chuỗi J: tự nâng cấp trong doCast
       const c = skills[i].combo;
       if (str.endsWith(c) && (best < 0 || c.length > skills[best].combo.length)) best = i;
     }
@@ -668,7 +744,7 @@ export class Game {
     let canExtend = false;
     for (let n = 1; n <= str.length; n++) {
       tail = str.slice(-n);
-      if (skills.some(s => s.combo.length > tail.length && s.combo.startsWith(tail))) { canExtend = true; break; }
+      if (skills.some(s => !s.chain && s.combo.length > tail.length && s.combo.startsWith(tail))) { canExtend = true; break; }
     }
     if (best < 0) { if (!canExtend) this.combo = []; this.pending = null; return; }
     const s = skills[best];
@@ -701,7 +777,7 @@ export class Game {
     const me = this.me;
     let best = null, bestScore = Infinity;
     for (const av of this.avatars.values()) {
-      if (av.isMe || av.dead || this.isAlly(av)) continue;
+      if (av.isMe || av.dead || this.isAlly(av) || av.hidden) continue;
       const dx = av.pos.x - me.pos.x, dz = av.pos.z - me.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 34 || d < 0.01) continue;
@@ -731,7 +807,7 @@ export class Game {
     const o = ray.ray.origin, d = ray.ray.direction;
     let best = null, bestAng = 0.09;
     for (const av of this.avatars.values()) {
-      if (av.isMe || av.dead || this.isAlly(av)) continue;
+      if (av.isMe || av.dead || this.isAlly(av) || av.hidden) continue;
       const vx = av.pos.x - o.x, vy = av.pos.y + 1 - o.y, vz = av.pos.z - o.z;
       const L = Math.hypot(vx, vy, vz);
       if (L > 40) continue;
@@ -774,8 +850,13 @@ export class Game {
   }
 
   doCast(idx) {
-    const s = this.me.char.skills[idx];
     const L = this.L, t = now();
+    // chuỗi J: đòn J thứ 3 liên tiếp (trong 1.2 s) thành đòn kết riêng của nhân vật
+    if (idx === 0) {
+      const fin = this.me.char.skills.findIndex(q => q.chain);
+      if (fin > 0 && this.jn >= 2 && t - this.jLast < 1.2 && !this.canCast(this.me.char.skills[fin], fin)) idx = fin;
+    }
+    const s = this.me.char.skills[idx];
     const why = this.canCast(s, idx);
     if (why === 'lock') return false;
     if (why) {
@@ -798,17 +879,32 @@ export class Game {
     if (s.lunge && L.onGround) { L.vel.x += h.x * s.lunge; L.vel.z += h.z * s.lunge; }
     if (s.leap) { L.vel.y = s.leap; L.onGround = false; }
     if (s.type === 'dash') L.skillDash = { h, dist: s.dist, delay: s.delay, dur: s.dur, t0: t };
+    if (idx === 0) { this.jn = t - (this.jLast || 0) < 1.2 ? (this.jn || 0) + 1 : 1; this.jLast = t; }
+    else this.jn = 0;
+    if (s.chain) this.hud.toast(`⚡ ${s.name}!`, 700);
     const seed = (Math.random() * 2 ** 31) | 0;
     const cs = this.cs++;
     const p = me.pos.clone();
-    const e = this.fx.castSkill({ skill: s, p, d, h, seed, caster: me.casterApi });
-    if (e) this.predicted.set(cs, e);
+    // điểm đích dự đoán (server sẽ gửi lại điểm chính xác)
+    let tg = null, aim = null;
+    if (s.type === 'leap') {
+      aim = this.steerAim();
+      let tx = aim[0], tz = aim[2];
+      const L2 = Math.hypot(tx - p.x, tz - p.z);
+      if (L2 > s.range) { tx = p.x + (tx - p.x) / L2 * s.range; tz = p.z + (tz - p.z) / L2 * s.range; }
+      tg = clampArena(tx, tz);
+      L.skillLeap = { from: p.clone(), to: v3(tg[0], 0, tg[1]), t0: t, delay: s.delay, dur: s.dur };
+    } else if (s.type === 'trap' || s.type === 'summon') tg = clampArena(p.x + h.x * s.offset, p.z + h.z * s.offset);
+    const e = this.fx.castSkill({ skill: s, p, d, h, seed, tg, caster: me.casterApi });
+    if (e) { this.predicted.set(cs, e); if (s.type === 'buff') e.buffOf = me.id; }
     if (e?.steer) {
       // chiêu cuối: lái theo tâm ngắm cho tới khi chiêu kết thúc
       e.steer.aim = this.steerAim();
       this.steering = { st: e.steer, color: s.fx.color, until: t + skillLifetime(s), sendAcc: 1 };
     }
-    this.net.send({ t: 'cast', sk: idx, cs, seed, p: [p.x, p.y, p.z].map(v => +v.toFixed(2)), d: [d.x, d.y, d.z].map(v => +v.toFixed(3)) });
+    const msg = { t: 'cast', sk: idx, cs, seed, p: [p.x, p.y, p.z].map(v => +v.toFixed(2)), d: [d.x, d.y, d.z].map(v => +v.toFixed(3)) };
+    if (aim) msg.a = aim.map(v => +v.toFixed(2));
+    this.net.send(msg);
     this.hud.flashSlot(idx);
     sfx(skillSound(s));
     if (L.charging) L.charging = false;
@@ -931,6 +1027,20 @@ export class Game {
     const p = me.pos;
     p.x += L.vel.x * dt; p.y += L.vel.y * dt; p.z += L.vel.z * dt;
     arenaCollide(curArena, p, BR);
+    if (this.fx.dynObs.length) dynCollide(this.fx.dynObs, p, BR);
+    const sl = L.skillLeap;
+    if (sl) {
+      // chiêu nhảy: bay theo vòng cung tới điểm đích
+      const el = t - sl.t0;
+      if (el >= sl.delay) {
+        const k = Math.min(1, (el - sl.delay) / sl.dur);
+        p.x = sl.from.x + (sl.to.x - sl.from.x) * k;
+        p.z = sl.from.z + (sl.to.z - sl.from.z) * k;
+        p.y = sl.from.y * (1 - k) + Math.sin(Math.PI * k) * 6;
+        L.vel.set(0, 0, 0);
+        if (k >= 1) { L.skillLeap = null; this.fx.dust(p, 16); }
+      } else L.vel.set(0, 0, 0);
+    }
     const gy = groundHeight(p.x, p.z, p.y);
     if (p.y <= gy && L.vel.y <= 0) {
       if (!L.onGround && L.vel.y < -8) this.fx.dust(p, 12);
@@ -1025,7 +1135,7 @@ export class Game {
       this.aimDir();   // cập nhật mục tiêu đang khóa
       this.updateSteer(dt, t);
       const L = this.L;
-      this.hud.updateBars(this.me.hp, this.me.mp, t, L.cds, L.healCd, L.dashCd, this.me.mp, L.charging);
+      this.hud.updateBars(this.me.hp, this.me.char.hp || GAME.maxHp, this.me.mp, t, L.cds, L.healCd, L.dashCd, this.me.mp, L.charging);
       this.hud.updatePlates(this.avatars.values(), this.camera, innerWidth, innerHeight);
       this.hud.scoreboard(this.avatars.values(), !!this.showScore, this.teamMode ? this.ts?.score || { A: 0, B: 0 } : null);
       if (this.teamMode) this.updateTeamHud();

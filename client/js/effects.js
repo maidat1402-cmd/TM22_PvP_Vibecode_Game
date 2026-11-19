@@ -334,6 +334,40 @@ export class FX {
     }
     this.lightIdx = 0;
     this.quality = 1;
+    this.dynObs = [];   // chướng ngại vật tạm thời { x, z, r, h } (cây thần, cột đá) — dùng cho va chạm phía client
+  }
+
+  // Dịch chuyển bóng tối / sét: bóng mờ ở chỗ cũ, vệt nối, bùng nổ ở chỗ mới
+  blinkFx(from, to, color, core = 0xffffff) {
+    const P = this.parts;
+    for (let i = 0; i < 26; i++) {
+      P.emit(from.x + (Math.random() - 0.5) * 0.8, from.y + Math.random() * 1.8, from.z + (Math.random() - 0.5) * 0.8,
+        (Math.random() - 0.5) * 2, 0.5 + Math.random(), (Math.random() - 0.5) * 2, Math.random() < 0.3 ? core : color, 0.7, 0.55, { drag: 2 });
+    }
+    const n = Math.max(4, Math.round(from.distanceTo(to) * 1.5));
+    for (let i = 0; i < n; i++) {
+      const k = i / n;
+      P.emit(from.x + (to.x - from.x) * k, 1 + from.y + (to.y - from.y) * k, from.z + (to.z - from.z) * k, 0, 0.3, 0, color, 0.45, 0.35);
+    }
+    P.burst(tmpV.set(to.x, to.y + 1, to.z), 22, core, { speed: 6, size: 0.35, life: 0.4 });
+    this.shockwave(to, color, 2.6, 0.35);
+  }
+
+  // Vòng đánh dấu trên mặt đất trong dur giây (dấu phi đao...)
+  groundMarker(pos, color, dur) {
+    const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide });
+    const e = new FnEffect(this, (dt, el) => {
+      ring.rotation.z += dt * 3;
+      ring.scale.setScalar(0.9 + Math.sin(el * 8) * 0.12);
+      m.opacity = el > dur - 0.5 ? Math.max(0, (dur - el) / 0.5) * 0.8 : 0.8;
+      if (Math.random() < 0.3) this.parts.emit(pos.x, pos.y + 0.1, pos.z, (Math.random() - 0.5), 1.5, (Math.random() - 0.5), color, 0.3, 0.4);
+      return el < dur;
+    });
+    e.mats.push(m);
+    const ring = e.add(new THREE.Mesh(GEO.ring, m));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(pos);
+    return this.add(e);
   }
 
   add(e) { this.list.push(e); return e; }
@@ -564,10 +598,15 @@ export class FX {
     if (e) e.steer = ctx.steer;
     return e;
   }
+
+  // cập nhật chướng ngại vật tạm thời (hiệu ứng gọi khi mọc lên / biến mất)
+  addObstacle(o) { this.dynObs.push(o); return o; }
+  removeObstacle(o) { const i = this.dynObs.indexOf(o); if (i >= 0) this.dynObs.splice(i, 1);
+  }
 }
 
 // Kiểu hiệu ứng mượn hình của kiểu có sẵn, chỉ đổi màu (fx.crystal / fx.spike...)
-const FX_ALIAS = { thorn: 'iceShard', vineSpike: 'iceSpike', bloom: 'frostNova', quake: 'frostNova' };
+const FX_ALIAS = { thorn: 'iceShard', vineSpike: 'iceSpike', bloom: 'frostNova', quake: 'frostNova', kunaiThrow: 'bolt' };
 const kindOf = s => FX_ALIAS[s.fx.kind] || s.fx.kind;
 
 // Đặt một đoạn trụ nối 2 điểm a → b (dùng vẽ tia sét)
@@ -582,6 +621,7 @@ function placeSeg(m, a, b, w) {
 
 // ======================= Từng loại chiêu =======================
 function vec(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+const v3c = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const SKILL_FX = {
   // ---------- Cận chiến ----------
@@ -754,7 +794,7 @@ const SKILL_FX = {
             -sub.d.x * 2 + (Math.random() - 0.5), (kind === 'crescent' ? 1.5 : 0) + (Math.random() - 0.5), -sub.d.z * 2 + (Math.random() - 0.5),
             Math.random() < 0.3 ? core : color, big ? 0.9 : kind === 'crescent' ? 0.55 : 0.28, big ? 0.5 : 0.3, { drag: 2 });
         }
-        if (sub.dist >= s.range || hitsObstacle(x, y, z, s.radius, fx.arena)) {
+        if (sub.dist >= s.range || hitsObstacle(x, y, z, s.radius, fx.arena, fx.dynObs)) {
           // máy chủ sẽ gửi 'pend'/'boom' — nhưng tự kết thúc để không bị trễ
           endSub(sub, gp, !s.explode);
         } else any = true;
@@ -785,7 +825,7 @@ const SKILL_FX = {
     const color = col(s.fx.color), core = col(s.fx.core || 0xffffff);
     const e = new Effect(fx);
     const P = fx.parts;
-    let orb, orbMat, wings = [], body;
+    let orb, orbMat, wings = [], body, boulder = null, boltAcc = 0, prevP = null;
     if (kind === 'spiralOrb') {
       orbMat = e.mat(energyMat(s.fx.color, s.fx.core));
       orb = e.add(new THREE.Mesh(GEO.sphere, orbMat));
@@ -816,6 +856,12 @@ const SKILL_FX = {
       glow.position.y = 1;
       body.add(glow, sprite(color, 6, 0.7));
       body.visible = false;
+    }
+    if (kind === 'rockRoll') {
+      // tảng đá lăn bao quanh người
+      const rm = e.mat(new THREE.MeshToonMaterial({ color: 0x8d6e53, emissive: 0x2a1a0e }));
+      boulder = e.add(new THREE.Mesh(GEO.rock, rm));
+      boulder.scale.setScalar(0.01);
     }
     let lastPos = null;
     const st = ctx.steer;
@@ -855,6 +901,38 @@ const SKILL_FX = {
             Math.random() < 0.2 ? core : color, 0.55, 0.5, { drag: 1.5 });
         }
         if (tf > s.dur + 0.1) return false;
+      } else if (kind === 'thunderDash') {
+        // lướt sét: tia sét nối các điểm đi qua + tia lửa điện
+        if (moving) {
+          boltAcc += dt;
+          const cur = v3c(p.x, p.y + 1, p.z);
+          if (prevP && boltAcc > 0.04) { fx.bolt(prevP, cur, s.fx.color, s.fx.core || 0xffffff, 0.06, false); boltAcc = 0; prevP = cur; }
+          if (!prevP) prevP = cur;
+          for (let i = 0; i < 6 * fx.quality; i++) {
+            P.emit(p.x + (Math.random() - 0.5), p.y + 0.3 + Math.random() * 1.4, p.z + (Math.random() - 0.5), (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6,
+              Math.random() < 0.4 ? core : color, 0.25, 0.25);
+          }
+        }
+        if (tf > s.dur) {
+          if (!e.state) { e.state = 1; fx.shockwave(p, color, 2.5); fx.bolt(v3c(p.x, p.y + 8, p.z), v3c(p.x, p.y + 0.1, p.z), s.fx.color, s.fx.core, 0.08, true); }
+          return false;
+        }
+      } else if (kind === 'rockRoll') {
+        // đá lăn: tảng đá xoay theo hướng lao, bụi đất phía sau
+        const grow = Math.min(1, el / Math.max(0.05, s.delay));
+        boulder.position.set(p.x, p.y + 0.9, p.z);
+        boulder.scale.setScalar(1.15 * grow * (tf > s.dur ? Math.max(0, 1 - (tf - s.dur) * 6) : 1));
+        if (moving) {
+          boulder.rotateOnWorldAxis(tmpV.set(h.z, 0, -h.x).normalize(), dt * 18);
+          for (let i = 0; i < 5 * fx.quality; i++) {
+            P.emit(p.x - h.x + (Math.random() - 0.5), p.y + 0.2, p.z - h.z + (Math.random() - 0.5), -h.x * 3 + (Math.random() - 0.5) * 2, 1 + Math.random() * 2, -h.z * 3 + (Math.random() - 0.5) * 2,
+              Math.random() < 0.5 ? 0xb08968 : 0x7f5539, 0.55, 0.5, { drag: 2, grav: 4 });
+          }
+        }
+        if (tf > s.dur + 0.15) {
+          if (!e.state) { e.state = 1; fx.dust(p, 20); fx.shockwave(p, color, 3); }
+          return false;
+        }
       } else {
         // dashPunch: nắm đấm phát sáng + vệt tàn ảnh
         const hp = caster.hand();
@@ -874,6 +952,252 @@ const SKILL_FX = {
       lastPos = (lastPos || new THREE.Vector3()).copy(p);
       return true;
     };
+    return e;
+  },
+
+  // ---------- Bẫy hạt giống ----------
+  trap(fx, ctx) {
+    const { skill: s } = ctx;
+    const color = col(s.fx.color), core = col(s.fx.core || 0xffffff);
+    const e = new Effect(fx);
+    const P = fx.parts;
+    const pos = new THREE.Vector3(...(ctx.tg ? [ctx.tg[0], 0, ctx.tg[1]] : [ctx.p.x + ctx.h.x * s.offset, 0, ctx.p.z + ctx.h.z * s.offset]));
+    const g = e.add(new THREE.Group());
+    g.position.copy(pos);
+    const leaf = e.mat(new THREE.MeshToonMaterial({ color: 0x40916c }));
+    const bud = new THREE.Mesh(GEO.sphereLo, e.mat(new THREE.MeshToonMaterial({ color: s.fx.core || 0xffafcc, emissive: 0x401020 })));
+    bud.scale.set(0.22, 0.3, 0.22); bud.position.y = 0.35;
+    g.add(bud);
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.Mesh(GEO.sphereLo, leaf);
+      l.scale.set(0.32, 0.05, 0.14);
+      const a = i * Math.PI / 2;
+      l.position.set(Math.cos(a) * 0.28, 0.08, Math.sin(a) * 0.28);
+      l.rotation.y = -a;
+      g.add(l);
+    }
+    const rm = e.mat(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    const ring = e.add(new THREE.Mesh(GEO.ring, rm));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(pos.x, 0.06, pos.z);
+    ring.scale.setScalar(s.radius);
+    g.scale.setScalar(0.01);
+    let gone = 0, fired = false;
+    e.retarget = tg => { pos.set(tg[0], 0, tg[1]); g.position.copy(pos); ring.position.set(pos.x, 0.06, pos.z); };
+    e.endSub = (k, at, fire) => {
+      if (gone) return;
+      gone = e.el;
+      if (fire) {
+        // sập bẫy: dây leo bật lên quấn chặt
+        fired = true;
+        for (let i = 0; i < 7; i++) {
+          const sp = new THREE.Mesh(GEO.cone, leaf);
+          const a = (i / 7) * Math.PI * 2;
+          sp.position.set(pos.x + Math.cos(a) * 0.7, 0.6, pos.z + Math.sin(a) * 0.7);
+          sp.rotation.set(Math.sin(a) * -0.5, 0, Math.cos(a) * 0.5);
+          sp.scale.set(0.18, 1.3, 0.18);
+          e.add(sp);
+        }
+        P.burst(tmpV.set(pos.x, 0.6, pos.z), 30, color, { speed: 6, size: 0.35, life: 0.6, up: 1.5 });
+        P.burst(tmpV.set(pos.x, 0.8, pos.z), 16, core, { speed: 3, size: 0.4, life: 0.8, up: 1 });
+        fx.shockwave(pos, color, s.radius * 1.3, 0.4);
+      }
+    };
+    e.endAll = () => e.endSub(0, null, false);
+    e.update = (dt, el) => {
+      const armed = el >= s.delay + s.arm;
+      g.scale.setScalar(Math.min(1, el * 4) * (1 + (armed ? Math.sin(el * 4) * 0.06 : 0)));
+      rm.opacity = armed && !gone ? 0.25 + Math.sin(el * 3) * 0.1 : 0;
+      if (gone) {
+        const f = (el - gone) / (fired ? 0.9 : 0.4);
+        g.scale.setScalar(Math.max(0.01, 1 - f));
+        for (const o of e.objs) if (o !== g && o !== ring) o.scale.y = Math.max(0.01, (1 - f) * 1.3);
+        return f < 1;
+      }
+      return el < s.delay + s.dur;
+    };
+    return e;
+  },
+
+  // ---------- Triệu hồi: cây thần ----------
+  summon(fx, ctx) {
+    const { skill: s } = ctx;
+    const color = col(s.fx.color), core = col(s.fx.core || 0xffffff);
+    const e = new Effect(fx);
+    const P = fx.parts;
+    const pos = new THREE.Vector3(...(ctx.tg ? [ctx.tg[0], 0, ctx.tg[1]] : [ctx.p.x + ctx.h.x * s.offset, 0, ctx.p.z + ctx.h.z * s.offset]));
+    const g = e.add(new THREE.Group());
+    g.position.copy(pos);
+    const bark = e.mat(new THREE.MeshToonMaterial({ color: 0x7f5539 }));
+    const leafM = e.mat(new THREE.MeshToonMaterial({ color: s.fx.color, emissive: 0x0b3d20 }));
+    const R = s.obstacle?.r || 1.6, H = s.obstacle?.h || 6;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.55, R * 0.85, H * 0.7, 9), bark);
+    trunk.position.y = H * 0.35;
+    g.add(trunk);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const root = new THREE.Mesh(GEO.cone, bark);
+      root.scale.set(0.35, 1.6, 0.35);
+      root.position.set(Math.cos(a) * R * 0.9, 0.3, Math.sin(a) * R * 0.9);
+      root.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
+      g.add(root);
+    }
+    for (const [x, y, z, r] of [[0, H * 0.82, 0, 2.4], [1.3, H * 0.7, 0.4, 1.6], [-1.2, H * 0.72, -0.5, 1.7], [0.2, H * 0.98, -0.9, 1.5]]) {
+      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), leafM);
+      c.position.set(x, y, z);
+      g.add(c);
+    }
+    const am = e.mat(new THREE.MeshBasicMaterial({ map: magicCircleTex(), color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const aura = e.add(new THREE.Mesh(GEO.plane, am));
+    aura.rotation.x = -Math.PI / 2;
+    aura.position.set(pos.x, 0.06, pos.z);
+    aura.scale.setScalar((s.aura?.radius || 5) * 2);
+    g.scale.setScalar(0.01);
+    let obs = null, up = false;
+    e.retarget = tg => { pos.set(tg[0], 0, tg[1]); g.position.copy(pos); aura.position.set(pos.x, 0.06, pos.z); if (obs) { obs.x = pos.x; obs.z = pos.z; } };
+    const end = s.delay + s.dur;
+    e.update = (dt, el) => {
+      if (el < s.delay) {
+        // mầm cây đang trồi lên
+        if (Math.random() < 0.7) P.emit(pos.x + (Math.random() - 0.5) * 2, 0.2, pos.z + (Math.random() - 0.5) * 2, 0, 3, 0, 0x9c6644, 0.4, 0.4, { grav: 6 });
+        return true;
+      }
+      if (!up) {
+        up = true;
+        obs = fx.addObstacle({ x: pos.x, z: pos.z, r: R, h: H });
+        fx.shockwave(pos, color, s.radius * 1.3, 0.5);
+        fx.dust(pos, 24);
+        P.burst(tmpV.set(pos.x, 1, pos.z), 40, color, { speed: 9, size: 0.45, life: 0.7, up: 2 });
+        fx.shake(0.3, pos);
+      }
+      const grow = Math.min(1, (el - s.delay) / 0.35);
+      const fade = el > end - 0.6 ? Math.max(0.01, (end - el) / 0.6) : 1;
+      g.scale.set(fade, grow * fade, fade);
+      g.rotation.y = Math.sin(el * 0.8) * 0.04;
+      am.opacity = 0.35 * fade * (0.8 + Math.sin(el * 3) * 0.2);
+      aura.rotation.z += dt * 0.3;
+      // hạt sáng xanh bay lên quanh cây (vùng hồi máu)
+      if (Math.random() < 0.8) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * (s.aura?.radius || 5);
+        P.emit(pos.x + Math.cos(a) * r, 0.2, pos.z + Math.sin(a) * r, 0, 1.5 + Math.random(), 0, Math.random() < 0.5 ? core : 0x95d5b2, 0.3, 1);
+      }
+      if (el >= end) { fx.removeObstacle(obs); return false; }
+      return true;
+    };
+    const dispose = e.dispose.bind(e);
+    e.dispose = () => { if (obs) fx.removeObstacle(obs); dispose(); };
+    return e;
+  },
+
+  // ---------- Nhảy đập đất ----------
+  leap(fx, ctx) {
+    const { skill: s, caster } = ctx;
+    const color = col(s.fx.color), core = col(s.fx.core || 0xffffff);
+    const e = new Effect(fx);
+    const P = fx.parts;
+    const to = new THREE.Vector3(...(ctx.tg ? [ctx.tg[0], 0, ctx.tg[1]] : [ctx.p.x + ctx.h.x * 10, 0, ctx.p.z + ctx.h.z * 10]));
+    // vòng chỉ điểm đáp
+    const tm = e.mat(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
+    const mark = e.add(new THREE.Mesh(GEO.ring, tm));
+    mark.rotation.x = -Math.PI / 2;
+    mark.position.set(to.x, 0.07, to.z);
+    e.retarget = tg => { to.set(tg[0], 0, tg[1]); mark.position.set(to.x, 0.07, to.z); };
+    const land = s.delay + s.dur;
+    const W = s.walls;
+    const pillars = [], obsList = [];
+    const rockM = e.mat(new THREE.MeshToonMaterial({ color: 0x8d6e53, emissive: 0x1f140b }));
+    let landed = false;
+    e.update = (dt, el) => {
+      mark.scale.setScalar(s.radius * (0.6 + 0.4 * Math.min(1, el / land)));
+      tm.opacity = landed ? 0 : 0.5 + Math.sin(el * 12) * 0.2;
+      const p = caster.pos();
+      if (!landed && el > s.delay) {
+        // vệt bụi đá khi bay
+        for (let i = 0; i < 4 * fx.quality; i++) P.emit(p.x + (Math.random() - 0.5), p.y + Math.random(), p.z + (Math.random() - 0.5), 0, -2, 0, Math.random() < 0.5 ? 0xb08968 : color, 0.5, 0.5, { drag: 1 });
+      }
+      if (!landed && el >= land) {
+        landed = true;
+        fx.shockwave(to, color, s.radius * 1.4, 0.55);
+        fx.shockwave(to, core, s.radius * 0.8, 0.35);
+        fx.dust(to, 40);
+        P.burst(tmpV.set(to.x, 0.5, to.z), 50, 0x9c6644, { speed: 12, size: 0.6, life: 0.8, up: 2, grav: 14 });
+        fx.flash(tmpV.set(to.x, 2, to.z), s.fx.color, 30, 0.4);
+        fx.shake(0.6, to);
+        if (W) for (let i = 0; i < W.count; i++) {
+          const a = (i / W.count) * Math.PI * 2 + ctx.seed % 7;
+          const x = to.x + Math.cos(a) * W.ring, z = to.z + Math.sin(a) * W.ring;
+          const m = e.add(new THREE.Mesh(new THREE.CylinderGeometry(W.r * 0.8, W.r * 1.1, W.h, 7), rockM));
+          m.position.set(x, -W.h / 2, z);
+          m.rotation.y = Math.random() * 3;
+          pillars.push(m);
+          obsList.push(fx.addObstacle({ x, z, r: W.r, h: W.h }));
+        }
+      }
+      if (landed) {
+        const tl = el - land;
+        for (const m of pillars) {
+          const up = Math.min(1, tl * 6), down = W && tl > W.dur - 0.5 ? Math.max(0, (W.dur - tl) / 0.5) : 1;
+          m.position.y = -W.h / 2 + W.h * up * down;
+        }
+        if (!W || tl >= W.dur) { for (const o of obsList) fx.removeObstacle(o); obsList.length = 0; return false; }
+      }
+      return true;
+    };
+    const dispose = e.dispose.bind(e);
+    e.dispose = () => { for (const o of obsList) fx.removeObstacle(o); dispose(); };
+    return e;
+  },
+
+  // ---------- Dịch chuyển bóng tối: chỉ là làn khói khi bắt đầu, phần dịch chuyển đến từ gói 'tp' ----------
+  blink(fx, ctx) {
+    const { skill: s, caster } = ctx;
+    const e = new Effect(fx);
+    const p = caster.pos();
+    fx.parts.burst(tmpV.set(p.x, p.y + 1, p.z), 18, s.fx.color, { speed: 3, size: 0.6, life: 0.5 });
+    e.update = (dt, el) => el < s.delay + 0.3;
+    return e;
+  },
+
+  // ---------- Tăng chỉ số tạm thời ----------
+  buff(fx, ctx) {
+    const { skill: s, caster } = ctx;
+    const color = col(s.fx.color), core = col(s.fx.core || 0xffffff);
+    const e = new Effect(fx);
+    const P = fx.parts;
+    const p0 = caster.pos();
+    if (s.fx.kind === 'stealth') {
+      // làn khói tím bùng lên rồi tan: nhân vật biến mất
+      P.burst(tmpV.set(p0.x, p0.y + 1, p0.z), 40, 0x240046, { speed: 4, size: 0.9, life: 0.8, drag: 2 });
+      P.burst(tmpV.set(p0.x, p0.y + 1, p0.z), 16, core, { speed: 6, size: 0.3, life: 0.4 });
+      e.update = (dt, el) => el < 0.5;
+      return e;
+    }
+    // giáp đá: các mảnh đá bay quanh người
+    const rm = e.mat(new THREE.MeshToonMaterial({ color: 0x9c6644, emissive: 0x2a1a0e }));
+    const rocks = [];
+    for (let i = 0; i < 7; i++) {
+      const m = e.add(new THREE.Mesh(GEO.rock, rm));
+      m.scale.setScalar(0.28 + Math.random() * 0.12);
+      m.userData.a = (i / 7) * Math.PI * 2;
+      m.userData.y = 0.3 + (i % 3) * 0.6;
+      rocks.push(m);
+    }
+    fx.shockwave(p0, color, 2.5, 0.4);
+    P.burst(tmpV.set(p0.x, p0.y + 1, p0.z), 24, color, { speed: 5, size: 0.4, life: 0.5 });
+    const end = s.delay + s.dur;
+    e.update = (dt, el) => {
+      const p = caster.pos();
+      const grow = Math.min(1, el * 4), fade = el > end - 0.3 ? Math.max(0, (end - el) / 0.3) : 1;
+      for (const m of rocks) {
+        const a = m.userData.a + el * 2.2;
+        m.position.set(p.x + Math.cos(a) * 0.95 * grow, p.y + m.userData.y + Math.sin(el * 3 + a) * 0.08, p.z + Math.sin(a) * 0.95 * grow);
+        m.rotation.x += dt * 2; m.rotation.y += dt * 3;
+        m.visible = fade > 0.02;
+        m.scale.setScalar((0.28 + (m.userData.a % 0.12)) * fade * grow + 0.001);
+      }
+      return el < end;
+    };
+    e.buffOf = null;
     return e;
   },
 

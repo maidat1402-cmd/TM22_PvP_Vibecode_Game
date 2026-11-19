@@ -76,6 +76,8 @@ Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng p
 
 Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất.
 
+**Chuỗi đòn J:** bấm `J` (hoặc nút ⚔ trên điện thoại) 3 lần liên tiếp, đòn thứ 3 thành **đòn kết** riêng của mỗi nhân vật: Kaze phóng kunai xuyên thấu, Raiga đấm hất tung, Homura xoay kiếm lửa, Yuki chém băng làm chậm, Shiden đâm thương dài (thêm 2 dấu điện), Midori quấn dây leo (choáng), Gantetsu đập đất, Kage đâm sau lưng (×2.2 sát thương nếu đứng sau đối thủ).
+
 **Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze) và mưa băng (Yuki) trôi theo tâm, Tinh Cầu Hủy Diệt (Raiga) bẻ hướng bay cả lên/xuống, Phượng Hoàng (Homura) uốn cong đường lao. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
 
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
@@ -164,21 +166,24 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 Các nhân vật là **nhân vật nguyên bản** theo các hình mẫu quen thuộc của anime/manga:
 
-| Nhân vật | Phong cách | Chiêu nổi bật |
-|---|---|---|
-| **Kaze** — Phong Nhẫn Giả | Ninja gió, nhanh nhẹn | Phi tiêu, Phong Cầu Xoáy, Lốc Phong Đao, tuyệt kỹ lốc xoáy khổng lồ |
-| **Raiga** — Khí Công Quyền Vương | Võ sĩ tóc vàng dựng đứng | Khí đạn liên thanh, Chưởng Phong Ba (tia năng lượng), Tinh Cầu Hủy Diệt |
-| **Homura** — Hỏa Kiếm Cơ | Nữ kiếm sĩ lửa | Sóng lửa trăng khuyết, Thăng Long Hỏa, Hỏa Trụ Liên Hoàn, Phượng Hoàng Giáng Thế |
-| **Yuki** — Băng Tuyết Pháp Sư | Pháp sư băng | Băng tiễn làm chậm, gai băng, kết giới đóng băng, mưa băng |
-| **Shiden** — Lôi Thương Kỵ Sĩ | Kỵ sĩ cầm thương sét, tầm đánh xa | Lôi tiễn xuyên thấu, lướt sét, Lôi Võng Trận (sét đánh quanh mình, choáng), Thiên Lôi Giáng (mưa sét) |
-| **Midori** — Mộc Linh Sư | Pháp sư cây cỏ, khống chế + tự hồi máu | Gai độc làm chậm, rễ cây trói (choáng), hoa nở hồi 30 máu, mưa cánh hoa |
-| **Gantetsu** — Thiết Quyền Hộ Vệ | Võ sĩ đá to con, chậm nhưng đấm nặng | Ném đá tảng (nổ), húc vai, Địa Chấn Quyền (choáng diện rộng), mưa thiên thạch |
-| **Kage** — Ảnh Sát Thủ | Sát thủ bóng tối, chạy nhanh nhất | Phi đao đôi, lướt xa 12 m, màn sương làm chậm, vòng xoáy hắc đao lái theo tâm |
+Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 5 chiêu, bấm vào một dòng chiêu để xem riêng chiêu đó.
+
+| Nhân vật | Máu | Phong cách | Chiêu nổi bật |
+|---|---|---|---|
+| **Kaze** — Phong Nhẫn Giả | 145 | Ninja gió, nhanh nhẹn | Phi tiêu, Phong Cầu Xoáy, Lốc Phong Đao, tuyệt kỹ lốc xoáy hút đối thủ |
+| **Raiga** — Khí Công Quyền Vương | 155 | Võ sĩ tóc vàng dựng đứng | Khí đạn liên thanh, Chưởng Phong Ba (tia năng lượng), Tinh Cầu Hủy Diệt |
+| **Homura** — Hỏa Kiếm Cơ | 150 | Nữ kiếm sĩ lửa | Sóng lửa trăng khuyết, Thăng Long Hỏa, Hỏa Trụ Liên Hoàn, Phượng Hoàng Giáng Thế |
+| **Yuki** — Băng Tuyết Pháp Sư | 145 | Pháp sư băng | Băng tiễn làm chậm, gai băng, kết giới đóng băng, mưa băng |
+| **Shiden** — Lôi Thương Kỵ Sĩ | 145 | Kỵ sĩ cầm thương sét, tầm đánh xa | **Nội tại Tích Điện:** trúng 3 đòn thì sét nảy sang đối thủ gần đó. Lôi tiễn xuyên thấu, lướt sét, Lôi Võng Trận, tuyệt kỹ **Lôi Long Xuyên** (phóng thương rồi dịch chuyển tới chỗ thương cắm, nổ sét choáng) |
+| **Midori** — Mộc Linh Sư | 145 | Pháp sư cây cỏ, khống chế + hỗ trợ | Gai độc làm chậm, rễ cây trói, **Gieo Hạt** (bẫy tồn tại 15 s, tối đa 3, giẫm vào bị trói), tuyệt kỹ **Thần Mộc** (cây lớn chắn đạn 9 s, hồi máu cho bạn và đồng đội đứng gần) |
+| **Gantetsu** — Thiết Quyền Hộ Vệ | 165 | Võ sĩ đá to con, chậm, trâu | Ném đá tảng (nổ), húc vai đá lăn, **Thiết Bích** (4 s giảm 40% sát thương, không bị đẩy/choáng), tuyệt kỹ **Sơn Băng** (nhảy tới chỗ tâm ngắm đập đất, dựng vòng cột đá 6 s) |
+| **Kage** — Ảnh Sát Thủ | 120 | Sát thủ bóng tối, chạy nhanh nhất, ít máu nhất | Phi đao để lại dấu bóng, **Thuấn Ảnh** (dịch chuyển tới dấu phi đao), **Ẩn Thân** (tàng hình 3.5 s, đòn đầu ×1.6), vòng xoáy hắc đao lái theo tâm |
 
 ### Thêm / sửa nhân vật
 
 Mọi thứ nằm trong [shared/characters.js](shared/characters.js):
 
+- `hp`: máu tối đa riêng (mặc định 150). Nhân vật to con/chậm nhiều máu hơn, nhân vật nhanh/sát thương cao ít máu hơn.
 - `look`: màu da, tóc, kiểu tóc (`spiky`, `superSpiky`, `ponytail`, `long`, `short`, `braids`, `mohawk`, `hooded`), trang phục, phụ kiện (`scarf`, `belt`, `sash`, `hat`, `pauldrons`, `flowerCrown`, `mask`), vũ khí (`kunai`, `katana`, `staff`, `spear`, `gauntlet`, `branch`, `dagger`, `none`), `scale` (to/nhỏ, chỉ đổi hình).
 - `skills`: mỗi chiêu có `combo`, `mana`, `cd` (hồi chiêu), `dmg`, `type` (`melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`) và `fx` (màu + kiểu hiệu ứng).
 

@@ -60,13 +60,13 @@ export class HUD {
   }
 
   // cds: mảng thời điểm hồi chiêu xong; now: thời gian hiện tại
-  updateBars(hp, mp, now, cds, healCd, dashCd, mana, charging) {
-    const hpP = Math.max(0, hp / GAME.maxHp);
+  updateBars(hp, maxHp, mp, now, cds, healCd, dashCd, mana, charging) {
+    const hpP = Math.max(0, hp / maxHp);
     this.hpFill.style.width = hpP * 100 + '%';
     this.ghostHp += (hp - this.ghostHp) * 0.05;
     if (hp > this.ghostHp) this.ghostHp = hp;
-    this.hpGhost.style.width = Math.max(0, this.ghostHp / GAME.maxHp) * 100 + '%';
-    this.hpText.textContent = `${Math.ceil(hp)} / ${GAME.maxHp}`;
+    this.hpGhost.style.width = Math.max(0, this.ghostHp / maxHp) * 100 + '%';
+    this.hpText.textContent = `${Math.ceil(hp)} / ${maxHp}`;
     this.hpFill.classList.toggle('low', hpP < 0.3);
     this.mpFill.style.width = Math.max(0, mp / GAME.maxMana) * 100 + '%';
     this.mpText.textContent = `${Math.floor(mp)} / ${GAME.maxMana}`;
@@ -125,14 +125,15 @@ export class HUD {
       const v = this.tmp.copy(av.pos);
       v.y += 2.55;
       v.project(camera);
-      const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && !av.dead;
+      const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && !av.dead && !av.hidden;
       if (!vis) { p.d.style.display = 'none'; continue; }
       p.d.style.display = '';
       const dist = camera.position.distanceTo(av.pos);
       const sc = Math.max(0.55, Math.min(1, 14 / dist));
       p.d.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px) translate(-50%,-100%) scale(${sc})`;
-      p.bar.style.width = Math.max(0, av.hp / GAME.maxHp) * 100 + '%';
+      p.bar.style.width = Math.max(0, av.hp / (av.char.hp || GAME.maxHp)) * 100 + '%';
       p.d.classList.toggle('target', !!av.targeted);
+      p.d.classList.toggle('buffed', !!(av.buff && av.buff.kind === 'stoneSkin'));
       if (p.d.dataset.team !== (av.team || '')) p.d.dataset.team = av.team || '';
     }
   }

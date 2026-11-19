@@ -115,8 +115,10 @@ export function rainPoints(skill, seed) {
 // arena.obstacles: trụ [x, z, bán kính, cao]; arena.boxes: hộp thẳng trục [x, z, nửa rộng X, nửa rộng Z, cao]
 
 // Đạn có chạm đất / chướng ngại vật / ra khỏi đấu trường không
-export function hitsObstacle(x, y, z, r = 0, arena = ARENA) {
+// dyn: chướng ngại vật tạm thời [{ x, z, r, h }] (cây thần, cột đá...)
+export function hitsObstacle(x, y, z, r = 0, arena = ARENA, dyn = null) {
   if (y <= 0.05) return true;
+  if (dyn) for (const o of dyn) if (y < o.h && Math.hypot(x - o.x, z - o.z) < o.r + r * 0.5) return true;
   for (const [ox, oz, or, oh] of arena.obstacles) {
     if (y < oh && Math.hypot(x - ox, z - oz) < or + r * 0.5) return true;
   }
@@ -137,6 +139,14 @@ export function arenaGround(arena, x, z, y, br) {
     if (y >= h - 0.3 && Math.abs(x - bx) < hw + br * 0.4 && Math.abs(z - bz) < hd + br * 0.4) g = Math.max(g, h);
   }
   return g;
+}
+
+// Đẩy nhân vật ra khỏi chướng ngại vật tạm thời (dạng trụ)
+export function dynCollide(dyn, p, br) {
+  for (const o of dyn) {
+    const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
+    if (d < o.r + br && p.y < o.h - 0.3) { const s = (o.r + br) / (d || 1); p.x = o.x + dx * s; p.z = o.z + dz * s; }
+  }
 }
 
 // Đẩy nhân vật (p: {x, y, z}) ra khỏi chướng ngại vật và giữ trong đấu trường
