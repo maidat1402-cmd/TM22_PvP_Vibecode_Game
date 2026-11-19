@@ -12,6 +12,8 @@ export class Net {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
       this.ws = ws;
+      // rời/tải lại trang: đóng kết nối ngay để server xoá nhân vật khỏi phòng
+      addEventListener('pagehide', () => { try { ws.close(); } catch { /* bỏ qua */ } }, { once: true });
       ws.onopen = () => {
         this.connected = true;
         this.pingTimer = setInterval(() => this.send({ t: 'ping', c: performance.now() }), 2000);

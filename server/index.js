@@ -121,6 +121,9 @@ class Hub {
     });
     ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
     ws.on('error', () => {});
+    // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
   }
 }
 
@@ -134,6 +137,15 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
   concurrencyLimit: 16,
 }, maxPayload: 16 * 1024 });
 wss.on('connection', ws => hub.onConnection(ws));
+// Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
+// Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch { /* bỏ qua */ }
+  }
+}, 5000);
 
 // ---------- Khởi động ----------
 function lanAddresses() {
