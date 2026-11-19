@@ -53,8 +53,9 @@ export const MOVE = {
   flyMaxHeight: 14,
 };
 
-// Đấu trường: mặt sàn tròn + chướng ngại vật hình trụ
+// Đấu trường mặc định (Đền Anh Đào). Các map khác: shared/arenas.js
 export const ARENA = {
+  id: 'shrine', name: 'Đền Anh Đào', icon: '🌸', theme: 'shrine',
   radius: 40,
   obstacles: [
     // [x, z, bán kính, chiều cao]
@@ -101,11 +102,52 @@ export function rainPoints(skill, seed) {
   return pts;
 }
 
+// ---------- Va chạm với đấu trường (dùng chung server/client) ----------
+// arena.obstacles: trụ [x, z, bán kính, cao]; arena.boxes: hộp thẳng trục [x, z, nửa rộng X, nửa rộng Z, cao]
+
 // Đạn có chạm đất / chướng ngại vật / ra khỏi đấu trường không
-export function hitsObstacle(x, y, z, r = 0) {
+export function hitsObstacle(x, y, z, r = 0, arena = ARENA) {
   if (y <= 0.05) return true;
-  for (const [ox, oz, or, oh] of ARENA.obstacles) {
+  for (const [ox, oz, or, oh] of arena.obstacles) {
     if (y < oh && Math.hypot(x - ox, z - oz) < or + r * 0.5) return true;
   }
-  return Math.hypot(x, z) > ARENA.radius + 6;
+  for (const [bx, bz, hw, hd, bh] of arena.boxes || []) {
+    const m = r * 0.5;
+    if (y < bh && Math.abs(x - bx) < hw + m && Math.abs(z - bz) < hd + m) return true;
+  }
+  return Math.hypot(x, z) > arena.radius + 6;
+}
+
+// Độ cao mặt đất tại (x, z) khi đang ở độ cao y – tính cả nóc chướng ngại vật
+export function arenaGround(arena, x, z, y, br) {
+  let g = 0;
+  for (const [ox, oz, r, h] of arena.obstacles) {
+    if (y >= h - 0.3 && Math.hypot(x - ox, z - oz) < r + br * 0.4) g = Math.max(g, h);
+  }
+  for (const [bx, bz, hw, hd, h] of arena.boxes || []) {
+    if (y >= h - 0.3 && Math.abs(x - bx) < hw + br * 0.4 && Math.abs(z - bz) < hd + br * 0.4) g = Math.max(g, h);
+  }
+  return g;
+}
+
+// Đẩy nhân vật (p: {x, y, z}) ra khỏi chướng ngại vật và giữ trong đấu trường
+export function arenaCollide(arena, p, br) {
+  for (const [ox, oz, r, h] of arena.obstacles) {
+    const dx = p.x - ox, dz = p.z - oz, d = Math.hypot(dx, dz);
+    if (d < r + br && p.y < h - 0.3) {
+      const s = (r + br) / (d || 1);
+      p.x = ox + dx * s; p.z = oz + dz * s;
+    }
+  }
+  for (const [bx, bz, hw, hd, h] of arena.boxes || []) {
+    if (p.y >= h - 0.3) continue;
+    const ex = hw + br - Math.abs(p.x - bx), ez = hd + br - Math.abs(p.z - bz);
+    if (ex > 0 && ez > 0) {
+      // đẩy ra theo cạnh gần nhất
+      if (ex < ez) p.x += Math.sign(p.x - bx || 1) * ex;
+      else p.z += Math.sign(p.z - bz || 1) * ez;
+    }
+  }
+  const dc = Math.hypot(p.x, p.z), maxR = arena.radius - 0.6;
+  if (dc > maxR) { p.x *= maxR / dc; p.z *= maxR / dc; }
 }

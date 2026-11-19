@@ -4,7 +4,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { NET, Ticker, GAME, MOVE, ARENA } from '/shared/config.js';
+import { NET, Ticker, GAME, MOVE, ARENA, arenaGround, arenaCollide } from '/shared/config.js';
+import { getArena } from '/shared/arenas.js';
 import { getChar, skillLifetime } from '/shared/characters.js';
 import { STEER_SEND_HZ } from '/shared/steer.js';
 import { buildChibi, ANIM } from './chibi.js';
@@ -124,12 +125,9 @@ class Avatar {
 }
 
 // Độ cao mặt đất tại (x,z) – tính cả mặt trên chướng ngại vật
+let curArena = ARENA;   // map của phòng hiện tại
 function groundHeight(x, z, y) {
-  let g = 0;
-  for (const [ox, oz, r, h] of ARENA.obstacles) {
-    if (y >= h - 0.3 && Math.hypot(x - ox, z - oz) < r + BR * 0.4) g = Math.max(g, h);
-  }
-  return g;
+  return arenaGround(curArena, x, z, y, BR);
 }
 
 // ======================= Game =======================
@@ -150,7 +148,7 @@ export class Game {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.9);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
-    this.world = buildWorld(this.scene);
+    this.world = buildWorld(this.scene, ARENA);
     this.fx = new FX(this.scene, this.camera);
     this.fx.warmup(this.renderer);   // biên dịch shader trước để không giật khi tung chiêu lần đầu
     this.hud = new HUD();
@@ -204,6 +202,7 @@ export class Game {
   // ======================= Vào / rời phòng =======================
   enter(msg) {
     this.clear();
+    this.setArena(getArena(msg.room.map));
     this.active = true;
     this.myId = msg.you;
     this.roomId = msg.room.id;
@@ -216,6 +215,15 @@ export class Game {
     this.cam.yaw = Math.atan2(this.me.pos.x, this.me.pos.z);
     $('chatlog').innerHTML = '';
     this.setupTouch();
+  }
+
+  // Dựng lại cảnh khi vào phòng có map khác
+  setArena(a) {
+    curArena = a;
+    this.fx.arena = a;
+    if (this.world.arena === a) return;
+    this.world.dispose();
+    this.world = buildWorld(this.scene, a);
   }
 
   leave() {
@@ -799,15 +807,7 @@ export class Game {
     // Tích phân + va chạm
     const p = me.pos;
     p.x += L.vel.x * dt; p.y += L.vel.y * dt; p.z += L.vel.z * dt;
-    for (const [ox, oz, r, h] of ARENA.obstacles) {
-      const dx = p.x - ox, dz = p.z - oz, d = Math.hypot(dx, dz);
-      if (d < r + BR && p.y < h - 0.3) {
-        const s = (r + BR) / (d || 1);
-        p.x = ox + dx * s; p.z = oz + dz * s;
-      }
-    }
-    const dc = Math.hypot(p.x, p.z), maxR = ARENA.radius - 0.6;
-    if (dc > maxR) { p.x *= maxR / dc; p.z *= maxR / dc; }
+    arenaCollide(curArena, p, BR);
     const gy = groundHeight(p.x, p.z, p.y);
     if (p.y <= gy && L.vel.y <= 0) {
       if (!L.onGround && L.vel.y < -8) this.fx.dust(p, 12);

@@ -691,7 +691,7 @@ const SKILL_FX = {
             -sub.d.x * 2 + (Math.random() - 0.5), (kind === 'crescent' ? 1.5 : 0) + (Math.random() - 0.5), -sub.d.z * 2 + (Math.random() - 0.5),
             Math.random() < 0.3 ? core : color, big ? 0.9 : kind === 'crescent' ? 0.55 : 0.28, big ? 0.5 : 0.3, { drag: 2 });
         }
-        if (sub.dist >= s.range || hitsObstacle(x, y, z, s.radius)) {
+        if (sub.dist >= s.range || hitsObstacle(x, y, z, s.radius, fx.arena)) {
           // máy chủ sẽ gửi 'pend'/'boom' — nhưng tự kết thúc để không bị trễ
           endSub(sub, gp, !s.explode);
         } else any = true;

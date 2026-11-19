@@ -1,6 +1,7 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, ARENA, rainPoints, hitsObstacle } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, rainPoints, hitsObstacle } from '../shared/config.js';
+import { getArena } from '../shared/arenas.js';
 import { getChar, skillLifetime } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
 
@@ -26,9 +27,10 @@ let nextRoomId = 1;
 let nextEntityId = 1;
 
 export class Room {
-  constructor(name, hub) {
+  constructor(name, hub, mapId) {
     this.id = String(nextRoomId++);
     this.name = name;
+    this.arena = getArena(mapId);
     this.hub = hub;
     this.players = new Map(); // id -> player
     this.entities = [];
@@ -41,13 +43,14 @@ export class Room {
 
   destroy() { this.stopLoop(); }
 
-  info() { return { id: this.id, name: this.name, count: this.count, mode: 'brawl' }; }
+  info() { return { id: this.id, name: this.name, count: this.count, mode: 'brawl', map: this.arena.id, mapName: this.arena.name }; }
 
   // ---------- Quản lý người chơi ----------
   spawnPoint() {
     // chọn điểm hồi sinh xa người chơi khác nhất
-    let best = ARENA.spawns[0], bestD = -1;
-    for (const s of ARENA.spawns) {
+    const A = this.arena;
+    let best = A.spawns[0], bestD = -1;
+    for (const s of A.spawns) {
       let minD = 1e9;
       for (const p of this.players.values()) if (!p.dead) minD = Math.min(minD, Math.hypot(p.x - s[0], p.z - s[1]));
       minD += Math.random() * 4;
@@ -72,7 +75,7 @@ export class Room {
     };
     this.players.set(p.id, p);
     client.room = this;
-    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name },
+    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id },
       players: [...this.players.values()].map(q => this.publicPlayer(q)) });
     this.broadcast({ t: 'pjoin', player: this.publicPlayer(p) }, p.id);
     this.broadcast({ t: 'sys', msg: `${p.name} đã vào phòng` });
@@ -301,7 +304,7 @@ export class Room {
               if (!s.pierce) { ended = true; break; }
             }
           }
-          if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius))) ended = true;
+          if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius, this.arena))) ended = true;
           if (ended) {
             sub.alive = false;
             if (s.explode) this.explode(e, src, nx, ny, nz, s.explode);
@@ -428,7 +431,7 @@ export class Room {
       p.hp = Math.min(GAME.maxHp, p.hp);
       p.mp = Math.max(0, Math.min(GAME.maxMana, p.mp));
       // Rơi khỏi đấu trường
-      if (p.y < -15 || Math.hypot(p.x, p.z) > ARENA.radius + 25) this.kill(p, null);
+      if (p.y < -15 || Math.hypot(p.x, p.z) > this.arena.radius + 25) this.kill(p, null);
     }
 
     for (const e of this.entities) {

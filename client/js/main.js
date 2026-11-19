@@ -187,9 +187,9 @@ net.on('rooms', m => {
   if (want || params.has('quick')) {
     autoJoinDone = true;
     const qmode = params.get('mode') || 'brawl';
-    const r = m.list.find(x => x.id === want) || (params.has('quick') ? m.list.find(x => (x.mode || 'brawl') === qmode) : null);
+    const r = m.list.find(x => x.id === want) || (params.has('quick') ? m.list.find(x => (x.mode || 'brawl') === qmode && (!params.get('map') || x.map === params.get('map'))) : null);
     if (r) net.send({ t: 'join', id: r.id, char: settings.char });
-    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || 'lantern' });
+    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (qmode === 'brawl' ? 'shrine' : 'lantern') });
     else game.hud.toast('Phòng trong link mời không còn tồn tại', 2500);
   }
 });
@@ -227,15 +227,22 @@ $('createBtn').onclick = () => {
   initAudio(); sfx('ui'); sendHello(); goFullscreen();
   const mode = document.querySelector('input[name=mode]:checked')?.value || 'brawl';
   const map = document.querySelector('input[name=map]:checked')?.value || 'lantern';
-  settings.mode = mode; settings.map = map; saveSettings();
-  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map });
+  const arena = document.querySelector('input[name=arena]:checked')?.value || 'shrine';
+  settings.mode = mode; settings.map = map; settings.arena = arena; saveSettings();
+  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: mode === 'brawl' ? arena : map });
 };
 for (const r of document.querySelectorAll('input[name=mode]')) {
   r.checked = r.value === settings.mode;
-  r.onchange = () => $('mapPick').classList.toggle('off', r.value === 'brawl');
+  r.onchange = () => showMapPick(r.value);
+}
+// chỉ hiện ô chọn map của chế độ đang chọn
+function showMapPick(mode) {
+  $('mapPick').classList.toggle('off', mode === 'brawl');
+  $('arenaPick').classList.toggle('off', mode !== 'brawl');
 }
 for (const r of document.querySelectorAll('input[name=map]')) r.checked = r.value === (settings.map || 'lantern');
-$('mapPick').classList.toggle('off', (settings.mode || 'brawl') === 'brawl');
+for (const r of document.querySelectorAll('input[name=arena]')) r.checked = r.value === (settings.arena || 'shrine');
+showMapPick(settings.mode || 'brawl');
 $('refreshBtn').onclick = () => { net.send({ t: 'list' }); loadServerInfo(); };
 $('nameInput').value = settings.name;
 $('nameInput').onchange = sendHello;

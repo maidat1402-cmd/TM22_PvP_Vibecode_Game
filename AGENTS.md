@@ -54,8 +54,9 @@ server/            Node.js (ESM). 1 cổng duy nhất: HTTP tĩnh + WebSocket �
   loop.js          Vòng lặp tick theo lịch cố định (xem mục 5)
   upnp.js, tunnel.js  Mở port qua UPnP / tạo link qua Cloudflare Tunnel
 shared/            Code chạy chung cho server và trình duyệt
-  config.js        NET (nhịp mạng), Ticker, GAME, MOVE, ARENA (sân đối kháng)
+  config.js        NET (nhịp mạng), Ticker, GAME, MOVE, ARENA (map mặc định), va chạm đấu trường
   characters.js    Nhân vật và chiêu thức, dạng dữ liệu (thêm nhân vật ở đây)
+  arenas.js        Map chế độ đối kháng: trụ, hộp, điểm hồi sinh, theme
   steer.js         Lái tuyệt kỹ theo tâm ngắm
   weapons.js       Súng, trang bị, lựu đạn, bảng mua đồ, phe, hằng số chế độ bắn súng
   maps.js          Map bắn súng, va chạm, raycast, mô phỏng lựu đạn
@@ -87,7 +88,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   2. Chạy server và mở 2 tab trình duyệt vào cùng phòng, xem cả 2 người chơi có thấy nhau, đánh hay bắn trúng nhau không.
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
 - Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
-- **Mở nhanh để test:** `/?quick&mode=brawl|bomb|dm&map=lantern|temple` vào thẳng một phòng mới, `/?room=<ID>` vào phòng có sẵn.
+- **Mở nhanh để test:** `/?quick&mode=brawl|bomb|dm&map=<id map>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn.
 - **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
 
@@ -145,5 +146,11 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Kiểu chiêu (`type`) có sẵn: `melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`. Hiệu ứng chọn qua `fx.kind`.
   - Kiểu chiêu mới cần sửa cả 3 nơi: mô phỏng ở `server/room.js`, hiệu ứng ở `client/js/effects.js`, thời gian tồn tại ở `skillLifetime`.
 - **Súng mới:** thêm vào `WEAPONS` và `BUY_MENU` trong `shared/weapons.js`. Mô hình súng thêm trong `client/js/shooter/guns.js`.
-- **Map mới:** thêm vào `MAPS` trong `shared/maps.js`, gồm khối va chạm, điểm hồi sinh, điểm đặt bom và `theme`. Giao diện theo `theme` viết ở `client/js/shooter/mapview.js`.
+- **Map đối kháng mới:**
+  - Khai báo trong `ARENAS` ở `shared/arenas.js`: `radius`, trụ `obstacles` `[x, z, bán kính, cao]`, hộp `boxes` `[x, z, nửa rộng X, nửa rộng Z, cao]` và `spawns`.
+  - Viết theme trong `THEMES` ở `client/js/world.js`: trời, sàn, cách vẽ trụ/hộp, cảnh trang trí, hạt bay. Nóc chướng ngại vật trong hình phải nằm đúng độ cao `h`, vì người chơi đứng được trên đó.
+  - Thêm một lựa chọn vào `#arenaPick` trong `client/index.html`.
+  - Kiểm tra điểm hồi sinh không nằm trong chướng ngại vật và cách mép sân ít nhất 2 m.
+  - Va chạm luôn đi qua `hitsObstacle`, `arenaGround`, `arenaCollide` trong `shared/config.js` và truyền map của phòng vào. Không đọc thẳng `ARENA`.
+- **Map bắn súng mới:** thêm vào `MAPS` trong `shared/maps.js`, gồm khối va chạm, điểm hồi sinh, điểm đặt bom và `theme`. Giao diện theo `theme` viết ở `client/js/shooter/mapview.js`.
 - **Cân bằng game:** chỉnh số trong `shared/`. Sau khi chỉnh, khởi động lại server để server và client dùng cùng một bộ số.

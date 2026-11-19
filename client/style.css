@@ -389,7 +389,7 @@ body.touch #clickToPlay { display: none !important; }
 .map-pick input { display: none; }
 .map-pick label span { display: inline-block; padding: 4px 10px; border-radius: 10px; border: 2px solid var(--line); color: var(--text); font-weight: 700; }
 .map-pick input:checked + span { border-color: #7cc4ff; background: rgba(72,149,239,.15); }
-.map-pick.off { opacity: .4; pointer-events: none; }
+.map-pick.off { display: none; }
 [data-layout="shooter"] [data-id="nade"] { right: 24px; bottom: 250px; width: 52px; height: 52px; }
 [data-layout="shooter"] [data-id="pick"] { right: 170px; bottom: 236px; width: 52px; height: 52px; }
 @media (max-height: 520px) {

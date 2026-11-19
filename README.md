@@ -79,6 +79,19 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
 
+### Map đối kháng
+
+Chọn map khi tạo phòng (mục **Map đối kháng**):
+
+| Map | Đặc điểm |
+|---|---|
+| 🌸 **Đền Anh Đào** | Sân đá tròn giữa rừng anh đào, cột đá rải đều — map cân bằng |
+| 🥋 **Đảo Đại Hội Võ Thuật** | Sàn đấu lát đá giữa biển, khán đài cổ vũ, bục cao ở giữa, rất thoáng — hợp đấu chưởng tầm xa |
+| 🏜 **Hoang Mạc Đá Đỏ** | Sân rộng nhất, nhiều cột đá cao 6–14 m để nấp hoặc bay lên nóc phục kích, bụi bay theo gió |
+| 🍃 **Làng Ninja Rừng Trúc** | Nhà gỗ nhảy lên mái được, tháp nước, bãi tập cọc gỗ, giếng đá, rừng trúc bao quanh |
+
+Các map là địa điểm tự thiết kế, chỉ lấy cảm hứng từ không khí phim võ thuật/ninja. Thêm map: khai báo trong [shared/arenas.js](shared/arenas.js) (trụ, hộp, điểm hồi sinh) và viết theme giao diện trong [client/js/world.js](client/js/world.js).
+
 ## Chế độ bắn súng
 
 Chọn map khi tạo phòng (phe Công luôn xuất phát ở phía nam, phe Thủ ở phía bắc):
@@ -160,7 +173,7 @@ Thông số chung (máu, mana, tốc độ hồi, tốc độ chạy, đấu tr�
 
 ```
 server/   index.js (HTTP + WebSocket + lobby), room.js (đối kháng), shooter.js (bắn súng: vòng đấu, tiền, bom), upnp.js, tunnel.js
-shared/   config.js, characters.js, weapons.js, maps.js  — dùng chung cho server và client
+shared/   config.js, characters.js, arenas.js (map đối kháng), steer.js, weapons.js, maps.js (map bắn súng)  — dùng chung cho server và client
 client/   index.html, style.css, js/ (game, chibi, effects, world, ui, audio, net, touch, main)
           js/shooter/ (sgame: lõi bắn súng, mapview: dựng map, guns: mô hình súng)
 ```
