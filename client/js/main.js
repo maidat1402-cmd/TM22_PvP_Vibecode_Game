@@ -132,7 +132,8 @@ function renderRooms(list) {
   for (const r of list) {
     const d = document.createElement('div');
     d.className = 'room';
-    const tag = { brawl: '⚔ Đối kháng', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl'];
+    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
+      + (r.mode === 'team' ? (r.phase === 'lobby' ? ' · đang chờ' : ' · đang đấu') : '');
     d.innerHTML = `<div><b>${esc(r.name)}</b><span class="mtag ${r.mode}">${tag}</span><small>${r.mapName ? esc(r.mapName) + ' · ' : ''}${r.count} người chơi · không giới hạn</small></div>`;
     const b = document.createElement('button');
     b.className = 'btn primary small';
@@ -189,7 +190,7 @@ net.on('rooms', m => {
     const qmode = params.get('mode') || 'brawl';
     const r = m.list.find(x => x.id === want) || (params.has('quick') ? m.list.find(x => (x.mode || 'brawl') === qmode && (!params.get('map') || x.map === params.get('map'))) : null);
     if (r) net.send({ t: 'join', id: r.id, char: settings.char });
-    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (qmode === 'brawl' ? 'shrine' : 'lantern') });
+    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (qmode === 'brawl' || qmode === 'team' ? 'shrine' : 'lantern') });
     else game.hud.toast('Phòng trong link mời không còn tồn tại', 2500);
   }
 });
@@ -229,7 +230,7 @@ $('createBtn').onclick = () => {
   const map = document.querySelector('input[name=map]:checked')?.value || 'lantern';
   const arena = document.querySelector('input[name=arena]:checked')?.value || 'shrine';
   settings.mode = mode; settings.map = map; settings.arena = arena; saveSettings();
-  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: mode === 'brawl' ? arena : map });
+  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: mode === 'brawl' || mode === 'team' ? arena : map });
 };
 for (const r of document.querySelectorAll('input[name=mode]')) {
   r.checked = r.value === settings.mode;
@@ -237,8 +238,9 @@ for (const r of document.querySelectorAll('input[name=mode]')) {
 }
 // chỉ hiện ô chọn map của chế độ đang chọn
 function showMapPick(mode) {
-  $('mapPick').classList.toggle('off', mode === 'brawl');
-  $('arenaPick').classList.toggle('off', mode !== 'brawl');
+  const brawlLike = mode === 'brawl' || mode === 'team';
+  $('mapPick').classList.toggle('off', brawlLike);
+  $('arenaPick').classList.toggle('off', !brawlLike);
 }
 for (const r of document.querySelectorAll('input[name=map]')) r.checked = r.value === (settings.map || 'lantern');
 for (const r of document.querySelectorAll('input[name=arena]')) r.checked = r.value === (settings.arena || 'shrine');
@@ -249,7 +251,7 @@ $('nameInput').onchange = sendHello;
 
 // ---------- Tạm dừng ----------
 game.onUnlock = shooter.onUnlock = () => {
-  if ($('settings').hidden && $('charModal').hidden && $('help').hidden) $('pause').hidden = false;
+  if ($('settings').hidden && $('charModal').hidden && $('help').hidden && $('teamLobby').hidden) $('pause').hidden = false;
 };
 $('resumeBtn').onclick = () => { $('pause').hidden = true; if (!touch.enabled) lockPointer(); };
 $('leaveBtn').onclick = () => {

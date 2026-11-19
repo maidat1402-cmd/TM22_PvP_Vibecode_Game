@@ -133,6 +133,7 @@ export class HUD {
       p.d.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px) translate(-50%,-100%) scale(${sc})`;
       p.bar.style.width = Math.max(0, av.hp / GAME.maxHp) * 100 + '%';
       p.d.classList.toggle('target', !!av.targeted);
+      if (p.d.dataset.team !== (av.team || '')) p.d.dataset.team = av.team || '';
     }
   }
 
@@ -171,12 +172,25 @@ export class HUD {
   }
 
   // ---------- Bảng điểm ----------
-  scoreboard(avatars, show) {
+  // teamScore: { A, B } khi đấu đội
+  scoreboard(avatars, show, teamScore) {
     const sb = $('scoreboard');
     sb.hidden = !show;
     if (!show) return;
-    const rows = [...avatars].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    $('sbBody').innerHTML = rows.map((a, i) => `<tr class="${a.isMe ? 'me' : ''}"><td>${i + 1}</td>
+    let rows = [...avatars].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+    if (teamScore) {
+      // đấu đội: chia theo đội, mỗi đội xếp theo số mạng hạ
+      const part = t => rows.filter(a => a.team === t);
+      const head = (t, name) => `<tr class="thead t${t}"><td colspan="5">${name} · ${teamScore[t]} điểm</td></tr>`;
+      const A = part('A'), B = part('B');
+      $('sbBody').innerHTML = head('A', '🔵 Đội Xanh') + this.sbRows(A) + head('B', '🔴 Đội Đỏ') + this.sbRows(B);
+      return;
+    }
+    $('sbBody').innerHTML = this.sbRows(rows);
+  }
+
+  sbRows(rows) {
+    return rows.map((a, i) => `<tr class="${a.isMe ? 'me' : ''}${a.team ? ' t' + a.team : ''}"><td>${i + 1}</td>
       <td><span class="dot" style="background:${hex(a.char.look.hair)}"></span>${esc(a.name)}</td>
       <td>${esc(a.char.name)}</td><td>${a.kills}</td><td>${a.deaths}</td></tr>`).join('');
   }

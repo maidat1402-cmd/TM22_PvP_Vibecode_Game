@@ -4,14 +4,14 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { NET, Ticker, GAME, MOVE, ARENA, arenaGround, arenaCollide } from '/shared/config.js';
+import { NET, Ticker, GAME, MOVE, ARENA, TEAM, arenaGround, arenaCollide } from '/shared/config.js';
 import { getArena } from '/shared/arenas.js';
 import { getChar, skillLifetime } from '/shared/characters.js';
 import { STEER_SEND_HZ } from '/shared/steer.js';
 import { buildChibi, ANIM } from './chibi.js';
 import { FX } from './effects.js';
 import { buildWorld } from './world.js';
-import { HUD, $, lockPointer } from './ui.js';
+import { HUD, $, esc, hex, lockPointer } from './ui.js';
 import { sfx, skillSound } from './audio.js';
 
 const now = () => performance.now() / 1000;
@@ -176,6 +176,7 @@ export class Game {
 
     this.bindNet();
     this.bindInput();
+    this.bindTeamUi();
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
   }
@@ -203,6 +204,9 @@ export class Game {
   enter(msg) {
     this.clear();
     this.setArena(getArena(msg.room.map));
+    this.teamMode = !!msg.room.team;
+    this.ts = null;
+    this.hideTeamUi();
     this.active = true;
     this.myId = msg.you;
     this.roomId = msg.room.id;
@@ -228,6 +232,8 @@ export class Game {
 
   leave() {
     this.active = false;
+    this.teamMode = false;
+    this.hideTeamUi();
     this.clear();
     this.hud.show(false);
     this.hud.death(false);
@@ -246,6 +252,7 @@ export class Game {
 
   addAvatar(p) {
     const av = new Avatar(this, p, p.id === this.myId);
+    av.team = p.team || null;
     this.avatars.set(p.id, av);
     return av;
   }
@@ -340,6 +347,7 @@ export class Game {
       if (av.isMe) this.L.healCd = now() + GAME.heal.cd;
     });
     n.on('healno', () => sfx('error'));
+    n.on('tstate', m => { if (this.active && this.teamMode) this.onTeamState(m); });
     n.on('chat', m => this.hud.chat(m.name, m.msg));
     n.on('sys', m => this.hud.chat('', m.msg, true));
   }
@@ -406,6 +414,120 @@ export class Game {
     }
   }
 
+  // ======================= Đấu đội =======================
+  isAlly(av) {
+    return this.teamMode && !!av.team && av.team === this.me?.team;
+  }
+
+  bindTeamUi() {
+    for (const b of document.querySelectorAll('#teamLobby [data-join]')) {
+      b.onclick = () => this.net.send({ t: 'tteam', team: b.dataset.join });
+    }
+    $('tlReady').onclick = () => this.net.send({ t: 'tready', on: !this.me?.ready });
+    $('tlStart').onclick = () => this.net.send({ t: 'tstart' });
+    $('tlHide').onclick = () => this.showLobby(false);
+    $('tlShow').onclick = () => this.showLobby(true);
+  }
+
+  // Mở/đóng bảng phòng chờ. Đóng = chạy nhảy khởi động (không mất máu)
+  showLobby(on) {
+    $('teamLobby').hidden = !on;
+    if (on) {
+      if (document.pointerLockElement) document.exitPointerLock();
+      $('clickToPlay').hidden = true;
+      this.renderLobby();
+    } else if (this.active && !this.touch?.enabled) {
+      lockPointer();
+      $('clickToPlay').hidden = !!document.pointerLockElement;
+    }
+  }
+
+  hideTeamUi() {
+    for (const id of ['teamLobby', 'tlShow', 'teamScore', 'teamBanner']) $(id).hidden = true;
+    clearTimeout(this.bannerTimer);
+  }
+
+  banner(html, cls, dur = 3) {
+    const b = $('teamBanner');
+    b.className = cls;
+    b.innerHTML = html;
+    b.hidden = false;
+    // chạy lại hiệu ứng xuất hiện
+    b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => { b.hidden = true; }, dur * 1000);
+  }
+
+  onTeamState(m) {
+    const prev = this.ts?.phase;
+    this.ts = { ...m, at: now() };
+    for (const [id, team, ready, k, d] of m.players) {
+      const av = this.avatars.get(id);
+      if (av) { av.team = team; av.ready = !!ready; av.kills = k; av.deaths = d; }
+    }
+    if (prev !== m.phase) {
+      if (m.phase === 'lobby') this.showLobby(true);
+      else if (m.phase === 'play') {
+        $('teamLobby').hidden = true;
+        if (prev === 'lobby') {
+          this.banner(`⚔ BẮT ĐẦU!<small>Đội nào hạ ${m.limit} mạng trước sẽ thắng</small>`, 'go', 3);
+          sfx('respawn');
+          if (!this.touch?.enabled) { lockPointer(); $('clickToPlay').hidden = !!document.pointerLockElement; }
+        }
+      } else if (m.phase === 'end') {
+        const mine = m.winner === this.me?.team;
+        const title = m.winner === 'draw' ? '🤝 HOÀ!' : `🏆 ${TEAM.names[m.winner].toUpperCase()} THẮNG!`;
+        this.banner(`${title}<small>${m.score.A} - ${m.score.B} · ${m.winner === 'draw' ? '' : mine ? 'Đội bạn chiến thắng 🎉 · ' : 'Thua rồi, phục thù nhé! · '}về phòng chờ sau ${m.left}s</small>`, m.winner, m.left);
+        sfx(mine ? 'respawn' : 'die');
+      }
+    }
+    this.renderLobby();
+  }
+
+  renderLobby() {
+    const m = this.ts;
+    if (!m || $('teamLobby').hidden) return;
+    const me = this.me;
+    const isHost = m.host === this.myId;
+    const counts = { A: 0, B: 0 };
+    for (const t of ['A', 'B']) {
+      const list = [...this.avatars.values()].filter(a => a.team === t);
+      counts[t] = list.length;
+      $('tlList' + t).innerHTML = list.map(a => `<li class="${a.isMe ? 'me' : ''}">
+        <span class="dot" style="background:${hex(a.char.look.hair)}"></span>
+        <span class="nm">${a.id === m.host ? '👑 ' : ''}${esc(a.name)} <small class="muted">${esc(a.char.name)}</small></span>
+        <span class="st ${a.ready || a.id === m.host ? 'ok' : ''}">${a.id === m.host ? 'Chủ phòng' : a.ready ? '✔ Sẵn sàng' : '⏳ Chưa'}</span></li>`).join('')
+        || '<li class="muted">Chưa có ai</li>';
+      $('tlCount' + t).textContent = `(${list.length})`;
+      document.querySelector(`#teamLobby [data-join="${t}"]`).disabled = me?.team === t;
+    }
+    $('tlInfo').textContent = `Map: ${this.world.arena.name} · Đội nào hạ ${m.limit} mạng trước, hoặc dẫn điểm khi hết ${Math.round(TEAM.timeLimit / 60)} phút, sẽ thắng. Trong lúc chờ có thể bấm Khởi động để chạy nhảy thử chiêu (chưa tính máu).`;
+    const rb = $('tlReady');
+    rb.hidden = isHost;
+    rb.classList.toggle('on', !!me?.ready);
+    rb.textContent = me?.ready ? '✖ Huỷ sẵn sàng' : '✔ Sẵn sàng';
+    const sb = $('tlStart');
+    sb.hidden = !isHost;
+    sb.disabled = !!m.block;
+    $('tlHint').textContent = isHost
+      ? (m.block ? `⏳ ${m.block}` : '✅ Mọi người đã sẵn sàng — bấm Bắt đầu!')
+      : (me?.ready ? '⏳ Chờ chủ phòng 👑 bắt đầu…' : 'Chọn đội rồi bấm Sẵn sàng khi bạn chuẩn bị xong');
+  }
+
+  updateTeamHud() {
+    const m = this.ts;
+    if (!m) return;
+    const live = m.phase === 'play' || m.phase === 'end';
+    $('tlShow').hidden = m.phase !== 'lobby' || !$('teamLobby').hidden;
+    $('teamScore').hidden = !live;
+    if (!live) return;
+    const left = Math.max(0, m.left - (now() - m.at));
+    $('tsA').textContent = m.score.A;
+    $('tsB').textContent = m.score.B;
+    const mm = Math.floor(left / 60), ss = String(Math.floor(left % 60)).padStart(2, '0');
+    $('tsMid').innerHTML = m.phase === 'play' ? `${mm}:${ss}<br>tới ${m.limit}` : 'Kết thúc';
+  }
+
   // ======================= Input =======================
   bindInput() {
     const canvas = $('game');
@@ -415,7 +537,7 @@ export class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       if (!locked && this.active && !this.chatting) this.onUnlock?.();
-      $('clickToPlay').hidden = locked || !this.active || this.chatting || !!this.touch?.enabled;
+      $('clickToPlay').hidden = locked || !this.active || this.chatting || !!this.touch?.enabled || !$('teamLobby').hidden;
     });
     addEventListener('mousemove', e => {
       if (document.pointerLockElement !== canvas) return;
@@ -455,6 +577,7 @@ export class Game {
         case 'KeyK': this.comboKey('K'); break;
         case 'KeyL': this.comboKey('L'); break;
         case 'KeyH': this.tryHeal(); break;
+        case 'KeyT': if (this.teamMode && this.ts?.phase === 'lobby') this.showLobby($('teamLobby').hidden); break;
         case 'Space': this.jump(); e.preventDefault(); break;
         case 'ShiftLeft': case 'ShiftRight': this.dash(); break;
       }
@@ -578,7 +701,7 @@ export class Game {
     const me = this.me;
     let best = null, bestScore = Infinity;
     for (const av of this.avatars.values()) {
-      if (av.isMe || av.dead) continue;
+      if (av.isMe || av.dead || this.isAlly(av)) continue;
       const dx = av.pos.x - me.pos.x, dz = av.pos.z - me.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 34 || d < 0.01) continue;
@@ -608,7 +731,7 @@ export class Game {
     const o = ray.ray.origin, d = ray.ray.direction;
     let best = null, bestAng = 0.09;
     for (const av of this.avatars.values()) {
-      if (av.isMe || av.dead) continue;
+      if (av.isMe || av.dead || this.isAlly(av)) continue;
       const vx = av.pos.x - o.x, vy = av.pos.y + 1 - o.y, vz = av.pos.z - o.z;
       const L = Math.hypot(vx, vy, vz);
       if (L > 40) continue;
@@ -904,7 +1027,8 @@ export class Game {
       const L = this.L;
       this.hud.updateBars(this.me.hp, this.me.mp, t, L.cds, L.healCd, L.dashCd, this.me.mp, L.charging);
       this.hud.updatePlates(this.avatars.values(), this.camera, innerWidth, innerHeight);
-      this.hud.scoreboard(this.avatars.values(), !!this.showScore);
+      this.hud.scoreboard(this.avatars.values(), !!this.showScore, this.teamMode ? this.ts?.score || { A: 0, B: 0 } : null);
+      if (this.teamMode) this.updateTeamHud();
       $('playerCount').textContent = this.avatars.size + ' người chơi';
       if (this.me.dead) this.hud.death(true, this.killer, GAME.respawnTime - (t - (this.deathAt || t)));
       $('stunned').hidden = !(t < L.stunUntil);

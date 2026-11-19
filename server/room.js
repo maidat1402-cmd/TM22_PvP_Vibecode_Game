@@ -1,6 +1,6 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, rainPoints, hitsObstacle } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, TEAM, rainPoints, hitsObstacle } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
 import { getChar, skillLifetime } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
@@ -27,10 +27,24 @@ let nextRoomId = 1;
 let nextEntityId = 1;
 
 export class Room {
-  constructor(name, hub, mapId) {
+  constructor(name, hub, mapId, team = false) {
     this.id = String(nextRoomId++);
     this.name = name;
     this.arena = getArena(mapId);
+    // Đấu đội: phòng chờ (lobby) → trận (play) → kết quả (end) → lại phòng chờ
+    this.team = team;
+    if (team) {
+      this.phase = 'lobby';
+      this.hostId = 0;
+      this.score = { A: 0, B: 0 };
+      this.winner = null;
+      this.phaseEnd = 0;
+      this.stateAcc = 0;
+      // chia điểm hồi sinh: nửa phía nam cho đội Xanh, nửa phía bắc cho đội Đỏ
+      const sorted = [...this.arena.spawns].sort((a, b) => a[1] - b[1]);
+      const half = Math.ceil(sorted.length / 2);
+      this.teamSpawns = { A: sorted.slice(0, half), B: sorted.slice(sorted.length - half) };
+    }
     this.hub = hub;
     this.players = new Map(); // id -> player
     this.entities = [];
@@ -43,16 +57,22 @@ export class Room {
 
   destroy() { this.stopLoop(); }
 
-  info() { return { id: this.id, name: this.name, count: this.count, mode: 'brawl', map: this.arena.id, mapName: this.arena.name }; }
+  info() {
+    return { id: this.id, name: this.name, count: this.count, mode: this.team ? 'team' : 'brawl', map: this.arena.id, mapName: this.arena.name,
+      phase: this.team ? this.phase : undefined };
+  }
 
   // ---------- Quản lý người chơi ----------
-  spawnPoint() {
-    // chọn điểm hồi sinh xa người chơi khác nhất
-    const A = this.arena;
-    let best = A.spawns[0], bestD = -1;
-    for (const s of A.spawns) {
+  spawnPoint(team) {
+    // chọn điểm hồi sinh xa người chơi khác (đấu đội: xa đối thủ, trong nửa sân của đội mình)
+    const list = this.team && team ? this.teamSpawns[team] : this.arena.spawns;
+    let best = list[0], bestD = -1;
+    for (const s of list) {
       let minD = 1e9;
-      for (const p of this.players.values()) if (!p.dead) minD = Math.min(minD, Math.hypot(p.x - s[0], p.z - s[1]));
+      for (const p of this.players.values()) {
+        if (p.dead || (this.team && p.team === team)) continue;
+        minD = Math.min(minD, Math.hypot(p.x - s[0], p.z - s[1]));
+      }
       minD += Math.random() * 4;
       if (minD > bestD) { bestD = minD; best = s; }
     }
@@ -61,24 +81,33 @@ export class Room {
 
   publicPlayer(p) {
     return { id: p.id, name: p.name, char: p.char, x: r2(p.x), y: r2(p.y), z: r2(p.z), yaw: r2(p.yaw),
-      hp: Math.ceil(p.hp), mp: Math.floor(p.mp), dead: p.dead, kills: p.kills, deaths: p.deaths };
+      hp: Math.ceil(p.hp), mp: Math.floor(p.mp), dead: p.dead, kills: p.kills, deaths: p.deaths, team: p.team || null };
   }
 
   add(client) {
-    const [sx, sz] = this.spawnPoint();
+    // đấu đội: vào đội ít người hơn
+    let team = null;
+    if (this.team) {
+      const n = this.teamCounts();
+      team = n.A <= n.B ? 'A' : 'B';
+    }
+    const [sx, sz] = this.spawnPoint(team);
     const p = {
       id: client.id, ws: client.ws, name: client.name, char: client.char,
       x: sx, y: 0, z: sz, yaw: Math.atan2(-sx, -sz), anim: 0, flags: 0,
       hp: GAME.maxHp, mp: GAME.maxMana, dead: false, respawnAt: 0,
       lastHit: -99, kills: 0, deaths: 0, cds: {}, lockUntil: 0, healCd: 0,
       healUntil: 0, healRate: 0, invulnUntil: 0, stunUntil: 0, lastSeen: now(),
+      team, ready: false,
     };
     this.players.set(p.id, p);
     client.room = this;
-    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id },
+    if (this.team && !this.hostId) this.hostId = p.id;
+    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id, team: this.team },
       players: [...this.players.values()].map(q => this.publicPlayer(q)) });
     this.broadcast({ t: 'pjoin', player: this.publicPlayer(p) }, p.id);
-    this.broadcast({ t: 'sys', msg: `${p.name} đã vào phòng` });
+    this.broadcast({ t: 'sys', msg: this.team ? `${p.name} đã vào ${TEAM.names[team]}` : `${p.name} đã vào phòng` });
+    if (this.team) this.sendTeamState();
     this.hub.roomsChanged();
   }
 
@@ -89,7 +118,111 @@ export class Room {
     this.broadcast({ t: 'pleave', id: clientId });
     this.broadcast({ t: 'sys', msg: `${p.name} đã rời phòng` });
     this.entities = this.entities.filter(e => e.owner !== clientId);
+    if (this.team && this.players.size) {
+      if (this.hostId === clientId) {
+        const next = this.players.values().next().value;
+        this.hostId = next.id;
+        this.broadcast({ t: 'sys', msg: `👑 ${next.name} trở thành chủ phòng` });
+      }
+      // đang đánh mà một đội không còn ai: đội còn lại thắng
+      if (this.phase === 'play') {
+        const n = this.teamCounts();
+        if (!n.A || !n.B) this.endMatch(n.A ? 'A' : 'B');
+      }
+      this.sendTeamState();
+    }
     this.hub.roomsChanged();
+  }
+
+  // ---------- Đấu đội ----------
+  teamCounts() {
+    const n = { A: 0, B: 0 };
+    for (const q of this.players.values()) n[q.team]++;
+    return n;
+  }
+
+  // Lý do chưa bắt đầu được (null = bắt đầu được)
+  startBlock() {
+    const n = this.teamCounts();
+    if (!n.A || !n.B) return 'Mỗi đội cần ít nhất 1 người';
+    const wait = [...this.players.values()].filter(q => q.id !== this.hostId && !q.ready).length;
+    if (wait) return `Còn ${wait} người chưa sẵn sàng`;
+    return null;
+  }
+
+  sendTeamState() {
+    const t = now();
+    this.broadcast({
+      t: 'tstate', phase: this.phase, host: this.hostId, score: this.score, winner: this.winner,
+      left: this.phaseEnd ? Math.max(0, Math.round(this.phaseEnd - t)) : 0, limit: TEAM.killLimit,
+      block: this.phase === 'lobby' ? this.startBlock() : null,
+      players: [...this.players.values()].map(q => [q.id, q.team, q.ready ? 1 : 0, q.kills, q.deaths]),
+    });
+    this.stateAcc = 0;
+  }
+
+  startMatch() {
+    const t = now();
+    this.phase = 'play';
+    this.score = { A: 0, B: 0 };
+    this.winner = null;
+    this.phaseEnd = t + TEAM.timeLimit;
+    this.entities = [];
+    for (const p of this.players.values()) {
+      const [sx, sz] = this.spawnPoint(p.team);
+      Object.assign(p, { dead: false, hp: GAME.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
+        invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0, healUntil: 0, ready: false });
+      this.broadcast({ t: 'respawn', id: p.id, p: [sx, 0, sz] });
+    }
+    this.broadcast({ t: 'sys', msg: `⚔ Trận đấu bắt đầu! Đội nào hạ ${TEAM.killLimit} mạng trước sẽ thắng.` });
+    this.sendTeamState();
+    this.hub.roomsChanged();
+  }
+
+  endMatch(winner) {
+    if (this.phase !== 'play') return;
+    this.phase = 'end';
+    this.winner = winner;          // 'A' | 'B' | 'draw'
+    this.phaseEnd = now() + TEAM.endDelay;
+    this.entities = [];
+    this.broadcast({ t: 'sys', msg: winner === 'draw' ? '🤝 Hai đội hoà!' : `🏆 ${TEAM.names[winner]} chiến thắng ${this.score.A} - ${this.score.B}!` });
+    this.sendTeamState();
+  }
+
+  backToLobby() {
+    this.phase = 'lobby';
+    this.phaseEnd = 0;
+    this.winner = null;
+    this.score = { A: 0, B: 0 };
+    for (const p of this.players.values()) p.ready = false;
+    this.sendTeamState();
+    this.hub.roomsChanged();
+  }
+
+  onTeamMessage(p, m) {
+    switch (m.t) {
+      case 'tteam': {
+        if (this.phase !== 'lobby') return;
+        const team = m.team === 'B' ? 'B' : 'A';
+        if (team === p.team) return;
+        p.team = team;
+        p.ready = false;
+        this.broadcast({ t: 'sys', msg: `${p.name} chuyển sang ${TEAM.names[team]}` });
+        break;
+      }
+      case 'tready':
+        if (this.phase !== 'lobby') return;
+        p.ready = !!m.on;
+        break;
+      case 'tstart': {
+        if (this.phase !== 'lobby' || p.id !== this.hostId) return;
+        const why = this.startBlock();
+        if (why) return this.send(p, { t: 'sys', msg: `Chưa bắt đầu được: ${why}` });
+        return this.startMatch();
+      }
+      default: return;
+    }
+    this.sendTeamState();
   }
 
   send(p, msg) {
@@ -122,6 +255,7 @@ export class Room {
         if (!p.dead) p.invulnUntil = Math.max(p.invulnUntil, t + MOVE.dashInvuln);
         break;
       case 'cast': this.handleCast(p, m, t); break;
+      case 'tteam': case 'tready': case 'tstart': if (this.team) this.onTeamMessage(p, m); break;
       case 'heal': this.handleHeal(p, t); break;
       case 'steer': { // cập nhật tâm ngắm cho chiêu cuối đang chạy
         const e = p.steerEnt, a = validAim(m.a);
@@ -209,6 +343,8 @@ export class Room {
   damage(src, tgt, amount, kb, s, at) {
     const t = now();
     if (tgt.dead || t < tgt.invulnUntil) return false;
+    // đấu đội: phòng chờ/kết quả không mất máu, không đánh được đồng đội
+    if (this.team && (this.phase !== 'play' || (src && src !== tgt && src.team === tgt.team))) return false;
     amount = Math.round(amount);
     tgt.hp -= amount;
     tgt.lastHit = t;
@@ -230,6 +366,13 @@ export class Room {
     tgt.healUntil = 0;
     if (src && src !== tgt) src.kills++;
     this.broadcast({ t: 'die', id: tgt.id, by: src ? src.id : 0, k: src ? src.kills : 0, d: tgt.deaths });
+    if (this.team && this.phase === 'play') {
+      // hạ đối thủ: +1 cho đội mình; tự rơi khỏi sân: +1 cho đội kia
+      const scorer = src && src !== tgt ? src.team : (tgt.team === 'A' ? 'B' : 'A');
+      this.score[scorer]++;
+      if (this.score[scorer] >= TEAM.killLimit) this.endMatch(scorer);
+      else this.sendTeamState();
+    }
   }
 
   kbFrom(fx, fz, tgt, s, mul = 1) {
@@ -243,7 +386,12 @@ export class Room {
 
   // Lọc mục tiêu hợp lệ (không phải chủ chiêu, còn sống)
   *targets(e) {
-    for (const q of this.players.values()) if (q.id !== e.owner && !q.dead) yield q;
+    const owner = this.team ? this.players.get(e.owner) : null;
+    for (const q of this.players.values()) {
+      if (q.id === e.owner || q.dead) continue;
+      if (owner && q.team === owner.team) continue;   // đấu đội: chiêu xuyên qua đồng đội
+      yield q;
+    }
   }
 
   explode(e, src, x, y, z, ex) {
@@ -412,7 +560,7 @@ export class Room {
     for (const p of this.players.values()) {
       if (p.dead) {
         if (t >= p.respawnAt) {
-          const [sx, sz] = this.spawnPoint();
+          const [sx, sz] = this.spawnPoint(p.team);
           Object.assign(p, { dead: false, hp: GAME.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz,
             invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0 });
           this.broadcast({ t: 'respawn', id: p.id, p: [sx, 0, sz] });
@@ -432,6 +580,16 @@ export class Room {
       p.mp = Math.max(0, Math.min(GAME.maxMana, p.mp));
       // Rơi khỏi đấu trường
       if (p.y < -15 || Math.hypot(p.x, p.z) > this.arena.radius + 25) this.kill(p, null);
+    }
+
+    if (this.team) {
+      if (this.phase === 'play' && t >= this.phaseEnd) {
+        const { A, B } = this.score;
+        this.endMatch(A === B ? 'draw' : A > B ? 'A' : 'B');
+      } else if (this.phase === 'end' && t >= this.phaseEnd) this.backToLobby();
+      // đồng bộ lại đồng hồ mỗi 5 giây
+      this.stateAcc += dt;
+      if (this.stateAcc >= 5) this.sendTeamState();
     }
 
     for (const e of this.entities) {

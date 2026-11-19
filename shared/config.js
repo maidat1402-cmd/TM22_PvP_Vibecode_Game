@@ -21,6 +21,15 @@ export class Ticker {
   }
 }
 
+// Chế độ đấu đội (đối kháng chia 2 đội)
+export const TEAM = {
+  names: { A: 'Đội Xanh', B: 'Đội Đỏ' },
+  colors: { A: 0x4dabf7, B: 0xff6b6b },
+  killLimit: 20,         // đội nào hạ đủ số mạng này trước sẽ thắng
+  timeLimit: 480,        // giây; hết giờ đội nhiều điểm hơn thắng
+  endDelay: 8,           // giây xem kết quả trước khi về phòng chờ
+};
+
 export const GAME = {
   maxHp: 150,
   maxMana: 100,

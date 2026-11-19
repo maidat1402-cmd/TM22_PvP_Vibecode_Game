@@ -4,11 +4,12 @@
 
 Game 3D nhân vật chibi, chơi nhiều người qua phòng (room), chạy trên trình duyệt máy tính **và điện thoại**. Server Node.js rất nhẹ.
 
-Có 3 chế độ, chọn khi tạo phòng:
+Có 4 chế độ, chọn khi tạo phòng:
 
 | Chế độ | Mô tả |
 |---|---|
-| ⚔ **Đối kháng** | Góc nhìn thứ 3, tung chiêu thức theo combo phím, máu + mana |
+| ⚔ **Đối kháng** | Góc nhìn thứ 3, tung chiêu thức theo combo phím, máu + mana, ai cũng là đối thủ |
+| 👥 **Đấu đội** | Như Đối kháng nhưng chia 2 đội Xanh / Đỏ, có phòng chờ, chủ phòng bấm bắt đầu |
 | 💣 **Đặt bom** | Bắn súng góc nhìn thứ nhất, 2 phe Công (Hắc Long) / Thủ (Thiên Ưng), theo vòng, có mua đồ và tiền thưởng |
 | 🔫 **Sinh tử** | Bắn súng tự do, ai cũng là đối thủ, hồi sinh nhanh, súng miễn phí |
 
@@ -78,6 +79,16 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 **Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze) và mưa băng (Yuki) trôi theo tâm, Tinh Cầu Hủy Diệt (Raiga) bẻ hướng bay cả lên/xuống, Phượng Hoàng (Homura) uốn cong đường lao. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
 
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
+
+### Đấu đội
+
+1. Tạo phòng ở chế độ **👥 Đấu đội** (chọn map như Đối kháng). Người tạo phòng là **chủ phòng 👑**.
+2. Mỗi người vào phòng được xếp vào đội ít người hơn. Trong **phòng chờ** ai cũng có thể bấm **Vào Đội Xanh / Vào Đội Đỏ** để đổi đội, rồi bấm **✔ Sẵn sàng**.
+3. Khi mỗi đội có ít nhất 1 người và mọi người đã sẵn sàng, chủ phòng bấm **▶ Bắt đầu**. Trong lúc chờ có thể bấm **🏃 Khởi động** để chạy nhảy thử chiêu (chưa mất máu); phím `T` hoặc nút **👥 Phòng chờ** để mở lại bảng.
+4. Trong trận: chiêu thức đi xuyên qua đồng đội (không đánh nhầm), tên đồng đội/đối thủ có màu theo đội, mỗi đội hồi sinh ở nửa sân của mình. Hạ một đối thủ được 1 điểm; ai tự rơi khỏi sân thì đội kia được 1 điểm.
+5. Đội nào đạt **20 điểm** trước, hoặc dẫn điểm khi hết **8 phút**, sẽ thắng (bằng điểm thì hoà). Nếu một đội không còn ai, đội kia thắng. Sau 8 giây cả phòng về lại phòng chờ.
+
+Chủ phòng thoát thì người vào phòng sớm nhất còn lại thành chủ phòng. Người vào giữa trận được xếp vào đội ít người hơn và chơi luôn. Điểm thắng và thời gian chỉnh ở `TEAM` trong [shared/config.js](shared/config.js).
 
 ### Map đối kháng
 

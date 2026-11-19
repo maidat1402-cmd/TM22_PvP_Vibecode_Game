@@ -96,8 +96,9 @@ class Hub {
         case 'create': {
           this.leaveRoom(c);
           const name = String(m.name || '').replace(/[<>]/g, '').slice(0, 24).trim() || `Phòng của ${c.name}`;
-          const mode = ['bomb', 'dm'].includes(m.mode) ? m.mode : 'brawl';
-          const r = mode === 'brawl' ? new Room(name, this, String(m.map || '')) : new ShooterRoom(name, this, mode, String(m.map || ''));
+          const mode = ['bomb', 'dm', 'team'].includes(m.mode) ? m.mode : 'brawl';
+          const r = mode === 'brawl' || mode === 'team' ? new Room(name, this, String(m.map || ''), mode === 'team')
+            : new ShooterRoom(name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
           if (m.char) c.char = getChar(m.char).id;
           r.add(c);

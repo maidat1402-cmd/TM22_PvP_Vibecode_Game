@@ -42,7 +42,8 @@
       <section class="panel" id="roomPanel">
         <h2>2. Vào phòng</h2>
         <div class="modes" id="modeSelect">
-          <label><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, chibi anime</small></span></label>
+          <label><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, ai cũng là đối thủ</small></span></label>
+          <label><input type="radio" name="mode" value="team"><span>👥 Đấu đội<small>Chiêu thức, chia 2 đội</small></span></label>
           <label><input type="radio" name="mode" value="bomb"><span>💣 Đặt bom<small>Bắn súng 2 phe, theo vòng</small></span></label>
           <label><input type="radio" name="mode" value="dm"><span>🔫 Sinh tử<small>Bắn súng tự do, hồi sinh nhanh</small></span></label>
         </div>
@@ -107,6 +108,29 @@
   <div id="plates" hidden></div>
   <div id="dmgnums" hidden></div>
   <div id="hurt"></div>
+
+  <!-- ===== Đấu đội: phòng chờ, tỉ số, thông báo ===== -->
+  <div id="teamLobby" hidden>
+    <div class="tl-box panel">
+      <h2>👥 Phòng chờ đấu đội</h2>
+      <p class="muted" id="tlInfo"></p>
+      <div class="tl-teams">
+        <div class="tl-team A"><h3>🔵 Đội Xanh <small id="tlCountA"></small></h3><ul id="tlListA"></ul>
+          <button class="btn small" data-join="A">Vào Đội Xanh</button></div>
+        <div class="tl-team B"><h3>🔴 Đội Đỏ <small id="tlCountB"></small></h3><ul id="tlListB"></ul>
+          <button class="btn small" data-join="B">Vào Đội Đỏ</button></div>
+      </div>
+      <div class="tl-actions">
+        <button id="tlReady" class="btn">✔ Sẵn sàng</button>
+        <button id="tlStart" class="btn primary">▶ Bắt đầu</button>
+        <button id="tlHide" class="btn">🏃 Khởi động</button>
+      </div>
+      <p class="tl-hint" id="tlHint"></p>
+    </div>
+  </div>
+  <button id="tlShow" class="btn small" hidden>👥 Phòng chờ <kbd>T</kbd></button>
+  <div id="teamScore" hidden><b class="A" id="tsA">0</b><span id="tsMid"></span><b class="B" id="tsB">0</b></div>
+  <div id="teamBanner" hidden></div>
 
   <div id="scoreboard" class="modal-lite" hidden>
     <h3>Bảng tỉ số</h3>
@@ -187,6 +211,7 @@
           <p><kbd>K</kbd> / <kbd>Chuột phải</kbd> Chiêu 1</p>
           <p><kbd>J</kbd>→<kbd>K</kbd> Chiêu 2 · <kbd>K</kbd>→<kbd>L</kbd> Chiêu 3</p>
           <p><kbd>J</kbd>→<kbd>K</kbd>→<kbd>L</kbd> <b>Tuyệt kỹ</b> (bấm liên tiếp nhanh) — trong lúc tuyệt kỹ chạy, xoay chuột để lái chiêu theo vòng tâm</p>
+          <p><b>Đấu đội:</b> chọn đội và bấm Sẵn sàng trong phòng chờ, chủ phòng 👑 bấm Bắt đầu. <kbd>T</kbd> mở/đóng phòng chờ. Chiêu không trúng đồng đội; đội đạt 20 điểm trước thắng.</p>
           <p><kbd>H</kbd> Hồi máu (tốn mana) · giữ <kbd>U</kbd> Vận khí: hồi mana rất nhanh nhưng đứng yên</p>
           <p>Chiêu tự khóa mục tiêu gần tâm màn hình.</p>
         </div>

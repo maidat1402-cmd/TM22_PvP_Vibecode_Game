@@ -227,7 +227,7 @@ tr.me td { color: var(--accent2); }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ============ CHỌN CHẾ ĐỘ ============ */
-.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; }
 .modes label { cursor: pointer; }
 .modes input { display: none; }
 .modes span {
@@ -396,4 +396,46 @@ body.touch #clickToPlay { display: none !important; }
   .logo h1 { font-size: 30px; } .logo p { display: none; } .logo { margin-bottom: 6px; }
   #menu { padding-top: 8px; } #preview { height: 150px; }
   .room-list { min-height: 70px; }
+}
+
+/* ===== Đấu đội ===== */
+.room .mtag.team { background: rgba(155,93,229,.4); }
+#teamLobby { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 18; pointer-events: none; }
+#teamLobby .tl-box { pointer-events: auto; width: min(640px, 100%); max-height: 90vh; overflow-y: auto; }
+.tl-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.tl-team { border-radius: 14px; padding: 10px; border: 2px solid; display: flex; flex-direction: column; gap: 6px; min-height: 150px; }
+.tl-team.A { border-color: rgba(77,171,247,.6); background: rgba(77,171,247,.1); }
+.tl-team.B { border-color: rgba(255,107,107,.6); background: rgba(255,107,107,.1); }
+.tl-team h3 { margin: 0; font-size: 17px; } .tl-team h3 small { color: var(--muted); font-weight: 600; }
+.tl-team ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.tl-team li { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.25); border-radius: 8px; padding: 4px 8px; font-weight: 700; }
+.tl-team li.me { outline: 2px solid var(--accent2); }
+.tl-team li .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.tl-team li .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-team li .st { font-size: 12px; color: var(--muted); } .tl-team li .st.ok { color: var(--hp); }
+.tl-team .btn[disabled] { opacity: .4; pointer-events: none; }
+.tl-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.tl-actions .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+#tlReady.on { background: rgba(74,222,128,.25); border-color: rgba(74,222,128,.6); }
+.tl-hint { text-align: center; margin: 8px 0 0; color: var(--accent2); font-weight: 700; min-height: 1.4em; }
+#tlShow { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9; }
+#tlShow kbd { font-size: 11px; }
+body.touch #tlShow kbd { display: none; }
+#teamScore { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 9; display: flex; align-items: center; gap: 10px;
+  background: rgba(10,8,25,.7); border: 1px solid var(--line); border-radius: 14px; padding: 4px 14px; font-size: 22px; pointer-events: none; }
+#teamScore b { min-width: 34px; text-align: center; } #teamScore .A { color: #4dabf7; } #teamScore .B { color: #ff6b6b; }
+#teamScore span { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.1; }
+#teamBanner { position: fixed; left: 50%; top: 22%; transform: translate(-50%,-50%); z-index: 19; font-size: 44px; font-weight: 800; text-align: center;
+  text-shadow: 0 3px 0 #000, 0 0 20px rgba(0,0,0,.6); pointer-events: none; animation: tbIn .4s ease-out; white-space: nowrap; }
+#teamBanner small { display: block; font-size: 18px; color: var(--text); }
+#teamBanner.A { color: #4dabf7; } #teamBanner.B { color: #ff6b6b; } #teamBanner.draw, #teamBanner.go { color: var(--accent2); }
+@keyframes tbIn { from { transform: translate(-50%,-50%) scale(1.6); opacity: 0; } }
+.plate[data-team="A"] .pn { color: #8ccaff; } .plate[data-team="B"] .pn { color: #ff9b9b; }
+.plate[data-team="A"] .pb i { background: #4dabf7; }
+.plate.me .pn { color: var(--accent2) !important; }
+#sbBody tr.tA td:first-child { box-shadow: inset 4px 0 #4dabf7; } #sbBody tr.tB td:first-child { box-shadow: inset 4px 0 #ff6b6b; }
+#sbBody tr.thead td { font-weight: 800; padding-top: 8px; }
+@media (max-width: 560px), (max-height: 520px) {
+  .tl-team { min-height: 0; } #teamLobby .tl-box { padding: 10px 12px; } #teamLobby h2 { font-size: 17px; margin-bottom: 2px; }
+  #teamBanner { font-size: 30px; }
 }
