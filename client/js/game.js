@@ -56,15 +56,14 @@ class Avatar {
   }
 
   setChar(id) {
-    if (this.model) { this.model.root.removeFromParent(); this.model.rig.shadow.removeFromParent(); }
+    if (this.model) this.model.dispose();
     this.char = getChar(id);
     this.model = buildChibi(this.char.look);
     this.game.scene.add(this.model.root, this.model.rig.shadow);
   }
 
   dispose() {
-    this.model.root.removeFromParent();
-    this.model.rig.shadow.removeFromParent();
+    this.model.dispose();
   }
 
   pushSnap(x, y, z, yaw) {
@@ -277,6 +276,7 @@ export class Game {
     this.fx.list.length = 0;
     this.effects.clear();
     this.predicted.clear();
+    this.kmarks.clear();
     this.me = null;
   }
 
@@ -436,6 +436,8 @@ export class Game {
     if (!av) return;
     const s = av.char.skills[m.sk];
     if (!s) return;
+    // xoá eid sau khi chiêu chắc chắn đã hết (cả chiêu của mình, nếu không map tăng mãi theo mỗi lần ra chiêu)
+    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     if (av.isMe) {
       // chiêu của mình: đã hiện trước rồi, chỉ cần gắn eid để nhận sự kiện kết thúc
       const e = this.predicted.get(m.cs);
@@ -452,7 +454,6 @@ export class Game {
     if (s.type === 'dash') av.forced = { p, h, dist: s.dist, delay: s.delay, dur: s.dur, t0: now(), steer: !!s.steer };
     const e = this.fx.castSkill({ skill: s, p, d, h, seed: m.seed, tg: m.tg, caster: av.casterApi });
     if (e) { this.effects.set(m.eid, e); if (s.type === 'buff') e.buffOf = av.id; }
-    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
   }
 

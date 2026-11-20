@@ -98,7 +98,7 @@ function skillReach(s) {
 }
 
 function setPreview(id) {
-  if (pvModel) pvModel.root.removeFromParent();
+  if (pvModel) pvModel.dispose();
   pvChar = getChar(id);
   pvModel = buildChibi(pvChar.look);
   pvScene.add(pvModel.root);

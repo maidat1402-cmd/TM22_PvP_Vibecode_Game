@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { NET, Ticker } from '/shared/config.js';
 import { getMap, PLAYER, moveAndCollide, rayMap, rayPlayer, inRect, newNade, stepNade, NADE_STEP } from '/shared/maps.js';
 import { WEAPONS, WEAPON_LIST, BUY_MENU, GRENADES, NADE_LIST, THROW_SPEED, itemInfo, TEAMS, SHOOTER as S, moveSpeedFor, shotSpread } from '/shared/weapons.js';
-import { buildChibi, ANIM } from '../chibi.js';
+import { buildChibi, ANIM, disposeObject } from '../chibi.js';
 import { FX } from '../effects.js';
 import { buildMapView } from './mapview.js';
 import { buildGun, buildViewModel, buildBomb, buildNade } from './guns.js';
@@ -57,7 +57,7 @@ class SAvatar {
     const id = WEAPON_LIST[idx] || 'knife';
     if (id === this.gunId) return;
     this.gunId = id;
-    if (this.gun) this.gun.removeFromParent();
+    if (this.gun) disposeObject(this.gun);
     this.gun = buildGun(id);
     this.gun.scale.setScalar(1.6);
     this.gun.rotation.x = -Math.PI / 2;
@@ -230,11 +230,11 @@ export class ShooterGame {
     this.avatars.clear();
     for (const d of this.decals) d.removeFromParent();
     this.decals.length = 0;
-    for (const t of this.tracers) t.mesh.removeFromParent();
+    for (const t of this.tracers) disposeObject(t.mesh);
     this.tracers.length = 0;
-    for (const n of this.nadeObjs.values()) n.mesh.removeFromParent();
+    for (const n of this.nadeObjs.values()) disposeObject(n.mesh);
     this.nadeObjs.clear();
-    for (const d of this.drops.values()) d.mesh.removeFromParent();
+    for (const d of this.drops.values()) disposeObject(d.mesh);
     this.drops.clear();
     this.clearSmokes();
     this.blindUntil = 0;
@@ -301,7 +301,7 @@ export class ShooterGame {
       for (const d of this.decals) d.removeFromParent();
       this.decals.length = 0;
       this.clearSmokes();
-      for (const n of this.nadeObjs.values()) n.mesh.removeFromParent();
+      for (const n of this.nadeObjs.values()) disposeObject(n.mesh);
       this.nadeObjs.clear();
       sfx('respawn');
     });
@@ -322,7 +322,7 @@ export class ShooterGame {
     // ---- súng rơi ----
     on('sdrop', m => {
       if (m.add) this.addDrop(m.add);
-      if (m.rem) { const d = this.drops.get(m.rem); if (d) { d.mesh.removeFromParent(); this.drops.delete(m.rem); } }
+      if (m.rem) { const d = this.drops.get(m.rem); if (d) { disposeObject(d.mesh); this.drops.delete(m.rem); } }
     });
     on('sround_end', m => {
       const T = TEAMS[m.winner];
@@ -554,7 +554,7 @@ export class ShooterGame {
 
   // ======================= Vũ khí =======================
   setViewModel() {
-    if (this.vm) this.vm.removeFromParent();
+    if (this.vm) disposeObject(this.vm);
     const id = this.curW();
     const team = this.mode === 'dm' ? 'T' : this.P?.team || 'T';
     if (this.P?.cur === 4 && this.P.nadeSel) {
@@ -642,7 +642,7 @@ export class ShooterGame {
 
   detonate(m) {
     const n = this.nadeObjs.get(m.gid);
-    if (n) { n.mesh.removeFromParent(); this.nadeObjs.delete(m.gid); }
+    if (n) { disposeObject(n.mesh); this.nadeObjs.delete(m.gid); }
     const p = v3(...m.pos);
     const dist = this.dist(p);
     if (m.k === 'he') {
@@ -884,6 +884,7 @@ export class ShooterGame {
   }
 
   tracer(a, b, color) {
+    if (document.hidden) return;   // tab ẩn: rAF dừng, tia đạn không được xoá → dồn hàng chục nghìn, quay lại thì khựng
     const geo = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
     const mesh = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.scene.add(mesh);

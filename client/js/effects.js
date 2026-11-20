@@ -255,7 +255,12 @@ class Effect {
   }
   update() { return false; }
   dispose() {
-    for (const o of this.objs) o.removeFromParent();
+    // geometry tạo riêng cho từng lần ra chiêu (arcGeo, cây triệu hồi, tường đá…) phải dispose, nếu không bộ nhớ GPU tăng mãi.
+    // Bỏ qua geometry dùng chung trong GEO và của sprite (three dùng chung 1 geometry cho mọi sprite).
+    for (const o of this.objs) {
+      o.traverse(c => { if (c.geometry && !c.isSprite && !SHARED_GEO.has(c.geometry)) c.geometry.dispose(); });
+      o.removeFromParent();
+    }
     for (const m of this.mats) m.dispose();
     this.objs.length = 0;
   }
@@ -316,6 +321,7 @@ const GEO = {
     return g;
   })(),
 };
+const SHARED_GEO = new Set(Object.values(GEO));
 
 // ======================= Quản lý FX =======================
 export class FX {
@@ -370,7 +376,12 @@ export class FX {
     return this.add(e);
   }
 
-  add(e) { this.list.push(e); return e; }
+  add(e) {
+    // Tab bị ẩn: rAF dừng nên hiệu ứng không được cập nhật/xoá, mà gói tin vẫn tới → dồn hàng nghìn hiệu ứng,
+    // quay lại tab thì phát cùng lúc (khựng vài giây, trắng màn hình). Bỏ luôn, đối tượng trả về vẫn dùng được.
+    if (typeof document !== 'undefined' && document.hidden) { e.dispose(); e.done = true; return e; }
+    this.list.push(e); return e;
+  }
 
   // Tạo sẵn 1 bản mỗi loại vật liệu rồi compile => tránh khựng hình lần đầu tung chiêu
   warmup(renderer) {
