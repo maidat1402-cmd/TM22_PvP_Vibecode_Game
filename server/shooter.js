@@ -205,7 +205,7 @@ export class ShooterRoom {
         if (this.phase === 'freeze' && Math.hypot(x - p.x, z - p.z) > 0.5) return;
         p.x = x; p.y = Math.max(0, y); p.z = z;
         this.pushHist(p, t);
-        p.yaw = +m.r || 0; p.pitch = +m.pi || 0; p.flags = m.f | 0; p.w = m.w | 0;
+        p.yaw = Number.isFinite(m.r) ? m.r : 0; p.pitch = Number.isFinite(m.pi) ? m.pi : 0; p.flags = m.f | 0; p.w = m.w | 0;
         // nhặt bom rơi
         if (this.bomb.state === 'dropped' && p.team === 'T' && this.mode === 'bomb') {
           const [bx, , bz] = this.bomb.pos;
@@ -290,7 +290,7 @@ export class ShooterRoom {
     }
     p.lastFire = t;
     p.protectUntil = 0;
-    if (!Array.isArray(m.o) || !Array.isArray(m.p)) return;
+    if (!Array.isArray(m.o) || m.o.length !== 3 || !Array.isArray(m.p)) return;   // o=[] lọt qua every() → NaN vào máu
     const o = m.o.map(Number);
     if (!o.every(Number.isFinite)) return;
     // gốc bắn phải gần vị trí người chơi
@@ -511,7 +511,7 @@ export class ShooterRoom {
     const g = typeof m.k === 'string' && GRENADES[m.k];
     if (!g || !p.alive || (p.nades[m.k] | 0) <= 0) return;
     if (this.phase === 'freeze' || this.phase === 'matchEnd' || t - p.lastThrow < 0.6) return;
-    if (!Array.isArray(m.o) || !Array.isArray(m.v)) return;
+    if (!Array.isArray(m.o) || m.o.length !== 3 || !Array.isArray(m.v) || m.v.length !== 3) return;
     const o = m.o.map(Number).map(r3), v = m.v.map(Number).map(r3);
     if (![...o, ...v].every(Number.isFinite)) return;
     if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2 || Math.abs(o[1] - p.y - 1.3) > 1.5) return;

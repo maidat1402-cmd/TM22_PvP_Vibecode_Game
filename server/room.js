@@ -251,14 +251,17 @@ export class Room {
         if (p.dead || !Array.isArray(m.p)) return;
         const [x, y, z] = m.p;
         if (![x, y, z].every(Number.isFinite)) return;
-        p.yaw = +m.r || 0; p.anim = m.a | 0; p.flags = m.f | 0;
+        // flag 128 là "đã chết" do server gắn: client tự gửi sẽ hiện chết với người khác mà vẫn đánh được
+        p.yaw = Number.isFinite(m.r) ? m.r : 0; p.anim = m.a | 0; p.flags = m.f & 127;
         // vừa dịch chuyển: gói vị trí cũ còn trên đường truyền thì bỏ qua
         if (t < (p.tpUntil || 0) && Math.hypot(x - p.x, z - p.z) > 3) break;
         p.x = x; p.y = Math.max(0, y); p.z = z;
         break;
       }
       case 'dodge': // né (dash) => bất tử ngắn
-        if (!p.dead) p.invulnUntil = Math.max(p.invulnUntil, t + MOVE.dashInvuln);
+        if (p.dead || t < (p.dodgeAt || 0)) break;   // spam 'dodge' không hồi chiêu = bất tử vĩnh viễn
+        p.dodgeAt = t + MOVE.dashCd - 0.15;          // dung sai cho lag
+        p.invulnUntil = Math.max(p.invulnUntil, t + MOVE.dashInvuln);
         break;
       case 'cast': this.handleCast(p, m, t); break;
       case 'tteam': case 'tready': case 'tstart': if (this.team) this.onTeamMessage(p, m); break;
