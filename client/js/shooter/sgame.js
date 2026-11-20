@@ -820,7 +820,7 @@ export class ShooterGame {
     const pellets = w.pellets || 1;
     const out = [];
     // hướng bắn = hướng nhìn + độ giật + tản ngẫu nhiên
-    const pitch = P.pitch + P.punch, yaw = P.yaw + P.punchYaw;
+    const pitch = this.aimPitch(), yaw = P.yaw + P.punchYaw;
     // đầu nòng tính từ vị trí mắt và hướng bắn của CHÍNH khung hình này (camera còn ở khung trước,
     // lấy theo camera thì khi chạy ngang tia đạn xuất phát lệch hẳn sang một bên)
     const muzzleW = this.muzzleAt(eye, pitch, yaw);
@@ -868,6 +868,9 @@ export class ShooterGame {
     this.net.send({ t: 'use', on });
     if (!on) this.useProg = null;
   }
+
+  // góc ngẩng thật của nòng súng (hướng nhìn + độ giật), dùng chung cho camera, tia bắn và tia ngắm
+  aimPitch() { return clamp(this.P.pitch + this.P.punch, -1.55, 1.55); }
 
   eyePos() {
     const P = this.P;
@@ -1066,8 +1069,9 @@ export class ShooterGame {
       if (P.stepAcc > 2.3) { P.stepAcc = 0; sfx('step', 6); }
     }
 
-    // giật hồi về
-    if (t - P.lastShot > 60 / w.rpm + 0.05) {
+    // giật hồi về: chỉ tạm dừng khi đang xả loạt (súng bắn nhanh). Trước đây chờ hết
+    // 60/rpm nên sniper (1,46 s/phát) giữ nguyên độ giật tới phát sau → đạn bay lệch tâm scope.
+    if (t - P.lastShot > Math.min(60 / w.rpm, 0.15) + 0.05) {
       P.punch = Math.max(0, P.punch - dt * 0.35);
       P.punchYaw *= Math.max(0, 1 - dt * 6);
     }
@@ -1093,7 +1097,8 @@ export class ShooterGame {
     const P = this.P, cam = this.camera;
     if (P.alive) {
       cam.position.copy(this.eyePos());
-      cam.rotation.set(P.pitch + P.punch * 0.5, P.yaw + P.punchYaw * 0.5, 0);
+      // camera nhìn đúng hướng đạn bay (cả độ giật) để tâm ngắm / scope chỉ đúng chỗ đạn trúng
+      cam.rotation.set(this.aimPitch(), P.yaw + P.punchYaw, 0);
       const fov = P.scoped ? WEAPONS[this.curW()].scope : 75;
       if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     } else {
@@ -1291,7 +1296,7 @@ export class ShooterGame {
     this.updateLocal(dt);
     // tia ngắm trúng ai (để hiện tên địch khi nhắm vào)
     const eye = this.eyePos();
-    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.P.pitch, this.P.yaw, 0, 'YXZ'));
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.aimPitch(), this.P.yaw + this.P.punchYaw, 0, 'YXZ'));
     const o = [eye.x, eye.y, eye.z], d = [dir.x, dir.y, dir.z];
     const wall = rayMap(o, d, 120, this.map.boxes).t;
     for (const a of this.avatars.values()) {

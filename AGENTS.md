@@ -87,7 +87,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   1. `node --check <file>` cho mọi file JS đã sửa (kể cả file client).
   2. Chạy server và mở 2 tab trình duyệt vào cùng phòng, xem cả 2 người chơi có thấy nhau, đánh hay bắn trúng nhau không.
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
-- Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
+- Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`. Hiện có `tests/shooter-hit.mjs`: giả lập trễ mạng, kiểm tra server nhận phát bắn hợp lệ (sniper xa, người bắn đang chạy) và từ chối phát gian lận (`node tests/shooter-hit.mjs 3123 150 60` khi server chạy ở cổng 3123).
 - **Mở nhanh để test:** `/?quick&mode=brawl|bomb|dm&map=<id map>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn.
 - **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
@@ -108,7 +108,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 |---|---|
 | Di chuyển của chính mình | Client tự quyết để mượt. Server chỉ chặn các trường hợp vô lý |
 | Máu, mana, hồi chiêu, sát thương (đối kháng) | Server. Client hiện hiệu ứng trước (dự đoán) rồi ghép với ID chiêu của server (`cs` → `eid`) |
-| Trúng đạn (bắn súng) | Client tự tính trúng/trượt rồi gửi lên. Server kiểm tra lại khoảng cách tới mục tiêu, tường chắn (`rayMap`), tốc độ bắn và số đạn |
+| Trúng đạn (bắn súng) | Client tự tính trúng/trượt rồi gửi lên. Server kiểm tra lại điểm trúng có nằm sát quỹ đạo mục tiêu trong khoảng người bắn đang thấy không (bù trễ theo RTT đo bằng ping/pong WebSocket, `nearPast()`), tường chắn (`rayMap`), tốc độ bắn và số đạn |
 | Vòng đấu, tiền, bom, súng rơi, lựu đạn | Server |
 
 ### Bẫy đã gặp

@@ -12,6 +12,15 @@ const r3 = v => Math.round(v * 1000) / 1000;
 const NO_NADES = () => ({ he: 0, flash: 0, smoke: 0 });
 let nextId = 1000;
 
+// Bù trễ khi kiểm tra trúng đạn. Người bắn nhìn thấy mục tiêu ở vị trí cũ:
+// (server → người bắn) + nội suy 70 ms + chờ snapshot + 1 khung hình + (người bắn → server).
+// Server giữ lịch sử vị trí ~1 s và chấp nhận điểm trúng nằm gần quỹ đạo mục tiêu trong khoảng đó.
+const HIST_KEEP = 1.0;      // giây lịch sử vị trí giữ lại
+const REWIND_MAX = 0.7;     // lùi tối đa (giây), dù ping cao tới đâu
+const DEFAULT_RTT = 0.2;    // khi chưa đo được ping
+const HIT_TOL = 1.0;        // điểm trúng cách tâm mục tiêu tối đa (m, theo phương ngang): hitbox ~0.5 m + dung sai
+const MAX_SPEED = 15;       // m/s, nhanh hơn mức này giữa 2 mẫu thì coi là dịch chuyển tức thời
+
 export class ShooterRoom {
   constructor(name, hub, mode, mapId) {
     this.id = String(nextId++);
@@ -155,6 +164,8 @@ export class ShooterRoom {
   spawn(p, resetLoadout) {
     const [x, z] = this.spawnPoint(p);
     p.x = x; p.y = 0; p.z = z;
+    p.hist = [];               // vị trí trước khi hồi sinh không còn tính
+    this.pushHist(p, now());
     p.yaw = this.mode === 'dm' ? Math.random() * 6.28 : (p.team === 'T' ? Math.PI : 0);
     p.hp = S.maxHp;
     p.alive = true;
@@ -193,6 +204,7 @@ export class ShooterRoom {
         // đóng băng đầu vòng: không cho di chuyển xa
         if (this.phase === 'freeze' && Math.hypot(x - p.x, z - p.z) > 0.5) return;
         p.x = x; p.y = Math.max(0, y); p.z = z;
+        this.pushHist(p, t);
         p.yaw = +m.r || 0; p.pitch = +m.pi || 0; p.flags = m.f | 0; p.w = m.w | 0;
         // nhặt bom rơi
         if (this.bomb.state === 'dropped' && p.team === 'T' && this.mode === 'bomb') {
@@ -283,8 +295,10 @@ export class ShooterRoom {
     // gốc bắn phải gần vị trí người chơi
     if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2.5 || Math.abs(o[1] - p.y - 1.3) > 2) return;
 
-    const pellets = m.p.slice(0, w.pellets || 1);
+    const pellets = m.p.slice(0, w.pellets || 1).filter(q => Array.isArray(q) && q.slice(0, 3).every(Number.isFinite));
     this.broadcast({ t: 'sshot', id: p.id, w: weaponIndex(wid), o: o.map(r2), e: pellets.map(q => [r2(q[0]), r2(q[1]), r2(q[2])]) }, p.id);
+    // người bắn thấy mục tiêu ở thời điểm t - rewind (theo giờ server nhận vị trí)
+    const rewind = Math.min(REWIND_MAX, (p.ws.rtt ?? DEFAULT_RTT) + NET.interp + 2 / NET.snapRate + 0.1);
     const dmgBy = new Map();
     for (const q of pellets) {
       const [ex, ey, ez, tid, zone] = q;
@@ -296,8 +310,8 @@ export class ShooterRoom {
       const dx = ex - o[0], dy = ey - o[1], dz = ez - o[2];
       const dist = Math.hypot(dx, dy, dz);
       if (w.melee && dist > w.reach + 1) continue;
-      // điểm trúng phải gần vị trí mục tiêu server biết (dung sai do trễ mạng)
-      if (Math.hypot(ex - tgt.x, ez - tgt.z) > 2.6 || ey < tgt.y - 1 || ey > tgt.y + 3) continue;
+      // điểm trúng phải gần quỹ đạo mục tiêu trong khoảng thời gian người bắn có thể đang thấy
+      if (!this.nearPast(tgt, ex, ey, ez, t - rewind)) continue;
       // không có tường chắn
       const dir = [dx / dist, dy / dist, dz / dist];
       const wall = rayMap(o, dir, dist, this.map.boxes);
@@ -307,6 +321,34 @@ export class ShooterRoom {
       dmgBy.set(tgt, { dmg: prev.dmg + dmg, head: prev.head || zone === 1, zone: prev.zone || zone });
     }
     for (const [tgt, h] of dmgBy) this.damage(p, tgt, h.dmg, h.head, wid);
+  }
+
+  // Lưu vị trí theo giờ server nhận (bỏ mẫu cũ hơn HIST_KEEP)
+  pushHist(p, t) {
+    const h = p.hist || (p.hist = []);
+    h.push([t, p.x, p.y, p.z]);
+    while (h.length > 2 && h[1][0] < t - HIST_KEEP) h.shift();
+  }
+
+  // Điểm (x, y, z) có nằm sát quỹ đạo của mục tiêu từ thời điểm `since` tới giờ không.
+  // Xét từng đoạn thẳng giữa 2 mẫu liên tiếp (client nội suy tuyến tính giữa các snapshot).
+  nearPast(tgt, x, y, z, since) {
+    const h = tgt.hist || [];
+    let i = h.length - 1;
+    while (i > 0 && h[i][0] > since) i--;      // lấy cả mẫu ngay trước `since` làm điểm đầu
+    const pts = h.slice(i);
+    if (!pts.length) pts.push([0, tgt.x, tgt.y, tgt.z]);
+    for (let k = 0; k < pts.length; k++) {
+      const [ta, ax, ay, az] = pts[k], [tb, bx, by, bz] = pts[Math.min(k + 1, pts.length - 1)];
+      let dx = bx - ax, dz = bz - az;
+      // nhảy cóc xa hơn mức chạy được (dịch chuyển, gói tin lạ): không nội suy qua đoạn đó
+      if (Math.hypot(dx, dz) > MAX_SPEED * (tb - ta) + 1) dx = dz = 0;
+      const L2 = dx * dx + dz * dz;
+      const s = L2 > 1e-9 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+      const cx = ax + dx * s, cz = az + dz * s, cy = ay + (by - ay) * s;
+      if (Math.hypot(x - cx, z - cz) <= HIT_TOL && y >= cy - 0.6 && y <= cy + 2.4) return true;
+    }
+    return false;
   }
 
   damage(src, tgt, dmg, head, wid) {

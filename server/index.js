@@ -122,8 +122,17 @@ class Hub {
     ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
     ws.on('error', () => {});
     // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
+    // Đồng thời đo RTT (giây) từ ping/pong của WebSocket: phòng bắn súng dùng để bù trễ khi kiểm tra trúng đạn.
+    // Trình duyệt tự trả pong, client không giả được giá trị nhỏ hơn thực tế.
     ws.isAlive = true;
-    ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('pong', () => {
+      ws.isAlive = true;
+      if (!ws.pingAt) return;
+      const s = (performance.now() - ws.pingAt) / 1000;
+      ws.pingAt = 0;
+      ws.rtt = ws.rtt == null ? s : ws.rtt * 0.6 + s * 0.4;
+    });
+    sendPing(ws);
   }
 }
 
@@ -139,11 +148,15 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
 wss.on('connection', ws => hub.onConnection(ws));
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
 // Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
+function sendPing(ws) {
+  ws.pingAt = performance.now();
+  try { ws.ping(); } catch { /* bỏ qua */ }
+}
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
-    try { ws.ping(); } catch { /* bỏ qua */ }
+    sendPing(ws);
   }
 }, 5000);
 
