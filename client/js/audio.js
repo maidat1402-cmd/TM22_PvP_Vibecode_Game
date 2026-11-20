@@ -110,6 +110,7 @@ export function skillSound(skill) {
   if (skill.bigCharge) return 'charge';   // tuyệt kỹ dị biến: tiếng tụ lực
   if (skill.type === 'melee') return k === 'impact' || k === 'quakePunch' ? 'punch' : 'swing';
   if (k === 'kiFist') return 'punch';
+  if (k === 'spearRod' || k === 'pillarThrow') return 'throw';
   if (skill.type === 'wall') return 'wind';
   if (/winter|tomb/i.test(k)) return 'ice';
   if (k === 'beam' || /bolt|lightning|thunder/i.test(k)) return 'beam';

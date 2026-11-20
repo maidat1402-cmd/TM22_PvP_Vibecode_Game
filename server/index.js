@@ -9,6 +9,7 @@ import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
 import { getChar } from '../shared/characters.js';
+import { VERSION } from '../shared/version.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -25,7 +26,7 @@ const HOST = String(arg('host', process.env.HOST || '0.0.0.0'));
 const USE_UPNP = !!arg('upnp', false);
 const USE_TUNNEL = !!arg('tunnel', false);
 
-const publicInfo = { port: PORT, lan: [], publicUrl: null, note: null };
+const publicInfo = { version: VERSION, port: PORT, lan: [], publicUrl: null, note: null };
 
 // ---------- HTTP tĩnh ----------
 const MIME = {
@@ -81,7 +82,7 @@ class Hub {
     const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null };
     this.clients.set(c.id, c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
-    send({ t: 'welcome', id: c.id });
+    send({ t: 'welcome', id: c.id, v: VERSION });
     ws.on('message', raw => {
       let m;
       try { m = JSON.parse(raw); } catch { return; }
@@ -161,7 +162,7 @@ function lanAddresses() {
 server.listen(PORT, HOST, async () => {
   const lan = HOST === '0.0.0.0' ? lanAddresses() : [];
   publicInfo.lan = lan.map(ip => `http://${ip}:${PORT}`);
-  console.log('\n=== CHIBI CLASH SERVER ===');
+  console.log(`\n=== CHIBI CLASH SERVER v${VERSION} ===`);
   console.log(`  Máy này     : http://localhost:${PORT}`);
   for (const u of publicInfo.lan) console.log(`  Mạng nội bộ : ${u}`);
   if (HOST !== '0.0.0.0') console.log('  (Chỉ chạy local. Dùng --host 0.0.0.0 để cho máy khác trong LAN vào)');

@@ -1,6 +1,6 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle, arenaGround } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
 import { getChar, charMaxHp, charSkills, skillLifetime } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
@@ -25,6 +25,9 @@ function distPointSeg(px, py, pz, ax, ay, az, bx, by, bz) {
 
 // Sát thương bỏng mỗi nhịp: không cộng dấu, không tích thanh dị biến, không gây bỏng tiếp
 const BURN_SKILL = { fx: { kind: 'burn', color: 0xff5400 }, noMark: true, noGauge: true, noBurn: true };
+// Hàng rào điện giữa 2 cọc sét (dị biến Shiden): mỗi lần chạm cộng 1 dấu điện
+const FENCE_SKILL = { fx: { kind: 'fence', color: 0xc77dff } };
+let nextPropId = 100000;   // id công trình (cọc sét, cột đá) — tách hẳn khỏi id người chơi
 
 let nextRoomId = 1;
 let nextEntityId = 1;
@@ -52,6 +55,8 @@ export class Room {
     this.players = new Map(); // id -> player
     this.entities = [];
     this.dyn = [];            // chướng ngại vật tạm thời { x, z, r, h, until, owner }
+    this.props = [];          // công trình có máu (cọc sét, cột đá): đối thủ đánh phá được
+    this.fenceCd = new Map(); // hàng rào điện: lần chạm gần nhất của từng (cặp cọc, người)
     this.lastTick = now();
     this.snapT = new Ticker(NET.snapRate);
     this.stopLoop = startLoop(NET.tickRate, () => this.tick());
@@ -110,7 +115,7 @@ export class Room {
     client.room = this;
     if (this.team && !this.hostId) this.hostId = p.id;
     this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id, team: this.team },
-      players: [...this.players.values()].map(q => this.publicPlayer(q)) });
+      players: [...this.players.values()].map(q => this.publicPlayer(q)), props: this.props.map(q => this.publicProp(q)) });
     this.broadcast({ t: 'pjoin', player: this.publicPlayer(p) }, p.id);
     this.broadcast({ t: 'sys', msg: this.team ? `${p.name} đã vào ${TEAM.names[team]}` : `${p.name} đã vào phòng` });
     if (this.team) this.sendTeamState();
@@ -124,6 +129,7 @@ export class Room {
     this.broadcast({ t: 'pleave', id: clientId });
     this.broadcast({ t: 'sys', msg: `${p.name} đã rời phòng` });
     this.entities = this.entities.filter(e => e.owner !== clientId);
+    for (const pr of this.props.filter(q => q.owner === clientId)) this.removeProp(pr, 'time');
     this.dyn = this.dyn.filter(o => o.owner !== clientId);
     if (this.team && this.players.size) {
       if (this.hostId === clientId) {
@@ -175,6 +181,7 @@ export class Room {
     this.winner = null;
     this.phaseEnd = t + TEAM.timeLimit;
     this.entities = [];
+    for (const pr of [...this.props]) this.removeProp(pr, 'time');
     for (const p of this.players.values()) {
       const [sx, sz] = this.spawnPoint(p.team);
       Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
@@ -313,7 +320,7 @@ export class Room {
     // dạng dị biến: client báo aw = 1, server chấp nhận nếu còn dị biến (dung sai trễ mạng 0.25 s)
     const aw = !!m.aw;
     if (aw && !(p.awUntil > t - 0.25)) return this.send(p, { t: 'castno', cs: m.cs, sk: sIdx, aw: 1, mp: Math.floor(p.mp) });
-    const s = charSkills(ch, aw)[sIdx];
+    let s = charSkills(ch, aw)[sIdx];
     const cdKey = sIdx + (aw ? 10 : 0);
     const reject = () => this.send(p, { t: 'castno', cs: m.cs, sk: sIdx, aw: aw ? 1 : 0, mp: Math.floor(p.mp) });
     if (!s || p.dead || t < p.stunUntil - 0.05) return reject();
@@ -334,6 +341,12 @@ export class Room {
     dy = Math.max(-0.95, Math.min(0.95, dy));
     const L = Math.hypot(dx, dy, dz) || 1;
     dx /= L; dy /= L; dz /= L;
+    // nhổ cột đá ném (dị biến Gantetsu): đạn bay ra từ cột đá của mình gần nhất, cột đá biến mất
+    let ripId = 0;
+    if (s.rip) {
+      const pr = this.findRip(p, x, z, m.rp, s.rip.range);
+      if (pr) { ripId = pr.id; x = pr.x; y = pr.y + 1.2; z = pr.z; this.removeProp(pr, 'rip'); s = s.ripSkill; }
+    }
 
     p.mp -= s.mana;
     p.cds[cdKey] = t + s.cd;
@@ -365,8 +378,8 @@ export class Room {
     e.st = initSteer(s, [x, y, z], [dx, dy, dz], e.h);
     if (e.st) p.steerEnt = e;
     let tg = null;   // điểm đích (nhảy / dịch chuyển / bẫy / cây) gửi kèm để mọi máy vẽ cùng chỗ
-    if (s.type === 'leap') {
-      // nhảy tới điểm tâm ngắm, giới hạn tầm và trong sân
+    if (s.type === 'leap' || s.type === 'pillar') {
+      // nhảy tới (dựng cột đá ở) điểm tâm ngắm, giới hạn tầm và trong sân
       const a = validAim(m.a);
       let tx = a ? a[0] : x + e.h[0] * Math.min(10, s.range), tz = a ? a[2] : z + e.h[1] * Math.min(10, s.range);
       const L2 = Math.hypot(tx - x, tz - z);
@@ -377,7 +390,12 @@ export class Room {
       // dấu phi đao còn hạn và trong tầm thì tới đó, không thì lướt bóng về phía trước
       const mk = p.shadowMark;
       const bt = s.behind ? this.aimTarget(p, x, z, e.h, s.behind) : null;
-      if (bt) tg = this.clampToArena(bt.x - Math.sin(bt.yaw) * 1.6, bt.z - Math.cos(bt.yaw) * 1.6);
+      // Lôi Độn (dị biến Shiden): tới cọc sét của mình gần tâm ngắm nhất
+      const rod = s.toRod ? this.aimProp(p, x, z, e.h, s.toRod, 'rod') : null;
+      if (rod) {
+        const rl = Math.hypot(x - rod.x, z - rod.z) || 1;
+        tg = this.clampToArena(rod.x + (x - rod.x) / rl * 0.9, rod.z + (z - rod.z) / rl * 0.9);
+      } else if (bt) tg = this.clampToArena(bt.x - Math.sin(bt.yaw) * 1.6, bt.z - Math.cos(bt.yaw) * 1.6);
       else if (mk && t < mk.until && Math.hypot(mk.x - x, mk.z - z) <= s.markRange) { tg = [mk.x, mk.z]; p.shadowMark = null; this.broadcast({ t: 'kmark', id: p.id, off: 1 }); }
       else tg = this.clampToArena(x + e.h[0] * s.dist, z + e.h[1] * s.dist);
       tg = this.freeSpot(tg[0], tg[1], x, z);
@@ -400,6 +418,7 @@ export class Room {
     const out = { t: 'cast', id: p.id, sk: sIdx, eid: e.id, p: [r2(x), r2(y), r2(z)], d: [r2(dx), r2(dy), r2(dz)], seed };
     if (aw) out.aw = 1;
     if (tg) out.tg = tg.map(r2);
+    if (ripId) out.rp = ripId;
     this.broadcast(out, p.id);
     this.send(p, { ...out, cs: m.cs, mp: Math.floor(p.mp) });
   }
@@ -495,12 +514,105 @@ export class Room {
     return best;
   }
 
+  // Cọc sét ở chỗ thương rơi (cắm xuống mặt đất / nóc chướng ngại vật bên dưới)
+  spawnRod(e, src, R, x, y, z, t) {
+    [x, z] = this.clampToArena(x, z);
+    const gy = arenaGround(this.arena, x, z, Math.max(0, y), 0.3);
+    const mine = this.props.filter(q => q.owner === src.id && q.kind === 'rod');
+    while (mine.length >= R.max) this.removeProp(mine.shift(), 'time');
+    this.addProp({ kind: 'rod', owner: src.id, team: src.team || null, x, y: gy, z, r: 0.45, h: 2.6, hp: R.hp, until: t + R.dur, fence: R.fence });
+  }
+
   // Vòng cột đá tạm thời quanh (cx, cz)
   spawnWalls(cx, cz, W, e, t) {
     for (let i = 0; i < W.count; i++) {
       const a = (i / W.count) * Math.PI * 2 + e.seed % 7;
       this.dyn.push({ x: cx + Math.cos(a) * W.ring, z: cz + Math.sin(a) * W.ring, r: W.r, h: W.h, until: t + W.dur, owner: e.owner });
     }
+  }
+
+  // ---------- Công trình (cọc sét, cột đá): có máu, đối thủ đánh phá được ----------
+  publicProp(pr) {
+    return { id: pr.id, k: pr.kind, o: pr.owner, tm: pr.team || null, p: [r2(pr.x), r2(pr.y), r2(pr.z)], r: pr.r, h: pr.h,
+      hp: Math.ceil(pr.hp), mhp: pr.maxHp, dur: r2(Math.max(0, pr.until - now())), fr: pr.fence?.range };
+  }
+
+  addProp(o) {
+    const pr = { id: nextPropId++, isProp: true, dead: false, yaw: 0, maxHp: o.hp, ...o };
+    // cột đá: chướng ngại vật chắn đường, chắn đạn, đứng lên nóc được
+    if (o.solid) { pr.dyn = { x: pr.x, z: pr.z, r: pr.r, h: pr.y + pr.h, until: pr.until, owner: pr.owner, prop: pr.id }; this.dyn.push(pr.dyn); }
+    this.props.push(pr);
+    this.broadcast({ t: 'prop', ...this.publicProp(pr) });
+    return pr;
+  }
+
+  // why: 'time' (hết giờ), 'break' (bị phá), 'rip' (bị nhổ lên ném), 'quake' (vỡ khi động đất)
+  removeProp(pr, why) {
+    if (pr.dead) return;
+    pr.dead = true;
+    this.props = this.props.filter(q => q !== pr);
+    if (pr.dyn) this.dyn = this.dyn.filter(o => o !== pr.dyn);
+    this.broadcast({ t: 'prop', id: pr.id, end: why });
+  }
+
+  damageProp(src, pr, amount) {
+    if (pr.dead) return false;
+    pr.hp -= Math.max(1, Math.round(amount));
+    if (pr.hp <= 0) this.removeProp(pr, 'break');
+    else this.broadcast({ t: 'prop', id: pr.id, hp: Math.ceil(pr.hp) });
+    return true;
+  }
+
+  // Công trình loại kind của p gần hướng ngắm nhất trong tầm (ưu tiên góc nhỏ, rồi gần)
+  aimProp(p, x, z, h, range, kind) {
+    let best = null, bs = Infinity;
+    for (const pr of this.props) {
+      if (pr.dead || pr.owner !== p.id || pr.kind !== kind) continue;
+      const vx = pr.x - x, vz = pr.z - z, d = Math.hypot(vx, vz);
+      if (d > range || d < 1) continue;
+      const ang = Math.acos(Math.max(-1, Math.min(1, (vx * h[0] + vz * h[1]) / d)));
+      if (ang > 1.2) continue;
+      const sc = ang * 3 + d * 0.05;
+      if (sc < bs) { bs = sc; best = pr; }
+    }
+    return best;
+  }
+
+  // Cột đá để nhổ lên ném: cột client gợi ý (rp) nếu hợp lệ, không thì cột của mình gần nhất trong tầm
+  findRip(p, x, z, rp, range) {
+    let best = null, bd = range;
+    for (const pr of this.props) {
+      if (pr.dead || pr.owner !== p.id || pr.kind !== 'pillar') continue;
+      const d = Math.hypot(pr.x - x, pr.z - z);
+      if (pr.id === rp && d <= range + 2) return pr;
+      if (d <= bd) { bd = d; best = pr; }
+    }
+    return best;
+  }
+
+  // Hàng rào điện: mọi cặp cọc sét của cùng một người cách nhau dưới fence.range
+  updateFences(t) {
+    const by = new Map();
+    for (const pr of this.props) if (pr.kind === 'rod' && !pr.dead) { if (!by.has(pr.owner)) by.set(pr.owner, []); by.get(pr.owner).push(pr); }
+    for (const [oid, rods] of by) {
+      if (rods.length < 2) continue;
+      const src = this.players.get(oid);
+      if (!src) continue;
+      for (let i = 0; i < rods.length; i++) for (let j = i + 1; j < rods.length; j++) {
+        const a = rods[i], b = rods[j], F = a.fence;
+        if (Math.hypot(a.x - b.x, a.z - b.z) > F.range) continue;
+        for (const q of this.players.values()) {
+          if (q === src || q.dead || (this.team && q.team === src.team)) continue;
+          if (q.y > Math.max(a.y, b.y) + F.h) continue;   // nhảy qua hàng rào thì né được
+          if (distPointSeg(q.x, 0, q.z, a.x, 0, a.z, b.x, 0, b.z) > F.w + BODY_R * 0.5) continue;
+          const key = a.id + ':' + b.id + ':' + q.id;
+          if (t < (this.fenceCd.get(key) || 0)) continue;
+          this.fenceCd.set(key, t + F.cd);
+          this.damage(src, q, F.dmg, [0, 2, 0], FENCE_SKILL, [q.x, q.y + 1, q.z]);
+        }
+      }
+    }
+    if (this.fenceCd.size > 200) for (const [k, v] of this.fenceCd) if (v < t) this.fenceCd.delete(k);
   }
 
   // ---------- Dị biến ----------
@@ -542,6 +654,7 @@ export class Room {
 
   // ---------- Sát thương ----------
   damage(src, tgt, amount, kb, s, at) {
+    if (tgt.isProp) return this.damageProp(src, tgt, amount);
     const t = now();
     if (tgt.dead || t < tgt.invulnUntil) return false;
     // đấu đội: phòng chờ/kết quả không mất máu, không đánh được đồng đội
@@ -568,6 +681,8 @@ export class Room {
     if (ta) {
       if (ta.dmgTaken) amount *= ta.dmgTaken;
       if (ta.noKb) kb = [0, 0, 0];
+      // đang ở trên không (Kaze dị biến bay tự do) thì nhận thêm sát thương
+      if (ta.airTaken && tgt.y - arenaGround(this.arena, tgt.x, tgt.z, tgt.y, BODY_R) > 1.2) amount *= ta.airTaken;
     }
     amount = Math.max(1, Math.round(amount));
     tgt.hp -= amount;
@@ -628,7 +743,7 @@ export class Room {
   seekStep(e, sub, k) {
     const [x, y, z] = sub.pos;
     let best = null, bd = 12;
-    for (const q of this.targets(e)) {
+    for (const q of this.targets(e, false)) {
       const vx = q.x - x, vy = q.y + CHEST - y, vz = q.z - z, d = Math.hypot(vx, vy, vz);
       if (d > bd || d < 0.3 || (vx * sub.d[0] + vy * sub.d[1] + vz * sub.d[2]) / d < 0.5) continue;
       bd = d; best = [vx / d, vy / d, vz / d];
@@ -648,13 +763,18 @@ export class Room {
     return [vx * k, s.kbUp != null ? s.kbUp : Math.abs(k) * 0.25, vz * k];
   }
 
-  // Lọc mục tiêu hợp lệ (không phải chủ chiêu, còn sống)
-  *targets(e) {
+  // Lọc mục tiêu hợp lệ (không phải chủ chiêu, còn sống). props: cả công trình của đối thủ (cọc sét, cột đá)
+  *targets(e, props = true) {
     const owner = this.team ? this.players.get(e.owner) : null;
     for (const q of this.players.values()) {
       if (q.id === e.owner || q.dead) continue;
       if (owner && q.team === owner.team) continue;   // đấu đội: chiêu xuyên qua đồng đội
       yield q;
+    }
+    if (!props) return;
+    for (const pr of this.props) {
+      if (pr.dead || pr.owner === e.owner || (owner && pr.team === owner.team)) continue;
+      yield pr;
     }
   }
 
@@ -717,9 +837,12 @@ export class Room {
           for (const q of this.targets(e)) {
             const key = q.id * 16 + sub.k;
             if (e.hits.has(key)) continue;
-            const d = distPointSeg(q.x, q.y + CHEST, q.z, ox, oy, oz, nx, ny, nz);
+            // công trình: thân trụ đứng (bán kính r, cao h); người chơi: hình cầu ở ngực
+            const d = q.isProp ? (ny >= q.y - 0.3 && ny <= q.y + q.h ? distPointSeg(q.x, 0, q.z, ox, 0, oz, nx, 0, nz) - q.r + BODY_R : 1e9)
+              : distPointSeg(q.x, q.y + CHEST, q.z, ox, oy, oz, nx, ny, nz);
             if (d < s.radius + BODY_R) {
               e.hits.set(key, t);
+              if (!q.isProp) sub.hitP = true;
               const kb = [sub.d[0] * s.kb, s.kbUp != null ? s.kbUp : s.kb * 0.3, sub.d[2] * s.kb];
               const hit = this.damage(src, q, s.dmg, kb, s, [q.x, q.y + 1, q.z]);
               if (hit && s.bounce && src) this.chainFrom(src, q, 0, s.bounce.n, s.bounce.dmg, s.bounce.range, 0, s.fx.color);
@@ -729,6 +852,8 @@ export class Room {
           if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius, this.arena, this.dyn, e.owner, src?.team))) ended = true;
           if (ended) {
             sub.alive = false;
+            // thương sét không trúng ai: cắm xuống chỗ rơi thành cọc sét
+            if (s.rod && src && !sub.hitP) this.spawnRod(e, src, s.rod, nx - sub.d[0] * 0.5, ny, nz - sub.d[2] * 0.5, t);
             if (s.mark && sub.k === 0 && src) {
               // dấu phi đao: Thuấn Ảnh dịch chuyển tới đây
               const [mx, mz] = this.clampToArena(nx - sub.d[0] * 0.8, nz - sub.d[2] * 0.8);
@@ -753,25 +878,39 @@ export class Room {
       }
       case 'dash': {
         const f = Math.min(1, (el - s.delay) / s.dur);
-        let x = px + hx * s.dist * f, z = pz + hz * s.dist * f;
+        let x = px + hx * s.dist * f, z = pz + hz * s.dist * f, y = py;
         let dhx = hx, dhz = hz;
-        if (e.st) { [x, z] = e.st.pos; [dhx, dhz] = e.st.h; }
-        const prev = e.state.prev || [px, pz];
-        e.state.prev = [x, z];
-        for (const q of this.targets(e)) {
+        // free3d: lướt theo đúng hướng ngắm 3 chiều (lên trời / bổ xuống)
+        if (s.free3d) { x = px + e.d[0] * s.dist * f; z = pz + e.d[2] * s.dist * f; y = Math.max(0, Math.min(MOVE.flyMaxHeight, py + e.d[1] * s.dist * f)); }
+        if (e.st) { [x, z] = e.st.pos; [dhx, dhz] = e.st.h; if (e.st.y != null) y = e.st.y; }
+        const prev = e.state.prev || [px, py, pz];
+        e.state.prev = [x, y, z];
+        if (!e.state.fin) for (const q of this.targets(e)) {
           // multi: lướt đánh nhiều nhịp — mỗi mục tiêu trúng tối đa s.multi lần, cách nhau s.multiInt giây
           const hc = e.hits.get(q.id);
           if (s.multi ? hc && (hc.n >= s.multi || t - hc.t < s.multiInt) : hc) continue;
-          const d = distPointSeg(q.x, q.y, q.z, prev[0], py, prev[1], x, py, z);
-          if (d < s.radius + BODY_R && Math.abs(q.y - py) < 2.5) {
+          const d = distPointSeg(q.x, q.y, q.z, prev[0], prev[1], prev[2], x, y, z);
+          if (d < s.radius + BODY_R && Math.abs(q.y - y) < 2.5) {
             e.hits.set(q.id, s.multi ? { n: (hc?.n || 0) + 1, t } : t);
             this.damage(src, q, s.dmg, [dhx * s.kb, s.kbUp || 3, dhz * s.kb], s, [q.x, q.y + 1, q.z]);
+            // phân thân gió: hẹn giờ chém lại đúng chỗ vừa lướt qua
+            if (s.clone && !q.isProp) (e.state.cl ||= []).push({ id: q.id, at: t + s.clone.delay, x: q.x, y: q.y, z: q.z });
           }
         }
-        if (f >= 1) {
-          if (s.explode) this.explode(e, src, x, py + 0.5, z, s.explode);
-          e.dead = true;
+        if (e.state.cl) for (const c of e.state.cl) {
+          if (c.done || t < c.at) continue;
+          c.done = true;
+          const C = s.clone, q = this.players.get(c.id);
+          this.broadcast({ t: 'pulse', k: 'windClone', pts: [[r2(c.x), r2(c.y + 1), r2(c.z)]], c: s.fx.color, r: C.radius });
+          if (q && !q.dead && Math.hypot(q.x - c.x, q.y - c.y, q.z - c.z) < C.radius + BODY_R) {
+            this.damage(src, q, C.dmg, this.kbFrom(c.x - dhx, c.z - dhz, q, C), { fx: { kind: 'windClone', color: s.fx.color } }, [q.x, q.y + 1, q.z]);
+          }
         }
+        if (f >= 1 && !e.state.fin) {
+          e.state.fin = true;
+          if (s.explode) this.explode(e, src, x, y + 0.5, z, s.explode);
+        }
+        if (e.state.fin && !(e.state.cl && e.state.cl.some(c => !c.done))) e.dead = true;
         break;
       }
       case 'beam': {
@@ -806,6 +945,19 @@ export class Room {
               this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
             }
           }
+          // cọc sét trong tầm cũng phóng vòng sét kéo người về phía cọc
+          const RP = s.rodPulse;
+          if (RP) {
+            const pts = [];
+            for (const pr of this.props) {
+              if (pr.dead || pr.kind !== 'rod' || pr.owner !== e.owner || Math.hypot(pr.x - cx, pr.z - cz) > RP.range) continue;
+              pts.push([r2(pr.x), r2(pr.y + 1.2), r2(pr.z)]);
+              for (const q of this.targets(e, false)) {
+                if (Math.hypot(q.x - pr.x, q.z - pr.z) < RP.radius + BODY_R && q.y - pr.y < 4) this.damage(src, q, s.dmg, this.kbFrom(pr.x, pr.z, q, { pull: RP.pull, kbUp: 1 }), s, [q.x, q.y + 1, q.z]);
+              }
+            }
+            if (pts.length) this.broadcast({ t: 'pulse', k: 'zap', pts, c: s.fx.color, r: RP.radius });
+          }
         }
         break;
       }
@@ -830,7 +982,7 @@ export class Room {
         if (el < s.delay + s.arm) break;
         const [cx, cz] = e.tg;
         let fired = false;
-        for (const q of this.targets(e)) {
+        for (const q of this.targets(e, false)) {
           if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R * 0.5 && q.y < 1.5) {
             this.damage(src, q, s.dmg, [0, s.kbUp || 0, 0], s, [q.x, q.y + 1, q.z]);
             fired = true;
@@ -897,7 +1049,7 @@ export class Room {
         if (e.state.done) break;
         e.state.done = true;
         const pts = [], sm = { ...s, noMark: true };
-        for (const q of this.targets(e)) {
+        for (const q of this.targets(e, false)) {
           if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
           const mk = q.charges?.get(e.owner);
           const marks = mk && t < mk.until ? mk.n : 0;
@@ -906,6 +1058,52 @@ export class Room {
           this.damage(src, q, s.dmg + marks * (s.perMark || 0), [0, s.kbUp, 0], sm, [q.x, q.y + 1, q.z]);
         }
         if (pts.length) this.broadcast({ t: 'chain', pts, c: s.fx.color, sky: 1 });
+        // mỗi cọc sét phóng thêm 1 tia vào đối thủ gần nó nhất
+        if (s.rodDmg) for (const pr of this.props) {
+          if (pr.dead || pr.kind !== 'rod' || pr.owner !== e.owner) continue;
+          let best = null, bd = s.rodRange;
+          for (const q of this.targets(e, false)) { const d = Math.hypot(q.x - pr.x, q.z - pr.z); if (d < bd) { bd = d; best = q; } }
+          if (!best) continue;
+          this.damage(src, best, s.rodDmg, [0, 3, 0], sm, [best.x, best.y + 1, best.z]);
+          this.broadcast({ t: 'chain', pts: [[r2(pr.x), r2(pr.y + 2.4), r2(pr.z)], [r2(best.x), r2(best.y + 1), r2(best.z)]], c: s.fx.color, nosky: 1 });
+        }
+        e.dead = true;
+        break;
+      }
+      case 'pillar': {
+        // cột đá trồi lên: hất tung đối thủ đứng ngay chỗ đó, rồi thành công trình chắn đường / đứng lên được
+        if (e.state.up) break;
+        e.state.up = true;
+        const [cx, cz] = e.tg;
+        const mine = this.props.filter(q => q.owner === e.owner && q.kind === 'pillar');
+        while (mine.length >= s.max) this.removeProp(mine.shift(), 'time');
+        for (const q of this.targets(e, false)) {
+          if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < s.h + 1) this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
+        }
+        this.addProp({ kind: 'pillar', owner: e.owner, team: src?.team || null, x: cx, y: 0, z: cz, r: s.r, h: s.h, hp: s.hp, until: t + s.dur, solid: true });
+        e.dead = true;
+        break;
+      }
+      case 'quake': {
+        // động đất cả sân: ai đang đứng trên mặt đất (kể cả nóc chướng ngại vật của map) bị choáng; ở trên không thì né được
+        if (e.state.done) break;
+        e.state.done = true;
+        for (const q of this.targets(e, false)) {
+          if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
+          const g = arenaGround(this.arena, q.x, q.z, q.y + 0.1, BODY_R);
+          if (q.y - g > s.airTol) { this.broadcast({ t: 'evade', id: q.id }); continue; }
+          this.damage(src, q, s.dmg, [0, s.kbUp, 0], s, [q.x, q.y + 1, q.z]);
+        }
+        // cột đá của mình vỡ tung, mảnh đá bắn ra xung quanh
+        const S = s.shard, pts = [], sh = { fx: s.fx };
+        for (const pr of this.props.filter(q => q.owner === e.owner && q.kind === 'pillar')) {
+          pts.push([r2(pr.x), r2(pr.y + 1.5), r2(pr.z)]);
+          this.removeProp(pr, 'quake');
+          for (const q of this.targets(e, false)) {
+            if (Math.hypot(q.x - pr.x, q.z - pr.z) < S.radius + BODY_R && q.y - pr.y < pr.h + 2) this.damage(src, q, S.dmg, this.kbFrom(pr.x, pr.z, q, S), sh, [q.x, q.y + 1, q.z]);
+          }
+        }
+        if (pts.length) this.broadcast({ t: 'pulse', k: 'rock', pts, c: s.fx.color, r: S.radius });
         e.dead = true;
         break;
       }
@@ -916,7 +1114,7 @@ export class Room {
           e.state.n = (e.state.n ?? -1) + 1;
           if (!src || src.dead) { e.dead = true; break; }
           let best = null, bs = Infinity;
-          for (const q of this.targets(e)) {
+          for (const q of this.targets(e, false)) {
             if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
             const sc = (e.hits.get(q.id) || 0) * 100 + Math.hypot(q.x - src.x, q.z - src.z);
             if (sc < bs) { bs = sc; best = q; }
@@ -1004,7 +1202,7 @@ export class Room {
       // Mana: thụ động (gấp đôi khi dị biến) + vận khí (flag 2) - bay (flag 1)
       let mr = GAME.manaRegen * (p.awUntil > t ? AWAKEN.manaRegenMul : 1);
       if (p.flags & 2) mr += GAME.chargeManaRate;
-      if (p.flags & 1) mr -= MOVE.flyManaPerSec + GAME.manaRegen;
+      if (p.flags & 1 && !this.awOf(p, t)?.passive.freeFly) mr -= MOVE.flyManaPerSec + GAME.manaRegen;   // Kaze dị biến bay không tốn mana
       p.mp += mr * dt;
       p.hp = Math.min(p.maxHp, p.hp);
       p.mp = Math.max(0, Math.min(GAME.maxMana, p.mp));
@@ -1027,6 +1225,10 @@ export class Room {
       if (t > e.end) e.dead = true;
     }
     this.entities = this.entities.filter(e => !e.dead);
+    if (this.props.length) {
+      for (const pr of this.props) if (t >= pr.until) this.removeProp(pr, 'time');
+      this.updateFences(t);
+    }
     if (this.dyn.length) this.dyn = this.dyn.filter(o => t < o.until);
     for (const p of this.players.values()) if (p.buff && t >= p.buff.until) this.endBuff(p);
 

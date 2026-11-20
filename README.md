@@ -14,7 +14,7 @@ Có 4 chế độ, chọn khi tạo phòng:
 | 🔫 **Sinh tử** | Bắn súng tự do, ai cũng là đối thủ, hồi sinh nhanh, súng miễn phí |
 
 - **Đồ hoạ**: nhân vật chibi dựng từ khối cơ bản + toon shading + viền đen; chiêu thức dùng particle GPU, shader năng lượng, vòng phép thuật, tia, lốc xoáy, cột lửa, mưa băng, bloom.
-- **Nhẹ**: không có file model/texture/âm thanh nào — tất cả được sinh bằng code (âm thanh tổng hợp bằng WebAudio). Toàn bộ client chỉ khoảng 100 KB code + three.js.
+- **Nhẹ**: không có file model/texture/âm thanh nào — tất cả được sinh bằng code (âm thanh tổng hợp bằng WebAudio). Toàn bộ client khoảng 370 KB code chưa nén + three.js, không có bước build.
 - **Multiplayer**: tạo phòng / vào phòng, **không giới hạn người chơi**, server quyết định máu/mana/sát thương (chống gian lận cơ bản), client tự di chuyển để mượt, có nội suy vị trí người khác.
 
 ## Yêu cầu
@@ -83,16 +83,16 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 
 | Nhân vật | Dạng dị biến | Nội tại khi biến hình | Bộ chiêu mới (J · K · JK · KL · JKL) |
 |---|---|---|---|
-| Kaze | **Phong Thần Hóa**: khăn tách thành 4 dải gió, lơ lửng | Chạy nhanh hơn 25%, lướt né hồi nhanh gấp đôi | Lưỡi gió bay · 5 phi tiêu tự tìm mục tiêu · lướt gió hất tung · **tường gió** chặn đạn đối thủ (đạn mình bay xuyên) · cưỡi **rồng lốc** lái theo tâm 2.2 s |
+| Kaze | **Phong Thần Hóa**: khăn tách thành 4 dải gió | **Bay tự do** không tốn mana: giữ `Space` (điện thoại: giữ nút Nhảy/Bay) là bay, cao tối đa 10 m, thả ra thì lượn chậm xuống; ra chiêu được giữa không trung. Chạy nhanh hơn 25%, lướt né hồi nhanh gấp đôi. Đang ở trên không thì nhận thêm 15% sát thương | Lưỡi gió bay · 5 phi tiêu tự tìm mục tiêu · **lướt 3 chiều** theo hướng ngắm (lên trời, bổ xuống), lướt xuyên qua ai thì 0.4 s sau **phân thân gió** chém thêm 1 nhát · **tường gió** chặn đạn đối thủ (đạn mình bay xuyên), bước vào chân tường thì được gió đẩy bay vọt lên · cưỡi **rồng lốc** 2.2 s lái theo tâm cả hướng lẫn độ cao (ngẩng camera để bay lên, nhìn xuống để bổ nhào) |
 | Raiga | **Bạo Khí Thân**: vân dung nham, găng khí khổng lồ | Không bị đẩy lùi, giảm 15% sát thương | Khí quyền bay 7 m · khí đạn nổ lan · lướt đấm 3 nhịp · chưởng 2 s **quét theo tâm** · lao tới đấm loạn rồi nổ khí tung lên trời |
 | Homura | **Viêm Hoàng Giáp**: cánh lửa, vương miện lửa | Mọi đòn gây **bỏng** (2 sát thương × 4 nhịp) | Chém để lại lửa · 2 trăng lửa chéo · bay lên bổ xuống tâm ngắm · vòng lửa bám theo người · phượng hoàng khổng lồ lao theo tâm |
 | Yuki | **Băng Hậu**: vương miện, áo choàng băng | Trúng 3 đòn trong 3 s thì **đóng băng** 1 s | Băng đạn · 3 băng thương xuyên · trượt băng · quan tài băng nhốt mọi người trong 7 m · bão tuyết 11 m bám theo người |
-| Shiden | **Lôi Kỵ Thần**: sừng vàng, thương dài gấp đôi | Chỉ cần 2 dấu điện là sét nảy | Thương đâm 4.6 m · lôi tiễn **nảy sang 2 người** · lướt sét hồi nhanh · lưới sét kéo vào giữa · **Thiên Lôi Phán Quyết**: sét giáng mọi đối thủ trong 22 m (+10 mỗi dấu điện) |
+| Shiden | **Lôi Kỵ Thần**: sừng vàng, giáp sáng điện | Chỉ cần 2 dấu điện là sét nảy. **Cọc sét**: tối đa 3 cọc, mỗi cọc 8 giây, 30 máu (đối thủ đánh vỡ được). Hai cọc cách nhau dưới 10 m nối thành **hàng rào điện**: đối thủ đi xuyên qua bị giật 8 sát thương + 1 dấu điện, nhảy qua thì né được | Thương đâm 4.6 m · **phóng thương**: trúng người thì gây sát thương, trượt thì cắm xuống chỗ rơi thành cọc sét · **Lôi Độn**: dịch chuyển tới cọc gần tâm ngắm nhất (không có cọc thì dịch chuyển 10 m), sét giáng quanh chỗ tới · lưới sét kéo vào giữa, mọi cọc trong 16 m cũng phóng vòng sét kéo người về phía cọc · **Thiên Lôi Phán Quyết**: sét giáng mọi đối thủ trong 22 m (+10 mỗi dấu điện), mỗi cọc phóng thêm 1 tia vào đối thủ gần nó |
 | Midori | **Hồn Rừng**: sừng cành cây, hoa mọc khắp người | **Hút máu** 20% sát thương gây ra | Roi gai kéo đối thủ về · gai nổ chùm · rễ trói 1 s · thảm hoa hồi máu · rừng gai trồi lên kéo theo tâm |
-| Gantetsu | **Sơn Thần Giáp**: giáp đá, to ×1.3 | Giảm 30% sát thương, không bị đẩy, không bị choáng (không được tăng tốc chạy) | Đấm chấn động hình nón · cự thạch nổ · cuộn đá lăn · **Thạch Lao** dựng vòng cột nhốt đối thủ · vọt lên trời rơi như **thiên thạch** |
+| Gantetsu | **Sơn Thần Giáp**: giáp đá, to ×1.3 | Giảm 30% sát thương, không bị đẩy, không bị choáng (không được tăng tốc chạy). **Cột đá**: tối đa 3 cột, mỗi cột 10 giây, 60 máu, chắn đường và chắn đạn, đứng lên nóc được | Đấm chấn động hình nón · **Nhổ Sơn Thạch**: có cột đá của mình trong 10 m thì nhổ cột đó lên ném (to, nổ rộng), không có thì ném cự thạch · cuộn đá lăn · **Dựng Sơn Trụ**: cột đá cao 4 m trồi lên ở tâm ngắm (tầm 14 m), trồi dưới chân đối thủ thì hất tung, dưới chân mình thì nâng mình lên nóc · **Địa Chấn Toàn Sân**: tụ lực 1.4 s rồi dậm đất, mọi đối thủ đang đứng trên mặt đất trong 25 m bị choáng 1.2 s; ai đang ở trên không (nhảy, bay, đứng trên cột đá) thì **né được**. Cột đá vỡ tung bắn mảnh đá |
 | Kage | **Vạn Ảnh**: thân bóng đen mắt đỏ, 2 phân thân | Mọi đòn đánh sau lưng ×1.5 | Chém + **2 phân thân chém theo** · mưa phi đao · dịch chuyển **ra sau lưng** đối thủ · hóa bóng bất tử 1.6 s · lướt chém lần lượt 5 nhát vào các đối thủ |
 
-**Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze) và mưa băng (Yuki) trôi theo tâm, Tinh Cầu Hủy Diệt (Raiga) bẻ hướng bay cả lên/xuống, Phượng Hoàng (Homura) uốn cong đường lao. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
+**Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze), mưa băng (Yuki) và vòng xoáy hắc đao (Kage) trôi theo tâm; Tinh Cầu Hủy Diệt (Raiga) và cây thương của Lôi Long Xuyên (Shiden) bẻ hướng bay cả lên/xuống; Phượng Hoàng (Homura) uốn cong đường lao. Ở dạng dị biến: rồng lốc (Kaze, lái cả độ cao), đường lao Bách Liệt Bạo Quyền (Raiga), phượng hoàng khổng lồ (Homura) lái theo tâm; rừng gai (Midori) trôi theo tâm; chưởng Bạo Long Chưởng (Raiga, KL) quét theo tâm cả chiều ngang lẫn chiều dọc. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
 
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
 
@@ -178,7 +178,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 ## Nhân vật
 
-Các nhân vật là **nhân vật nguyên bản** theo các hình mẫu quen thuộc của anime/manga:
+Cả 8 nhân vật đều **tự sáng tác**: tên, ngoại hình và chiêu thức chỉ lấy cảm hứng chung từ các hình mẫu quen thuộc (ninja gió, kiếm sĩ lửa, pháp sư băng…), không mô phỏng nhân vật có bản quyền nào.
 
 Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến, bấm vào một dòng chiêu để xem riêng chiêu đó.
 
@@ -193,13 +193,42 @@ Các nhân vật là **nhân vật nguyên bản** theo các hình mẫu quen th
 | **Gantetsu** — Thiết Quyền Hộ Vệ | 165 | Võ sĩ đá to con, chậm, trâu | Ném đá tảng (nổ), húc vai đá lăn, **Thiết Bích** (4 s giảm 40% sát thương, không bị đẩy/choáng), tuyệt kỹ **Sơn Băng** (nhảy tới chỗ tâm ngắm đập đất, dựng vòng cột đá 6 s) |
 | **Kage** — Ảnh Sát Thủ | 120 | Sát thủ bóng tối, chạy nhanh nhất, ít máu nhất | Phi đao để lại dấu bóng, **Thuấn Ảnh** (dịch chuyển tới dấu phi đao), **Ẩn Thân** (tàng hình 3.5 s, đòn đầu ×1.6), vòng xoáy hắc đao lái theo tâm |
 
+Tên chiêu thường của từng nhân vật:
+
+| Nhân vật | `J` | `K` | `J` `K` | `K` `L` | `J` `K` `L` ★ | `J` `J` `J` (đòn kết) |
+|---|---|---|---|---|---|---|
+| Kaze | Kunai Liên Trảm | Phi Tiêu Phong Ấn | Phong Cầu Xoáy | Lốc Phong Đao | Đại Phong Long Quyển | Phi Kunai Tuyệt Ảnh |
+| Raiga | Liên Hoàn Quyền | Khí Đạn | Thiểm Quang Quyền | Chưởng Phong Ba | Tinh Cầu Hủy Diệt | Thăng Thiên Quyền |
+| Homura | Viêm Kiếm Trảm | Viêm Nguyệt Trảm | Thăng Long Hỏa | Hỏa Trụ Liên Hoàn | Phượng Hoàng Giáng Thế | Viêm Long Toàn Trảm |
+| Yuki | Băng Trượng Kích | Băng Tiễn Phong Bạo | Băng Phong Lộ | Hàn Băng Kết Giới | Thiên Băng Vũ | Băng Phong Kích |
+| Shiden | Lôi Thương Đâm | Lôi Tiễn | Lôi Ảnh Bộ | Lôi Võng Trận | Lôi Long Xuyên | Lôi Thương Toàn Kích |
+| Midori | Đằng Tiên Quất | Gai Độc Phi Châm | Rễ Thần Trói Buộc | Gieo Hạt Trói Thân | Thần Mộc Giáng Thế | Đằng Mạn Triền Thân |
+| Gantetsu | Thiết Quyền | Phi Thạch | Thiết Kiên Xung | Thiết Bích Thân | Sơn Băng Địa Liệt | Địa Liệt Quyền |
+| Kage | Ảnh Trảm | Ảnh Phi Đao | Thuấn Ảnh Bộ | Ẩn Thân Thuật | Hắc Liên Loạn Trảm | Bối Ảnh Thích |
+
+Tên chiêu ở dạng dị biến:
+
+| Nhân vật | `J` | `K` | `J` `K` | `K` `L` | `J` `K` `L` ★ |
+|---|---|---|---|---|---|
+| Kaze | Phong Nhận | Bão Phi Tiêu | Phong Ảnh Bộ | Thiên Phong Bích | Phong Long Thiên Hành |
+| Raiga | Khí Quyền | Bạo Khí Đạn | Liên Hoàn Thiểm Quyền | Bạo Long Chưởng | Bách Liệt Bạo Quyền |
+| Homura | Viêm Hoàng Trảm | Song Nguyệt Viêm | Viêm Long Trụy | Hỏa Luân Trận | Phượng Hoàng Thiên Hỏa |
+| Yuki | Băng Tinh Đạn | Băng Thương Xuyên | Băng Hoạt Bộ | Băng Quan Phong Ấn | Vĩnh Đông Giới |
+| Shiden | Lôi Thần Thương | Lôi Trụ Thương | Lôi Độn | Lôi Võng Thiên La | Thiên Lôi Phán Quyết |
+| Midori | Gai Tiên Câu | Gai Hoa Nổ | Cổ Thụ Căn | Hoa Viên Hồi Xuân | Vạn Gai Lâm |
+| Gantetsu | Chấn Sơn Quyền | Nhổ Sơn Thạch | Sơn Thạch Cuộn | Dựng Sơn Trụ | Địa Chấn Toàn Sân |
+| Kage | Vạn Ảnh Trảm | Ảnh Đao Vũ | Bối Ảnh Bộ | Hóa Ảnh | Vạn Ảnh Táng |
+
+Đòn kết `J` `J` `J` ở dạng dị biến là bản cường hóa của đòn kết thường (sát thương ×1.5, tên thêm hậu tố "· Cực").
+
 ### Thêm / sửa nhân vật
 
 Mọi thứ nằm trong [shared/characters.js](shared/characters.js):
 
 - `hp`: máu tối đa riêng (mặc định 150). Nhân vật to con/chậm nhiều máu hơn, nhân vật nhanh/sát thương cao ít máu hơn.
 - `look`: màu da, tóc, kiểu tóc (`spiky`, `superSpiky`, `ponytail`, `long`, `short`, `braids`, `mohawk`, `hooded`), trang phục, phụ kiện (`scarf`, `belt`, `sash`, `hat`, `pauldrons`, `flowerCrown`, `mask`), vũ khí (`kunai`, `katana`, `staff`, `spear`, `gauntlet`, `branch`, `dagger`, `none`), `scale` (to/nhỏ, chỉ đổi hình).
-- `skills`: mỗi chiêu có `combo`, `mana`, `cd` (hồi chiêu), `dmg`, `type` (`melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`) và `fx` (màu + kiểu hiệu ứng).
+- `skills`: mỗi chiêu có `combo`, `mana`, `cd` (hồi chiêu), `dmg`, `type` và `fx` (màu + kiểu hiệu ứng). Kiểu chiêu có sẵn: `melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`, `trap` (bẫy), `summon` (vật triệu hồi), `leap` (nhảy tới tâm ngắm), `blink` (dịch chuyển), `buff`; riêng dạng dị biến có thêm `wall` (tường chắn đạn), `smite` (sét giáng mọi đối thủ trong tầm), `multiblink` (lướt chém nhiều nhát), `pillar` (dựng cột đá), `quake` (động đất cả sân).
+- `passive`: nội tại của dạng thường (hiện chỉ Shiden có Tích Điện).
 - `awaken` (bảng `AWAKEN` cuối file): tên, `form` (ngoại hình, dựng trong `client/js/chibi.js` → `buildForm`), `look` (màu đè lên), `passive` (nội tại) và 6 chiêu dị biến. Thông số chung của dị biến (100 điểm, 17 giây…) ở `AWAKEN` trong `shared/config.js`.
 
 Thông số chung (máu, mana, tốc độ hồi, tốc độ chạy, đấu trường...) ở [shared/config.js](shared/config.js).
@@ -207,11 +236,21 @@ Thông số chung (máu, mana, tốc độ hồi, tốc độ chạy, đấu tr�
 ## Cấu trúc thư mục
 
 ```
-server/   index.js (HTTP + WebSocket + lobby), room.js (đối kháng), shooter.js (bắn súng: vòng đấu, tiền, bom), upnp.js, tunnel.js
-shared/   config.js, characters.js, arenas.js (map đối kháng), steer.js, weapons.js, maps.js (map bắn súng)  — dùng chung cho server và client
+server/   index.js (HTTP + WebSocket + lobby), room.js (đối kháng + đấu đội), shooter.js (bắn súng: vòng đấu, tiền, bom),
+          loop.js (vòng lặp tick bù lệch timer), upnp.js, tunnel.js
+shared/   config.js, characters.js (nhân vật + dị biến), arenas.js (map đối kháng), steer.js, weapons.js, maps.js (map bắn súng)
+          — dùng chung cho server và client
 client/   index.html, style.css, js/ (game, chibi, effects, world, ui, audio, net, touch, main)
           js/shooter/ (sgame: lõi bắn súng, mapview: dựng map, guns: mô hình súng)
+tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 ```
+
+## Kiểm tra khi phát triển
+
+- Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `bomb`, `dm`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
+- Test dị biến: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn).
+- Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).
+- Số phiên bản hiện ở góc dưới menu và trong bảng tạm dừng (Esc). Lịch sử thay đổi theo từng phiên bản ở [CHANGELOG.md](CHANGELOG.md). Nếu thấy dòng chữ đỏ `vX ≠ server vY` thì trình duyệt đang chạy bản cũ: tải lại trang.
 
 ## Ghi chú kỹ thuật
 

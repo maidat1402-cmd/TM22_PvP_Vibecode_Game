@@ -101,6 +101,8 @@ input:focus { border-color: var(--accent); }
 .server-info code { background: rgba(0,0,0,.3); padding: 2px 8px; border-radius: 6px; color: #bfe9ff; font-size: 13px; user-select: text; }
 .menu-foot { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
 .conn { margin-left: auto; font-size: 12px; color: var(--muted); }
+.ver-tag { font-size: 11px; color: var(--muted); opacity: 0.8; font-variant-numeric: tabular-nums; }
+.ver-tag.bad { color: #ff8a8a; opacity: 1; }
 .conn.ok { color: var(--hp); }
 
 /* ============ HUD ============ */

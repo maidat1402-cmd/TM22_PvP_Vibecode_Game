@@ -105,6 +105,7 @@ class Avatar {
           if (b > a) f.cur.addScaledVector(f.h, f.dist / f.dur * (b - a));
           f.last = el;
           this.pos.copy(f.cur);
+          if (f.st && f.st.y != null) this.pos.y = f.st.y;   // rồng lốc lái cả độ cao
         } else {
           const k = Math.max(0, Math.min(1, (el - f.delay) / f.dur));
           this.pos.set(f.p.x + f.h.x * f.dist * k, f.p.y, f.p.z + f.h.z * f.dist * k);
@@ -196,8 +197,11 @@ function clampArena(x, z) {
   const R = curArena.radius - 1.2, d = Math.hypot(x, z);
   return d > R ? [x / d * R, z / d * R] : [x, z];
 }
+let curDyn = [];        // chướng ngại vật tạm thời phía client (fx.dynObs): nóc cột đá đứng lên được
 function groundHeight(x, z, y) {
-  return arenaGround(curArena, x, z, y, BR);
+  let g = arenaGround(curArena, x, z, y, BR);
+  for (const o of curDyn) if (!o.noBody && y >= o.h - 0.3 && Math.hypot(x - o.x, z - o.z) < o.r + BR * 0.4) g = Math.max(g, o.h);
+  return g;
 }
 
 // ======================= Game =======================
@@ -220,6 +224,7 @@ export class Game {
     this.composer.addPass(new OutputPass());
     this.world = buildWorld(this.scene, ARENA);
     this.fx = new FX(this.scene, this.camera);
+    curDyn = this.fx.dynObs;
     this.fx.warmup(this.renderer);   // biên dịch shader trước để không giật khi tung chiêu lần đầu
     this.hud = new HUD();
     this.applySettings();
@@ -245,6 +250,7 @@ export class Game {
     this.suspended = false;   // true khi đang ở chế độ bắn súng (dùng chung renderer)
 
     this.kmarks = new Map();   // dấu phi đao đang hiện: id người chơi -> hiệu ứng
+    this.props = new Map();    // công trình (cọc sét, cột đá): id -> { k, o, x, y, z, r, h, hp, fx }
     this.bindNet();
     this.bindInput();
     this.bindTeamUi();
@@ -290,6 +296,7 @@ export class Game {
     this.cam.yaw = Math.atan2(this.me.pos.x, this.me.pos.z);
     $('chatlog').innerHTML = '';
     this.setupTouch();
+    for (const pr of msg.props || []) this.onProp(pr);
   }
 
   // Dựng lại cảnh khi vào phòng có map khác
@@ -318,6 +325,8 @@ export class Game {
     this.fx.list.length = 0;
     this.effects.clear();
     this.predicted.clear();
+    this.props.clear();
+    this.fx.fences([], 0);
     this.me = null;
   }
 
@@ -427,6 +436,7 @@ export class Game {
       const from = v3(...m.from), to = v3(...m.p);
       const sk = av.skills, s = sk.find(q => q.type === 'blink' || q.type === 'multiblink' || q.teleport) || sk[2];
       this.fx.blinkFx(from, to, s.fx.color, s.fx.core || 0xffffff);
+      if (s.fx.kind === 'thunderStep') this.fx.judgement(v3(to.x, to.y + 1, to.z), s.fx.color, true);   // Lôi Độn: sét giáng xuống chỗ tới
       av.pos.copy(to);
       av.buf.length = 0; av.pushSnap(to.x, to.y, to.z, av.yaw);
       av.forced = null;
@@ -469,6 +479,24 @@ export class Game {
       if (old) { old.done = true; this.kmarks.delete(m.id); }
       if (m.p) this.kmarks.set(m.id, this.fx.groundMarker(v3(m.p[0], 0.05, m.p[1]), 0x9d4edd, m.dur));
     });
+    // công trình: tạo / mất máu / biến mất
+    n.on('prop', m => this.onProp(m));
+    // hiệu ứng rời: phân thân gió, mảnh đá cột vỡ, vòng sét từ cọc
+    n.on('pulse', m => {
+      for (const pt of m.pts) {
+        const p = v3(...pt);
+        if (m.k === 'windClone') { this.fx.windClone(p, m.c); sfx('swing', this.distToCam(p)); }
+        else if (m.k === 'rock') { this.fx.rockBurst(p, m.c, m.r); sfx('explosion', this.distToCam(p)); }
+        else { this.fx.zapRing(p, m.c, m.r); sfx('beam', this.distToCam(p)); }
+      }
+    });
+    // né được động đất (đang ở trên không)
+    n.on('evade', m => {
+      const av = this.avatars.get(m.id);
+      if (!av) return;
+      this.hud.dmgNumber(v3(av.pos.x, av.pos.y + 1.6, av.pos.z), 'NÉ!', 'other', this.camera, innerWidth, innerHeight);
+      if (av.isMe) this.hud.toast('Né được động đất! 🦘', 900);
+    });
     n.on('chat', m => this.hud.chat(m.name, m.msg));
     n.on('sys', m => this.hud.chat('', m.msg, true));
   }
@@ -481,8 +509,9 @@ export class Game {
   onCast(m) {
     const av = this.avatars.get(m.id);
     if (!av) return;
-    const s = charSkills(av.char, !!m.aw)[m.sk];
+    let s = charSkills(av.char, !!m.aw)[m.sk];
     if (!s) return;
+    if (m.rp && s.ripSkill) s = s.ripSkill;   // nhổ cột đá ném
     if (av.isMe) {
       // chiêu của mình: đã hiện trước rồi, chỉ cần gắn eid để nhận sự kiện kết thúc
       const e = this.predicted.get(m.cs);
@@ -496,9 +525,12 @@ export class Game {
     av.faceYaw = Math.atan2(h.x, h.z);
     av.faceUntil = now() + s.lock;
     av.model.play(s.pose, s.lock);
-    if (s.type === 'dash') av.forced = { p, h, dist: s.dist, delay: s.delay, dur: s.dur, t0: now(), steer: !!s.steer };
+    // lướt 3 chiều (free3d): để nội suy theo snapshot lo, không ép đường lao ngang
+    if (s.type === 'dash' && !s.free3d) av.forced = { p, h, dist: s.dist, delay: s.delay, dur: s.dur, t0: now(), steer: !!s.steer };
     const e = this.fx.castSkill({ skill: s, p, d, h, seed: m.seed, tg: m.tg, caster: av.casterApi, owner: av.id, team: av.team, seekTargets: () => this.seekTargets(av) });
     if (e) { this.effects.set(m.eid, e); if (s.type === 'buff') e.buffOf = av.id; }
+    if (av.forced && e?.steer) av.forced.st = e.steer;   // rồng lốc lái cả độ cao
+    if (s.type === 'quake' && !this.isAlly(av)) this.hud.toast(`⚠ ${av.name} sắp động đất cả sân — nhảy lên để né!`, 1500);
     setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
   }
@@ -539,6 +571,55 @@ export class Game {
     else if (m.frost) this.fx.parts.burst(at, 6 * m.frost, 0xe0f7ff, { speed: 2, size: 0.3, life: 0.6 });
     if (m.burn) this.fx.parts.burst(at, 8, 0xff7b00, { speed: 3, size: 0.35, life: 0.5, up: 1 });
     if (m.fx === 'burn') this.fx.parts.burst(at, 5, 0xff5400, { speed: 2, size: 0.3, life: 0.4, up: 1.5 });
+  }
+
+  // ======================= Công trình (cọc sét, cột đá) =======================
+  onProp(m) {
+    const P = this.props;
+    if (m.end) { const pr = P.get(m.id); if (pr) { pr.fx.end(m.end); P.delete(m.id); } return; }
+    let pr = P.get(m.id);
+    if (pr) { if (m.hp != null) { if (m.hp < pr.hp) pr.fx.hit(); pr.hp = m.hp; } return; }
+    if (!m.k) return;
+    pr = { id: m.id, k: m.k, o: m.o, tm: m.tm, x: m.p[0], y: m.p[1], z: m.p[2], r: m.r, h: m.h, hp: m.hp, fr: m.fr };
+    pr.fx = this.fx.prop({ k: m.k, p: m.p, r: m.r, h: m.h });
+    P.set(m.id, pr);
+    // cột đá trồi lên ngay dưới chân mình: được nâng lên nóc cột
+    const me = this.me;
+    if (m.k === 'pillar' && me && !me.dead && Math.hypot(me.pos.x - pr.x, me.pos.z - pr.z) < pr.r + BR * 0.4 && me.pos.y < pr.y + pr.h) {
+      me.pos.y = pr.y + pr.h;
+      this.L.vel.y = Math.max(this.L.vel.y, 3);
+      this.L.onGround = false;
+    }
+  }
+
+  // Hàng rào điện giữa các cặp cọc sét của cùng một người (vẽ mỗi khung hình)
+  updateFences(dt) {
+    const rods = [];
+    for (const pr of this.props.values()) if (pr.k === 'rod') rods.push(pr);
+    const pairs = [];
+    for (let i = 0; i < rods.length; i++) for (let j = i + 1; j < rods.length; j++) {
+      const a = rods[i], b = rods[j];
+      if (a.o !== b.o || Math.hypot(a.x - b.x, a.z - b.z) > (a.fr || 10)) continue;
+      pairs.push({ key: a.id + ':' + b.id, a: [a.x, a.y, a.z], b: [b.x, b.y, b.z], c: 0xb388ff, h: 2.2 });
+    }
+    if (pairs.length || this.fx.fenceMap?.size) this.fx.fences(pairs, dt);
+  }
+
+  // Cột đá của mình gần p nhất trong tầm (để nhổ lên ném)
+  ripPillar(p, range) {
+    let best = null, bd = range;
+    for (const pr of this.props.values()) {
+      if (pr.k !== 'pillar' || pr.o !== this.myId) continue;
+      const d = Math.hypot(pr.x - p.x, pr.z - p.z);
+      if (d <= bd) { bd = d; best = pr; }
+    }
+    return best;
+  }
+
+  // Điểm cần ném tới: ngực mục tiêu đang khoá, không thì điểm tâm ngắm
+  aimPoint() {
+    for (const av of this.avatars.values()) if (av.targeted && !av.dead) return [av.pos.x, av.pos.y + 0.85, av.pos.z];
+    return this.steerAim();
   }
 
   // ======================= Dị biến =======================
@@ -1015,7 +1096,7 @@ export class Game {
       sfx('error');
       return true;
     }
-    const d = this.aimDir();
+    let d = this.aimDir();
     const h = v3(d.x, 0, d.z).normalize();
     const me = this.me;
     L.cds[idx + this.cdOff()] = t + s.cd;
@@ -1028,25 +1109,36 @@ export class Game {
     me.model.play(s.pose, s.lock);
     if (s.lunge && L.onGround) { L.vel.x += h.x * s.lunge; L.vel.z += h.z * s.lunge; }
     if (s.leap) { L.vel.y = s.leap; L.onGround = false; }
-    if (s.type === 'dash') L.skillDash = { h, dist: s.dist, delay: s.delay, dur: s.dur, t0: t };
+    if (s.type === 'dash') L.skillDash = { h, dist: s.dist, delay: s.delay, dur: s.dur, t0: t, d3: s.free3d ? d.clone() : null };
     if (idx === 0) { this.jn = t - (this.jLast || 0) < 1.2 ? (this.jn || 0) + 1 : 1; this.jLast = t; }
     else this.jn = 0;
     if (s.chain) this.hud.toast(`⚡ ${s.name}!`, 700);
     const seed = (Math.random() * 2 ** 31) | 0;
     const cs = this.cs++;
     const p = me.pos.clone();
+    // nhổ cột đá ném (dị biến Gantetsu): đạn bay ra từ cột đá của mình gần nhất, hướng về điểm cần ném
+    let fs = s, rp = null;
+    if (s.rip && (rp = this.ripPillar(p, s.rip.range))) {
+      fs = s.ripSkill;
+      p.set(rp.x, rp.y + 1.2, rp.z);
+      const a = this.aimPoint();
+      d = v3(a[0] - p.x, a[1] - (p.y + 0.85), a[2] - p.z).normalize();
+      rp.fx.end('rip');
+      this.props.delete(rp.id);
+    }
     // điểm đích dự đoán (server sẽ gửi lại điểm chính xác)
     let tg = null, aim = null;
-    if (s.type === 'leap') {
+    if (s.type === 'leap' || s.type === 'pillar') {
       aim = this.steerAim();
       let tx = aim[0], tz = aim[2];
       const L2 = Math.hypot(tx - p.x, tz - p.z);
       if (L2 > s.range) { tx = p.x + (tx - p.x) / L2 * s.range; tz = p.z + (tz - p.z) / L2 * s.range; }
       tg = clampArena(tx, tz);
-      L.skillLeap = { from: p.clone(), to: v3(tg[0], 0, tg[1]), t0: t, delay: s.delay, dur: s.dur, h: s.height || 6 };
+      if (s.type === 'leap') L.skillLeap = { from: p.clone(), to: v3(tg[0], 0, tg[1]), t0: t, delay: s.delay, dur: s.dur, h: s.height || 6 };
     } else if (s.type === 'trap' || s.type === 'summon' || s.type === 'wall') tg = clampArena(p.x + h.x * s.offset, p.z + h.z * s.offset);
-    const e = this.fx.castSkill({ skill: s, p, d, h, seed, tg, caster: me.casterApi, owner: me.id, team: me.team, seekTargets: () => this.seekTargets(me) });
+    const e = this.fx.castSkill({ skill: fs, p, d, h, seed, tg, caster: me.casterApi, owner: me.id, team: me.team, seekTargets: () => this.seekTargets(me) });
     if (e) { this.predicted.set(cs, e); if (s.type === 'buff') e.buffOf = me.id; }
+    if (L.skillDash && e?.steer && s.type === 'dash') L.skillDash.st = e.steer;   // rồng lốc: bám độ cao đang lái
     if (e?.steer) {
       // chiêu cuối: lái theo tâm ngắm cho tới khi chiêu kết thúc
       e.steer.aim = this.steerAim();
@@ -1055,6 +1147,7 @@ export class Game {
     const msg = { t: 'cast', sk: idx, cs, seed, p: [p.x, p.y, p.z].map(v => +v.toFixed(2)), d: [d.x, d.y, d.z].map(v => +v.toFixed(3)) };
     if (aw) msg.aw = 1;
     if (aim) msg.a = aim.map(v => +v.toFixed(2));
+    if (rp) msg.rp = rp.id;
     this.net.send(msg);
     this.hud.flashSlot(idx);
     sfx(skillSound(s));
@@ -1130,8 +1223,10 @@ export class Game {
 
     // Vận khí: giữ U khi đứng trên đất
     L.charging = k.has('KeyU') && L.onGround && !stunned && !rooted && t >= L.lockUntil;
-    // Bay: giữ Space trên không sau khi đã nhảy đôi
-    L.flying = !L.onGround && L.jumps >= 2 && k.has('Space') && me.mp > 1 && !stunned && !L.skillDash;
+    // Bay: giữ Space trên không sau khi đã nhảy đôi (tốn mana).
+    // Kaze dị biến bay tự do: giữ Space là bay ngay, không tốn mana, thả ra thì lượn chậm xuống
+    const FF = this.awakened() ? me.char.awaken.passive.freeFly : null;
+    L.flying = !L.onGround && k.has('Space') && !stunned && !L.skillDash && (FF ? true : L.jumps >= 2 && me.mp > 1);
 
     const input = stunned || rooted || L.charging ? v3() : this.moveDir();
     L.sprint = L.sprint && (k.has('ShiftLeft') || k.has('ShiftRight')) && input.lengthSq() > 0;
@@ -1148,10 +1243,13 @@ export class Game {
       const el = t - sd.t0;
       if (el >= sd.delay && el <= sd.delay + sd.dur) {
         const v = sd.dist / sd.dur;
-        L.vel.set(sd.h.x * v, 0, sd.h.z * v);
+        if (sd.d3) L.vel.set(sd.d3.x * v, sd.d3.y * v, sd.d3.z * v);   // lướt 3 chiều theo hướng ngắm
+        else L.vel.set(sd.h.x * v, 0, sd.h.z * v);
+        if (sd.st && sd.st.y != null) L.vel.y = (sd.st.y - me.pos.y) * 8;   // rồng lốc: bám độ cao đang lái
       } else if (el > sd.delay + sd.dur) {
         L.skillDash = null;
         L.vel.x *= 0.15; L.vel.z *= 0.15;
+        if (sd.d3 || sd.st) L.vel.y *= 0.3;
       } else L.vel.set(0, Math.max(0, L.vel.y * 0.5), 0);
     } else if (L.dashT > 0) {
       L.dashT -= dt;
@@ -1169,19 +1267,33 @@ export class Game {
 
     // Trọng lực / bay
     if (L.flying) {
-      const target = me.pos.y < MOVE.flyMaxHeight ? MOVE.flyRise : 0;
+      const maxH = FF ? FF.max : MOVE.flyMaxHeight;
+      const target = me.pos.y < maxH ? (FF ? FF.rise : MOVE.flyRise) : 0;
       L.vel.y += (target - L.vel.y) * Math.min(1, dt * 5);
-      me.mp -= MOVE.flyManaPerSec * dt;
+      if (!FF) me.mp -= MOVE.flyManaPerSec * dt;
       if (Math.random() < 0.6) this.fx.parts.emit(me.pos.x, me.pos.y, me.pos.z, (Math.random() - 0.5), -3, (Math.random() - 0.5), me.char.skills[1].fx.color, 0.35, 0.4);
     } else if (!(sd && t - sd.t0 >= sd.delay)) {
       L.vel.y -= MOVE.gravity * dt;
+      if (FF && !L.onGround && L.knockT <= 0) L.vel.y = Math.max(L.vel.y, FF.glide);   // lượn chậm xuống
     }
 
     // Tích phân + va chạm
     const p = me.pos;
     p.x += L.vel.x * dt; p.y += L.vel.y * dt; p.z += L.vel.z * dt;
     arenaCollide(curArena, p, BR);
-    if (this.fx.dynObs.length) dynCollide(this.fx.dynObs, p, BR);
+    if (this.fx.dynObs.length) {
+      dynCollide(this.fx.dynObs, p, BR);
+      // tường gió của mình / đồng đội: bước vào chân tường thì luồng gió đẩy bay vọt lên
+      if (t >= (L.liftCd || 0)) for (const o of this.fx.dynObs) {
+        if (!o.lift || !(o.pass === me.id || (me.team && o.passTeam === me.team))) continue;
+        if (Math.hypot(p.x - o.x, p.z - o.z) < o.r + BR + 0.3 && p.y < 2) {
+          L.vel.y = o.lift; L.onGround = false; L.jumps = 2; L.liftCd = t + 0.8;
+          this.fx.parts.burst(v3(p.x, p.y + 0.5, p.z), 20, 0x9ff7ee, { speed: 6, size: 0.35, life: 0.5, up: 2 });
+          sfx('jump');
+          break;
+        }
+      }
+    }
     const sl = L.skillLeap;
     if (sl) {
       // chiêu nhảy: bay theo vòng cung tới điểm đích
@@ -1285,6 +1397,7 @@ export class Game {
         // hào quang vận khí
         if (!av.dead && (av.isMe ? this.L.charging : av.flags & 2)) this.fx.aura(av.pos, av.char.look.aura || av.char.skills[1].fx.color, dt);
       }
+      this.updateFences(dt);
       this.updateCamera(dt);
       this.aimDir();   // cập nhật mục tiêu đang khóa
       this.updateSteer(dt, t);

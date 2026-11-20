@@ -1,6 +1,7 @@
 // Khởi động: menu, chọn nhân vật (preview 3D), danh sách phòng, cài đặt.
 import * as THREE from 'three';
 import { CHARACTERS, getChar, charSkills, skillLifetime } from '/shared/characters.js';
+import { VERSION } from '/shared/version.js';
 import { FX } from './effects.js';
 import { Net } from './net.js';
 import { Game } from './game.js';
@@ -97,6 +98,8 @@ function skillReach(s) {
     case 'wall': return s.offset + 2;
     case 'smite': return 10;
     case 'multiblink': return 9;
+    case 'pillar': return 9;
+    case 'quake': return 14;
     default: return s.range || 3;
   }
 }
@@ -154,7 +157,11 @@ function playSkill(i) {
   let tg = null;
   if (s.type === 'trap' || s.type === 'summon' || s.type === 'wall') tg = [PV_HOME.x + s.offset, 0];
   if (s.type === 'leap') tg = [PV_HOME.x + Math.min(s.range, 9), 0];
-  demo.effect = pvFx.castSkill({ skill: s, p: m.root.position.clone(), d, h, seed: 12345 + i, tg, caster: pvCaster });
+  if (s.type === 'pillar') tg = [PV_HOME.x + 7, 0];
+  if (s.type === 'pillar') demo.dur = Math.max(demo.dur, s.delay + 2.8);
+  if (s.type === 'quake') demo.dur = Math.max(demo.dur, s.delay + 1);
+  // preview: các hiệu ứng cần server (cột đá...) tự dựng bản giả
+  demo.effect = pvFx.castSkill({ skill: s, p: m.root.position.clone(), d, h, seed: 12345 + i, tg, caster: pvCaster, preview: true });
   if (s.type === 'dash') demo.dash = { h, v: s.dist / s.dur, delay: s.delay, dur: s.dur };
   demo.leap = s.type === 'leap' ? { from: PV_HOME.clone(), to: new THREE.Vector3(tg[0], 0, 0), delay: s.delay, dur: s.dur, h: s.height || 5 } : null;
   // sét giáng (smite) / lướt chém (multiblink): diễn trên vài điểm giả lập phía trước
@@ -376,7 +383,14 @@ function copy(text) {
 }
 
 // ---------- Kết nối ----------
-net.on('welcome', () => {
+// Số phiên bản ở menu và bảng tạm dừng
+for (const el of document.querySelectorAll('.ver-tag')) el.textContent = 'v' + VERSION;
+net.on('welcome', m => {
+  // Trình duyệt còn giữ bản cũ (server đã cập nhật): nhắc tải lại trang
+  if (m.v && m.v !== VERSION) {
+    for (const el of document.querySelectorAll('.ver-tag')) { el.textContent = `v${VERSION} ≠ server v${m.v}`; el.classList.add('bad'); }
+    game.hud.toast(`Server đã cập nhật lên v${m.v}, hãy tải lại trang (F5)`, 6000);
+  }
   $('connState').textContent = '● Đã kết nối';
   $('connState').classList.add('ok');
   sendHello();

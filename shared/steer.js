@@ -2,7 +2,7 @@
 // Cấu hình nằm ở skill.steer (shared/characters.js):
 //   follow: vùng chiêu (lốc xoáy, mưa băng) trôi về điểm tâm trên mặt đất với tốc độ giới hạn
 //   homing: đạn (cầu năng lượng) bẻ hướng 3D về điểm tâm với tốc độ quay giới hạn
-//   turn  : chiêu lao tới (phượng hoàng) bẻ hướng lao trên mặt phẳng ngang
+//   turn  : chiêu lao tới (phượng hoàng) bẻ hướng lao trên mặt phẳng ngang; có fly {max, rate} thì lái cả độ cao (st.y)
 //   aim   : tia chưởng (beam) xoay hướng 3D về điểm tâm, gốc tia đứng yên ở ngực người ra chiêu
 // st.aim do người ra chiêu cập nhật liên tục (client gửi 'steer' ~15 lần/giây).
 
@@ -23,6 +23,7 @@ export function initSteer(s, p, d, h) {
   } else if (g.mode === 'turn') {
     st.h = [h[0], h[1]];
     st.pos = [p[0], p[2]];
+    if (g.fly) st.y = p[1];   // lái cả độ cao (rồng lốc dị biến của Kaze)
   }
   return st;
 }
@@ -66,6 +67,11 @@ export function steerStep(st, s, dt, el, pos) {
         const max = g.turn * dt, na = cur + Math.max(-max, Math.min(max, da));
         st.h[0] = Math.sin(na); st.h[1] = Math.cos(na);
       }
+    }
+    // fly: độ cao trôi dần về độ cao điểm tâm (ngẩng camera lên trời để bay lên, nhìn xuống đất để bổ nhào)
+    if (g.fly && a && el >= s.delay && el <= s.delay + s.dur) {
+      const ty = Math.max(0, Math.min(g.fly.max, a[1])), dy = ty - st.y, step = g.fly.rate * dt;
+      st.y += Math.max(-step, Math.min(step, dy));
     }
     const run = Math.min(el, s.delay + s.dur) - Math.max(el - dt, s.delay);   // phần dt nằm trong lúc lao
     if (!pos && run > 0) {

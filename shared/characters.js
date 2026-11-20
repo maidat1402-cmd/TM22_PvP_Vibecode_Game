@@ -328,7 +328,11 @@ export const CHARACTERS = [
 //   burn {dmg, every, dur} (đốt), frost {stacks, window, stun, immune} (đóng băng cộng dồn),
 //   chargeStacks (số dấu điện cần), lifesteal (hút máu), backAll (mọi đòn sau lưng ×)
 // Kiểu chiêu chỉ có ở dạng dị biến: wall (tường chắn đạn), smite (sét đánh mọi đối thủ trong tầm),
-// multiblink (lướt chém lần lượt nhiều đối thủ). Thêm vào chiêu có sẵn: seek (đạn tự tìm), bounce (sét nảy),
+// multiblink (lướt chém lần lượt nhiều đối thủ), pillar (dựng cột đá), quake (động đất cả sân).
+// Công trình (server: room.props, client: game.props) là vật có máu, đối thủ đánh phá được: cọc sét (rod), cột đá (pillar).
+// Trường dị biến v2: rod (đạn cắm thành cọc), toRod (blink tới cọc), rodPulse (aoe phóng thêm ở từng cọc),
+// rodDmg/rodRange (smite có thêm tia từ cọc), rip (nhổ cột đá ném), free3d (lướt theo cả chiều dọc), clone (phân thân
+// gió chém lại), lift (tường gió đẩy bay lên), steer.fly (lái cả độ cao). Thêm vào chiêu có sẵn: seek (đạn tự tìm), bounce (sét nảy),
 // multi/multiInt (lướt đánh nhiều nhịp), echo (phân thân chém theo), follow (vùng bám theo người),
 // walls (aoe dựng cột đá), height (độ cao cú nhảy), behind (dịch chuyển ra sau lưng), invuln (buff bất tử),
 // bigCharge (tuyệt kỹ tụ lực lâu, hiệu ứng tích lũy lớn).
@@ -341,9 +345,11 @@ function finA(c, over) {
 const AWAKEN = {
   kaze: c => ({
     name: 'Phong Thần Hóa', form: 'windGod', color: 0x7fffe8, core: 0xffffff,
-    desc: 'Khăn tách thành 4 dải gió, lơ lửng trên không. Lướt né hồi nhanh gấp đôi, chạy nhanh hơn 25%.',
+    desc: 'Khăn tách thành 4 dải gió. Bay tự do không tốn mana (giữ Space, cao tối đa 10 m, thả ra thì lượn chậm xuống), ra chiêu được giữa không trung. Chạy nhanh hơn 25%, lướt né hồi nhanh gấp đôi; đang ở trên không thì nhận thêm 15% sát thương.',
     look: { hair: 0xc8fff6, eye: 0x39ff9f, outfit: 0x1a3a4a },
-    passive: { speed: 1.25, dashCd: 0.35 },
+    // freeFly: bay không tốn mana (max: độ cao tối đa, rise: tốc độ bay lên, glide: tốc độ rơi tối đa khi lượn)
+    // airTaken: hệ số sát thương nhận vào khi đang ở trên không
+    passive: { speed: 1.25, dashCd: 0.35, freeFly: { max: 10, rise: 6, glide: -2.5 }, airTaken: 1.15 },
     skills: [
       { id: 'kz_a_blade', name: 'Phong Nhận', combo: 'J', mana: 0, cd: 0.3, lock: 0.26, instant: true,
         type: 'projectile', speed: 36, radius: 0.6, range: 9, dmg: 7, kb: 3, count: 1, spread: 0, pierce: true, delay: 0.08, pose: 'slash',
@@ -351,17 +357,21 @@ const AWAKEN = {
       { id: 'kz_a_fan', name: 'Bão Phi Tiêu', combo: 'K', mana: 10, cd: 0.7, lock: 0.3,
         type: 'projectile', speed: 32, radius: 0.45, range: 30, dmg: 5, kb: 3, count: 5, spread: 0.16, seek: 6, delay: 0.1, pose: 'throw',
         fx: { color: 0x7fffe8, core: 0xffffff, kind: 'shuriken' } },
-      { id: 'kz_a_gale', name: 'Phong Lưu Bộ', combo: 'JK', mana: 18, cd: 2.8, lock: 0.45,
-        type: 'dash', dist: 11, dur: 0.3, radius: 1.8, dmg: 22, kb: 4, kbUp: 10, delay: 0.1, pose: 'thrust', invuln: true,
+      { id: 'kz_a_step', name: 'Phong Ảnh Bộ', combo: 'JK', mana: 18, cd: 2.6, lock: 0.4,
+        // lướt 3 chiều theo hướng ngắm (lên trời, bổ xuống, chéo); lướt xuyên qua ai thì 0.4 giây sau phân thân gió chém thêm 1 nhát
+        type: 'dash', free3d: true, dist: 12, dur: 0.3, radius: 1.8, dmg: 16, kb: 3, kbUp: 5, delay: 0.08, pose: 'thrust', invuln: true,
+        clone: { delay: 0.4, radius: 2.8, dmg: 12, kb: 6, kbUp: 4 },
         fx: { color: 0x66e0ff, core: 0xffffff, kind: 'windDash' } },
       { id: 'kz_a_wall', name: 'Thiên Phong Bích', combo: 'KL', mana: 22, cd: 7, lock: 0.35,
-        // tường gió 7 m trước mặt trong 4 giây: chặn đạn của đối thủ (đạn của mình bay xuyên), hất văng người đứng sát
-        type: 'wall', offset: 3, width: 7, height: 4.5, dur: 4, segs: 5, segR: 0.9, dmg: 10, kb: 11, kbUp: 4, delay: 0.12, pose: 'push',
+        // tường gió 7 m trước mặt trong 4 giây: chặn đạn của đối thủ (đạn của mình bay xuyên), hất văng người đứng sát;
+        // Kaze (và đồng đội) bước vào chân tường thì được luồng gió đẩy bay vọt lên (lift)
+        type: 'wall', offset: 3, width: 7, height: 4.5, dur: 4, segs: 5, segR: 0.9, dmg: 10, kb: 11, kbUp: 4, delay: 0.12, pose: 'push', lift: 13,
         fx: { color: 0x9ff7ee, core: 0xffffff, kind: 'windWall' } },
       { id: 'kz_a_dragon', name: 'Phong Long Thiên Hành', combo: 'JKL', mana: 60, cd: 13, lock: 3.5, root: true, bigCharge: true,
-        // tụ gió 1.3 giây rồi cưỡi rồng lốc lao đi 2.2 giây, lái theo tâm; cuốn mọi người trên đường đi nhiều nhịp
+        // tụ gió 1.3 giây rồi cưỡi rồng lốc lao đi 2.2 giây, lái theo tâm cả hướng lẫn độ cao (ngẩng camera để bay lên,
+        // nhìn xuống đất để bổ nhào); cuốn mọi người trên đường đi nhiều nhịp
         type: 'dash', dist: 26, dur: 2.2, radius: 3.2, dmg: 12, kb: 3, kbUp: 7, multi: 6, multiInt: 0.3, delay: 1.3, pose: 'raise',
-        steer: { mode: 'turn', turn: 3.2 },
+        steer: { mode: 'turn', turn: 3.2, fly: { max: 9, rate: 7 } },
         fx: { color: 0x7ff5e0, core: 0xe8fffb, kind: 'dragonTornado' } },
       finA(c, { speed: 50, fx: { color: 0xc8fff6 } }),
     ],
@@ -457,29 +467,37 @@ const AWAKEN = {
   }),
   shiden: c => ({
     name: 'Lôi Kỵ Thần', form: 'thunderGod', color: 0xc77dff, core: 0xfff3a0,
-    desc: 'Giáp sáng điện, thương dài gấp đôi, sét bám quanh người. Chỉ cần 2 dấu điện là sét nảy.',
+    desc: 'Giáp sáng điện, sét bám quanh người. Phóng thương cắm xuống đất thành cọc sét (tối đa 3), hai cọc gần nhau nối thành hàng rào điện; dịch chuyển tới cọc, tuyệt kỹ cho mọi cọc cùng phóng sét. Chỉ cần 2 dấu điện là sét nảy.',
     look: { hair: 0xe0d4ff, eye: 0xfff3a0, outfit: 0x3c1a78, accColor: 0xffe066 },
     passive: { chargeStacks: 2 },
     skills: [
       { id: 'sd_a_thrust', name: 'Lôi Thần Thương', combo: 'J', mana: 0, cd: 0.36, lock: 0.3, instant: true,
         type: 'melee', range: 4.6, arc: 0.6, dmg: 9, kb: 4, delay: 0.1, lunge: 5, pose: 'thrust',
         fx: { color: 0xd0a8ff, kind: 'slash' } },
-      { id: 'sd_a_bolt', name: 'Lôi Tiễn Liên Hoàn', combo: 'K', mana: 10, cd: 0.7, lock: 0.25,
-        // trúng mục tiêu thì sét nảy sang 2 đối thủ gần đó
-        type: 'projectile', speed: 46, radius: 0.45, range: 30, dmg: 11, kb: 2.5, count: 1, spread: 0, pierce: true, delay: 0.08, pose: 'throw',
-        bounce: { n: 2, range: 8, dmg: 6 },
-        fx: { color: 0xb388ff, core: 0xfff3a0, kind: 'bolt' } },
-      { id: 'sd_a_flash', name: 'Lôi Thần Bộ', combo: 'JK', mana: 14, cd: 1.5, lock: 0.35,
-        type: 'dash', dist: 12, dur: 0.18, radius: 1.4, dmg: 18, kb: 8, kbUp: 3, delay: 0.05, pose: 'thrust', invuln: true,
-        fx: { color: 0xd0a8ff, core: 0xfff3a0, kind: 'thunderDash' } },
+      { id: 'sd_a_rod', name: 'Lôi Trụ Thương', combo: 'K', mana: 12, cd: 0.9, lock: 0.3,
+        // phóng thương sét: trúng người thì gây sát thương, không trúng thì cắm xuống chỗ rơi thành cọc sét
+        // (8 giây, 30 máu, tối đa 3 cọc). Hai cọc cách nhau dưới 10 m nối thành hàng rào điện:
+        // đối thủ đi xuyên qua bị 8 sát thương + 1 dấu điện (mỗi 0.7 giây), nhảy qua thì né được
+        type: 'projectile', speed: 42, radius: 0.5, range: 20, dmg: 13, kb: 3, count: 1, spread: 0, delay: 0.1, pose: 'throw',
+        rod: { dur: 8, max: 3, hp: 30, fence: { range: 10, dmg: 8, cd: 0.7, w: 0.8, h: 2.2 } },
+        fx: { color: 0xb388ff, core: 0xfff3a0, kind: 'spearRod' } },
+      { id: 'sd_a_jump', name: 'Lôi Độn', combo: 'JK', mana: 14, cd: 1.6, lock: 0.3,
+        // dịch chuyển tới cọc sét gần tâm ngắm nhất (trong 30 m); không có cọc thì dịch chuyển 10 m về phía trước.
+        // Tới nơi sét giáng xuống quanh mình
+        type: 'blink', toRod: 30, dist: 10, markRange: 0, radius: 3, dmg: 16, kb: 7, kbUp: 4, delay: 0.1, pose: 'thrust',
+        stun: 0.3,
+        fx: { color: 0xd0a8ff, core: 0xfff3a0, kind: 'thunderStep' } },
       { id: 'sd_a_net', name: 'Lôi Võng Thiên La', combo: 'KL', mana: 30, cd: 7.5, lock: 0.8, root: true,
-        // lưới sét 6 m kéo đối thủ vào giữa
+        // lưới sét 6 m kéo đối thủ vào giữa; mọi cọc sét trong 16 m cũng phóng vòng sét 3.5 m kéo người về phía cọc
         type: 'aoe', at: 'self', radius: 6, dmg: 8, kb: 0, pull: 5, kbUp: 1, ticks: 3, tickInt: 0.3, delay: 0.3, pose: 'raise',
         stun: 0.5,
+        rodPulse: { range: 16, radius: 3.5, pull: 3 },
         fx: { color: 0xb388ff, core: 0xfff3a0, kind: 'thunderRing' } },
       { id: 'sd_a_judge', name: 'Thiên Lôi Phán Quyết', combo: 'JKL', mana: 65, cd: 13, lock: 1.7, root: true, bigCharge: true,
-        // tụ sét 1.4 giây rồi giáng sét xuống mọi đối thủ trong 22 m; mỗi dấu điện trên người thêm 10 sát thương
+        // tụ sét 1.4 giây rồi giáng sét xuống mọi đối thủ trong 22 m; mỗi dấu điện trên người thêm 10 sát thương.
+        // Đồng thời mỗi cọc sét phóng thêm 1 tia (14 sát thương) vào đối thủ gần nó nhất trong 9 m
         type: 'smite', range: 22, delay: 1.4, dmg: 30, perMark: 10, kb: 2, kbUp: 6, stun: 0.8, pose: 'raise',
+        rodDmg: 14, rodRange: 9,
         fx: { color: 0xc77dff, core: 0xfff7c2, kind: 'judgement' } },
       finA(c, { fx: { color: 0xe0c3ff } }),
     ],
@@ -518,7 +536,7 @@ const AWAKEN = {
   }),
   gantetsu: c => ({
     name: 'Sơn Thần Giáp', form: 'mountain', color: 0xd4a373, core: 0xffd166,
-    desc: 'Toàn thân phủ giáp đá, to lớn hơn, hai tay thành nắm đá khổng lồ. Giảm 30% sát thương, không bị đẩy lùi, không bị choáng, nhưng không được tăng tốc chạy.',
+    desc: 'Toàn thân phủ giáp đá, to lớn hơn. Dựng cột đá đứng lên được, nhổ cột đá lên ném, tuyệt kỹ động đất cả sân (ai đang đứng trên mặt đất đều bị choáng, nhảy lên kịp thì né được). Giảm 30% sát thương, không bị đẩy lùi, không bị choáng, nhưng không được tăng tốc chạy.',
     look: { skin: 0xb08968, outfit: 0x7f5539, outfit2: 0x4a3426, accColor: 0xffd166, scale: 1.3 },
     passive: { dmgTaken: 0.7, noKb: true, noStun: true, speed: 1.0 },
     skills: [
@@ -526,24 +544,27 @@ const AWAKEN = {
         // cú đấm tạo sóng chấn động hình nón
         type: 'melee', range: 4.2, arc: 0.75, dmg: 10, kb: 8, kbUp: 3, delay: 0.14, lunge: 2, pose: 'punch',
         fx: { color: 0xe9c46a, core: 0xfefae0, kind: 'quakePunch' } },
-      { id: 'gt_a_boulder', name: 'Cự Thạch', combo: 'K', mana: 14, cd: 1.3, lock: 0.45,
+      { id: 'gt_a_boulder', name: 'Nhổ Sơn Thạch', combo: 'K', mana: 14, cd: 1.3, lock: 0.45,
+        // có cột đá của mình trong 10 m: nhổ cột đó lên ném theo tâm (to, mạnh, nổ rộng hơn); không có thì ném cự thạch
         type: 'projectile', speed: 20, radius: 1.5, range: 26, dmg: 14, kb: 9, count: 1, spread: 0, delay: 0.25, pose: 'throw',
         explode: { radius: 4, dmg: 8, kb: 8, kbUp: 5 },
+        rip: { range: 10, over: { radius: 1.9, dmg: 22, speed: 24, range: 28, explode: { radius: 5, dmg: 12, kb: 10, kbUp: 6 }, fx: { kind: 'pillarThrow' } } },
         fx: { color: 0xa47148, core: 0xe9c46a, kind: 'rock' } },
       { id: 'gt_a_roll', name: 'Sơn Thạch Cuộn', combo: 'JK', mana: 20, cd: 4, lock: 0.55, root: true,
         type: 'dash', dist: 11, dur: 0.4, radius: 2.0, dmg: 24, kb: 16, kbUp: 5, delay: 0.12, pose: 'thrust', invuln: true,
         fx: { color: 0xd4a373, core: 0xffd166, kind: 'rockRoll', scale: 1.45 } },
-      { id: 'gt_a_cage', name: 'Thạch Lao', combo: 'KL', mana: 26, cd: 9, lock: 0.5,
-        // đất trồi lên ở 6 m phía trước, dựng vòng cột đá nhốt đối thủ 4.5 giây
-        type: 'aoe', at: 'front', offset: 6, radius: 3.2, dmg: 16, kb: 0, kbUp: 2, ticks: 1, tickInt: 0, delay: 0.3, pose: 'slam',
-        stun: 0.6,
-        walls: { count: 8, ring: 3.8, r: 0.9, h: 2.8, dur: 4.5 },
-        fx: { color: 0xd4a373, core: 0xfefae0, kind: 'stoneCage' } },
-      { id: 'gt_a_meteor', name: 'Thiên Thạch Sơn Thần', combo: 'JKL', mana: 65, cd: 14, lock: 2.4, root: true, bigCharge: true,
-        // tụ lực 1.2 giây, vọt lên trời 16 m rồi rơi xuống điểm tâm ngắm như thiên thạch
-        type: 'leap', range: 18, dur: 1.1, height: 16, delay: 1.2, radius: 7, dmg: 42, kb: 12, kbUp: 10, pose: 'raise',
-        stun: 1.0,
-        fx: { color: 0xff8c42, core: 0xffd166, kind: 'meteorDrop' } },
+      { id: 'gt_a_pillar', name: 'Dựng Sơn Trụ', combo: 'KL', mana: 18, cd: 2.2, lock: 0.35,
+        // cột đá cao 4 m trồi lên ở điểm tâm ngắm (tầm 14 m, tồn tại 10 giây, 60 máu, tối đa 3 cột):
+        // chắn đường và chắn đạn, đứng lên nóc được; trồi ngay dưới chân đối thủ thì hất tung lên,
+        // dưới chân mình (hoặc đồng đội) thì nâng lên nóc cột
+        type: 'pillar', range: 14, delay: 0.25, r: 1.1, h: 4, dur: 10, max: 3, hp: 60, radius: 1.7, dmg: 12, kb: 2, kbUp: 14, pose: 'slam',
+        fx: { color: 0xd4a373, core: 0xffd166, kind: 'stonePillar' } },
+      { id: 'gt_a_world', name: 'Địa Chấn Toàn Sân', combo: 'JKL', mana: 65, cd: 14, lock: 1.9, root: true, bigCharge: true,
+        // tụ lực 1.4 giây rồi dậm đất: mọi đối thủ đang đứng trên mặt đất trong 25 m bị choáng 1.2 giây và mất máu,
+        // ai đang ở trên không (nhảy, bay, đứng trên cột đá) thì né được. Cột đá của Gantetsu vỡ tung bắn mảnh đá xung quanh
+        type: 'quake', range: 25, delay: 1.4, dmg: 26, stun: 1.2, kb: 0, kbUp: 5, airTol: 0.5, pose: 'slam',
+        shard: { radius: 3.5, dmg: 10, kb: 8, kbUp: 6 },
+        fx: { color: 0xff8c42, core: 0xffd166, kind: 'groundQuake' } },
       finA(c, { radius: 4, fx: { color: 0xe9c46a } }),
     ],
   }),
@@ -578,7 +599,11 @@ const AWAKEN = {
     ],
   }),
 };
-for (const c of CHARACTERS) c.awaken = AWAKEN[c.id](c);
+for (const c of CHARACTERS) {
+  c.awaken = AWAKEN[c.id](c);
+  // chiêu có rip (nhổ cột đá ném): dựng sẵn bản chiêu khi nhổ được cột
+  for (const s of c.awaken.skills) if (s.rip) s.ripSkill = { ...s, ...s.rip.over, id: s.id + '_rip', rip: undefined, fx: { ...s.fx, ...s.rip.over.fx } };
+}
 
 // Bộ chiêu đang dùng: dạng thường hoặc dạng dị biến
 export function charSkills(c, aw) {
@@ -604,7 +629,9 @@ export function skillLifetime(s) {
     case 'wall': return s.delay + s.dur;
     case 'smite': return s.delay + 0.2;
     case 'multiblink': return s.delay + s.strikes * s.interval + 0.1;
-    case 'dash': return s.delay + s.dur + 0.1;
+    case 'dash': return s.delay + s.dur + 0.1 + (s.clone ? s.clone.delay + 0.15 : 0);
+    case 'pillar': return s.delay + 0.2;
+    case 'quake': return s.delay + 0.2;
     case 'beam': return s.delay + s.dur + 0.05;
     case 'aoe': return s.delay + (s.ticks - 1) * s.tickInt + 0.05;
     case 'line': return s.delay + s.count * s.interval + 0.05;
