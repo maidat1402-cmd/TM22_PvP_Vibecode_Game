@@ -99,6 +99,10 @@ function skillReach(s) {
     case 'smite': return 10;
     case 'multiblink': return 9;
     case 'pillar': return 9;
+    case 'decoy': return 9;
+    case 'icewall': case 'turret': return s.offset + 3;
+    case 'timezone': return s.radius;
+    case 'pet': return s.offset + 4;
     case 'quake': return 14;
     default: return s.range || 3;
   }
@@ -158,6 +162,9 @@ function playSkill(i) {
   if (s.type === 'trap' || s.type === 'summon' || s.type === 'wall') tg = [PV_HOME.x + s.offset, 0];
   if (s.type === 'leap') tg = [PV_HOME.x + Math.min(s.range, 9), 0];
   if (s.type === 'pillar') tg = [PV_HOME.x + 7, 0];
+  if (s.type === 'icewall' || s.type === 'turret') { tg = [PV_HOME.x + s.offset, 0]; demo.dur = Math.max(demo.dur, s.delay + 2.8); }
+  if (s.type === 'decoy') demo.dur = Math.max(demo.dur, 2);
+  if (s.type === 'timezone') demo.dur = Math.min(4.5, s.delay + 3);
   if (s.type === 'pillar') demo.dur = Math.max(demo.dur, s.delay + 2.8);
   if (s.type === 'quake') demo.dur = Math.max(demo.dur, s.delay + 1);
   // preview: các hiệu ứng cần server (cột đá...) tự dựng bản giả
@@ -342,7 +349,7 @@ function renderRooms(list) {
   for (const r of list) {
     const d = document.createElement('div');
     d.className = 'room';
-    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
+    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
       + (r.mode === 'team' ? (r.phase === 'lobby' ? ' · đang chờ' : ' · đang đấu') : '');
     d.innerHTML = `<div><b>${esc(r.name)}</b><span class="mtag ${r.mode}">${tag}</span><small>${r.mapName ? esc(r.mapName) + ' · ' : ''}${r.count} người chơi · không giới hạn</small></div>`;
     const b = document.createElement('button');
@@ -407,7 +414,7 @@ net.on('rooms', m => {
     const qmode = params.get('mode') || 'brawl';
     const r = m.list.find(x => x.id === want) || (params.has('quick') ? m.list.find(x => (x.mode || 'brawl') === qmode && (!params.get('map') || x.map === params.get('map'))) : null);
     if (r) net.send({ t: 'join', id: r.id, char: settings.char });
-    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (qmode === 'brawl' || qmode === 'team' ? 'shrine' : 'lantern') });
+    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (['brawl', 'team', 'practice'].includes(qmode) ? 'shrine' : 'lantern') });
     else game.hud.toast('Phòng trong link mời không còn tồn tại', 2500);
   }
 });
@@ -447,7 +454,7 @@ $('createBtn').onclick = () => {
   const map = document.querySelector('input[name=map]:checked')?.value || 'lantern';
   const arena = document.querySelector('input[name=arena]:checked')?.value || 'shrine';
   settings.mode = mode; settings.map = map; settings.arena = arena; saveSettings();
-  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: mode === 'brawl' || mode === 'team' ? arena : map });
+  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: ['brawl', 'team', 'practice'].includes(mode) ? arena : map });
 };
 for (const r of document.querySelectorAll('input[name=mode]')) {
   r.checked = r.value === settings.mode;
@@ -455,7 +462,7 @@ for (const r of document.querySelectorAll('input[name=mode]')) {
 }
 // chỉ hiện ô chọn map của chế độ đang chọn
 function showMapPick(mode) {
-  const brawlLike = mode === 'brawl' || mode === 'team';
+  const brawlLike = mode === 'brawl' || mode === 'team' || mode === 'practice';
   $('mapPick').classList.toggle('off', brawlLike);
   $('arenaPick').classList.toggle('off', !brawlLike);
 }
@@ -485,6 +492,8 @@ $('leaveBtn').onclick = () => {
   $('clickToPlay').hidden = true;
   loadServerInfo();
 };
+// đấu tập: nạp đầy thanh dị biến rồi quay lại trận
+$('fillAwkBtn').onclick = () => { game.net.send({ t: 'pfill' }); sfx('ui'); $('resumeBtn').click(); };
 $('inviteBtn').onclick = () => copy(`${window.__inviteUrl || location.origin}/?room=${current === shooter ? shooter.roomId : game.roomId}`);
 $('switchTeamBtn').onclick = () => { shooter.switchTeam(); $('pause').hidden = true; };
 $('fullscreenBtn').onclick = () => {

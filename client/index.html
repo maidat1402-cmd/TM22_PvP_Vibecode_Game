@@ -16,6 +16,7 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+  <div id="darkfog" hidden></div>   <!-- sương đêm: nằm dưới HUD để vẫn đọc được thanh máu / chiêu -->
 
   <!-- ================= MENU ================= -->
   <div id="menu">
@@ -48,6 +49,7 @@
         <div class="modes" id="modeSelect">
           <label><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, ai cũng là đối thủ</small></span></label>
           <label><input type="radio" name="mode" value="team"><span>👥 Đấu đội<small>Chiêu thức, chia 2 đội</small></span></label>
+          <label><input type="radio" name="mode" value="practice"><span>🎯 Đấu tập<small>Một mình với bia tập + võ sĩ máy</small></span></label>
           <label><input type="radio" name="mode" value="bomb"><span>💣 Đặt bom<small>Bắn súng 2 phe, theo vòng</small></span></label>
           <label><input type="radio" name="mode" value="dm"><span>🔫 Sinh tử<small>Bắn súng tự do, hồi sinh nhanh</small></span></label>
         </div>
@@ -160,6 +162,7 @@
       <button id="pauseSettingsBtn" class="btn">⚙ Cài đặt</button>
       <button id="pauseHelpBtn" class="btn">❔ Cách chơi</button>
       <button id="inviteBtn" class="btn">🔗 Copy link mời bạn</button>
+      <button id="fillAwkBtn" class="btn" hidden>⚡ Nạp đầy thanh dị biến (P)</button>
       <button id="leaveBtn" class="btn danger">⟵ Rời phòng</button>
       <p class="muted">Lưu ý: trận đấu vẫn tiếp diễn khi bạn mở menu.</p>
       <p class="muted">Chibi Clash <span class="ver-tag"></span></p>
@@ -219,6 +222,7 @@
           <p><kbd>J</kbd>→<kbd>K</kbd> Chiêu 2 · <kbd>K</kbd>→<kbd>L</kbd> Chiêu 3</p>
           <p><kbd>J</kbd>→<kbd>K</kbd>→<kbd>L</kbd> <b>Tuyệt kỹ</b> (bấm liên tiếp nhanh) — trong lúc tuyệt kỹ chạy, xoay chuột để lái chiêu theo vòng tâm</p>
           <p><kbd>L</kbd><kbd>L</kbd> <b>Dị biến</b>: đánh trúng đối thủ để tích thanh vàng dưới thanh mana (1 sát thương = 1 điểm). Đầy 100 thì bấm L hai lần để biến hình 17 giây: cả 6 chiêu đổi sang bộ chiêu mới mạnh hơn, có nội tại riêng. Chết mất nửa thanh.</p>
+          <p><b>Đấu tập</b>: chế độ chơi một mình với bia tập + võ sĩ máy. Bấm <kbd>P</kbd> (điện thoại: menu ☰) để nạp đầy thanh dị biến ngay.</p>
           <p><kbd>J</kbd><kbd>J</kbd><kbd>J</kbd> <b>Đòn kết</b>: đánh thường 3 lần liên tiếp, đòn thứ 3 là đòn kết riêng của nhân vật (Kage đâm sau lưng gây ×2.2)</p>
           <p><b>Đấu đội:</b> chọn đội và bấm Sẵn sàng trong phòng chờ, chủ phòng 👑 bấm Bắt đầu. <kbd>T</kbd> mở/đóng phòng chờ. Chiêu không trúng đồng đội; đội đạt 20 điểm trước thắng.</p>
           <p><kbd>H</kbd> Hồi máu (tốn mana) · giữ <kbd>U</kbd> Vận khí: hồi mana rất nhanh nhưng đứng yên</p>

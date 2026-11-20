@@ -2,7 +2,18 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.7.0 (2026-11-20)
+## 0.8.0 (2026-11-20)
+
+- Chế độ **Đấu tập**: phòng có sẵn 2 bia tập + 1 võ sĩ máy, phím `P` (menu ☰ trên điện thoại) nạp đầy thanh dị biến.
+- Dị biến v2, đợt 2 và đợt 3:
+  - Homura: vệt lửa trên sàn (bước chạy, nhát chém, cú bổ), Hồi Nguyệt Viêm bay về như boomerang, Phượng Hoàng Niết Bàn làm mọi vệt lửa bùng thành cột lửa, hồi sinh 1 lần với 30% máu.
+  - Kage: Phân Ảnh Mồi (2 phân thân giống hệt mình, trúng 1 đòn là tan), Hoán Ảnh đổi chỗ với phân thân, Vạn Ảnh Táng kèm sương đêm (đối thủ chỉ thấy người trong 6 m).
+  - Yuki: sàn băng trơn trượt, Băng Tường đập vỡ được, Thời Băng Giới làm chậm người và đạn của đối thủ.
+  - Raiga: giữ phím tụ khí (Tụ Khí Đạn, Bạo Long Chưởng), Bạo Trảo Quăng túm – quật – ném đối thủ.
+  - Midori: cây bắn gai tự động, người cây Mộc Thần đi theo đánh hộ; hút máu giảm còn 12%.
+- Người chơi giả do server điều khiển (bia tập, võ sĩ máy, phân thân, người cây), vùng trên sàn (lửa, băng, ngưng đọng), kiểm tra đồng minh chung `allied()`.
+
+## 0.7.0 (2026-11-20) · `5d96fa7`
 
 - Dị biến v2, đợt 1: Kaze, Shiden, Gantetsu có luật chơi riêng khi biến hình (bản thảo: `docs/ban-thao-di-bien-v2.md`).
   - Kaze: bay tự do không tốn mana (cao tối đa 10 m), nhận thêm 15% sát thương khi ở trên không; Phong Ảnh Bộ lướt 3 chiều + phân thân gió chém lại; tường gió đẩy bay lên; rồng lốc lái được độ cao.

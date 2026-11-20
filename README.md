@@ -4,12 +4,13 @@
 
 Game 3D nhân vật chibi, chơi nhiều người qua phòng (room), chạy trên trình duyệt máy tính **và điện thoại**. Server Node.js rất nhẹ.
 
-Có 4 chế độ, chọn khi tạo phòng:
+Có 5 chế độ, chọn khi tạo phòng:
 
 | Chế độ | Mô tả |
 |---|---|
 | ⚔ **Đối kháng** | Góc nhìn thứ 3, tung chiêu thức theo combo phím, máu + mana, ai cũng là đối thủ |
 | 👥 **Đấu đội** | Như Đối kháng nhưng chia 2 đội Xanh / Đỏ, có phòng chờ, chủ phòng bấm bắt đầu |
+| 🎯 **Đấu tập** | Như Đối kháng nhưng có sẵn 2 bia tập và 1 võ sĩ máy: chơi một mình vẫn luyện chiêu và biến hình được |
 | 💣 **Đặt bom** | Bắn súng góc nhìn thứ nhất, 2 phe Công (Hắc Long) / Thủ (Thiên Ưng), theo vòng, có mua đồ và tiền thưởng |
 | 🔫 **Sinh tử** | Bắn súng tự do, ai cũng là đối thủ, hồi sinh nhanh, súng miễn phí |
 
@@ -73,6 +74,7 @@ Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng p
 | `L`→`L` | **Dị biến** (khi thanh dị biến đầy) |
 | `H` | Hồi máu (tốn mana, có hồi chiêu) |
 | giữ `U` | Vận khí: hồi mana rất nhanh nhưng phải đứng yên |
+| `P` | Chỉ ở **Đấu tập**: nạp đầy thanh dị biến ngay (điện thoại: menu ☰ → ⚡ Nạp đầy thanh dị biến) |
 | `Tab` / `Enter` / `F1` / `Esc` | Bảng điểm / chat / hướng dẫn / menu |
 
 Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất và **ngắm cả theo chiều dọc**: đối thủ đang bay cao (hoặc mình đang bay bắn xuống) thì đạn, tia chưởng bay chếch thẳng tới ngực đối thủ. Không khoá được ai thì ngẩng camera lên để bắn chếch lên trời.
@@ -84,17 +86,27 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 | Nhân vật | Dạng dị biến | Nội tại khi biến hình | Bộ chiêu mới (J · K · JK · KL · JKL) |
 |---|---|---|---|
 | Kaze | **Phong Thần Hóa**: khăn tách thành 4 dải gió | **Bay tự do** không tốn mana: giữ `Space` (điện thoại: giữ nút Nhảy/Bay) là bay, cao tối đa 10 m, thả ra thì lượn chậm xuống; ra chiêu được giữa không trung. Chạy nhanh hơn 25%, lướt né hồi nhanh gấp đôi. Đang ở trên không thì nhận thêm 15% sát thương | Lưỡi gió bay · 5 phi tiêu tự tìm mục tiêu · **lướt 3 chiều** theo hướng ngắm (lên trời, bổ xuống), lướt xuyên qua ai thì 0.4 s sau **phân thân gió** chém thêm 1 nhát · **tường gió** chặn đạn đối thủ (đạn mình bay xuyên), bước vào chân tường thì được gió đẩy bay vọt lên · cưỡi **rồng lốc** 2.2 s lái theo tâm cả hướng lẫn độ cao (ngẩng camera để bay lên, nhìn xuống để bổ nhào) |
-| Raiga | **Bạo Khí Thân**: vân dung nham, găng khí khổng lồ | Không bị đẩy lùi, giảm 15% sát thương | Khí quyền bay 7 m · khí đạn nổ lan · lướt đấm 3 nhịp · chưởng 2 s **quét theo tâm** · lao tới đấm loạn rồi nổ khí tung lên trời |
-| Homura | **Viêm Hoàng Giáp**: cánh lửa, vương miện lửa | Mọi đòn gây **bỏng** (2 sát thương × 4 nhịp) | Chém để lại lửa · 2 trăng lửa chéo · bay lên bổ xuống tâm ngắm · vòng lửa bám theo người · phượng hoàng khổng lồ lao theo tâm |
-| Yuki | **Băng Hậu**: vương miện, áo choàng băng | Trúng 3 đòn trong 3 s thì **đóng băng** 1 s | Băng đạn · 3 băng thương xuyên · trượt băng · quan tài băng nhốt mọi người trong 7 m · bão tuyết 11 m bám theo người |
+| Raiga | **Bạo Khí Thân**: vân dung nham, găng khí khổng lồ | Không bị đẩy lùi, giảm 15% sát thương. **Giữ phím để tụ khí**: giữ `K` (hoặc giữ `L` khi bấm `K` `L`) rồi thả, giữ càng lâu càng to và mạnh (K tối đa 1.5 s: sát thương ×2.2; chưởng tối đa 1.2 s: ×1.8, tia to gấp đôi). Lúc tụ khí phải đứng yên | Khí quyền bay 7 m · **Tụ Khí Đạn** · **Bạo Trảo Quăng**: lao tới túm đối thủ đầu tiên trúng, nhấc bổng lên, quật xuống đất (choáng) rồi ném văng theo hướng nhìn (không túm được người đang bất tử hoặc không bị đẩy lùi) · chưởng 2 s quét theo tâm, giữ L để tụ · lao tới đấm loạn rồi nổ khí tung lên trời |
+| Homura | **Viêm Hoàng Giáp**: cánh lửa, vương miện lửa | Mọi đòn gây **bỏng**. **Đất cháy**: bước chạy, nhát chém J và cú bổ JK để lại vệt lửa trên sàn 3 giây; đối thủ đứng vào bị bỏng (nhảy qua thì không), Homura đứng trên lửa hồi mana nhanh hơn. **Hồi sinh 1 lần**: gục khi đang biến hình thì sống lại tại chỗ với 30% máu, hết dị biến | Chém để lại vệt lửa · **Hồi Nguyệt Viêm**: trăng lửa bay 13 m rồi quay về như boomerang, trúng cả lượt đi lẫn lượt về · bay lên bổ xuống, chỗ đáp thành vũng lửa 4 m · vòng lửa bám theo người · **Phượng Hoàng Niết Bàn**: phượng hoàng lao theo tâm, mọi vệt lửa trên sàn cùng bùng thành cột lửa |
+| Yuki | **Băng Hậu**: vương miện, áo choàng băng | Trúng 3 đòn trong 3 s thì **đóng băng** 1 s. **Sàn băng**: chiêu đóng băng mặt sàn; đối thủ đứng trên băng bị trơn trượt, rất khó dừng và đổi hướng (nhảy, bay thì không sao); Yuki trên băng của mình chạy nhanh hơn 30% | Băng đạn, chỗ trúng đóng băng sàn · 3 băng thương xuyên · trượt băng để lại vệt băng · **Băng Tường**: tường băng cong 5 khối chắn đường và chắn đạn của cả hai bên, mỗi khối 25 máu, bị đập vỡ thì mảnh băng làm chậm người đứng gần · **Thời Băng Giới**: vùng 10 m quanh Yuki 4 giây, đối thủ và đạn của đối thủ đi vào chậm 60%, sàn thành băng, mất máu theo nhịp, hết giờ băng vỡ tung làm choáng |
 | Shiden | **Lôi Kỵ Thần**: sừng vàng, giáp sáng điện | Chỉ cần 2 dấu điện là sét nảy. **Cọc sét**: tối đa 3 cọc, mỗi cọc 8 giây, 30 máu (đối thủ đánh vỡ được). Hai cọc cách nhau dưới 10 m nối thành **hàng rào điện**: đối thủ đi xuyên qua bị giật 8 sát thương + 1 dấu điện, nhảy qua thì né được | Thương đâm 4.6 m · **phóng thương**: trúng người thì gây sát thương, trượt thì cắm xuống chỗ rơi thành cọc sét · **Lôi Độn**: dịch chuyển tới cọc gần tâm ngắm nhất (không có cọc thì dịch chuyển 10 m), sét giáng quanh chỗ tới · lưới sét kéo vào giữa, mọi cọc trong 16 m cũng phóng vòng sét kéo người về phía cọc · **Thiên Lôi Phán Quyết**: sét giáng mọi đối thủ trong 22 m (+10 mỗi dấu điện), mỗi cọc phóng thêm 1 tia vào đối thủ gần nó |
-| Midori | **Hồn Rừng**: sừng cành cây, hoa mọc khắp người | **Hút máu** 20% sát thương gây ra | Roi gai kéo đối thủ về · gai nổ chùm · rễ trói 1 s · thảm hoa hồi máu · rừng gai trồi lên kéo theo tâm |
+| Midori | **Hồn Rừng**: sừng cành cây, hoa mọc khắp người | **Hút máu** 12% sát thương gây ra. Sức mạnh nằm ở cây cối cô trồng: cây và người cây đối thủ đánh phá được | Roi gai kéo đối thủ về · gai nổ chùm · **Trồng Gai Đài**: cây bắn gai (tối đa 2 cây, 10 giây, 40 máu) tự bắn gai làm chậm vào đối thủ gần nhất trong 12 m · thảm hoa hồi máu · **Mộc Thần Hộ Vệ**: người cây cao 3 m trồi lên (hất tung đối thủ quanh đó), đi theo Midori 10 giây, tự đấm đối thủ gần và lấy thân chặn đạn (130 máu) |
 | Gantetsu | **Sơn Thần Giáp**: giáp đá, to ×1.3 | Giảm 30% sát thương, không bị đẩy, không bị choáng (không được tăng tốc chạy). **Cột đá**: tối đa 3 cột, mỗi cột 10 giây, 60 máu, chắn đường và chắn đạn, đứng lên nóc được | Đấm chấn động hình nón · **Nhổ Sơn Thạch**: có cột đá của mình trong 10 m thì nhổ cột đó lên ném (to, nổ rộng), không có thì ném cự thạch · cuộn đá lăn · **Dựng Sơn Trụ**: cột đá cao 4 m trồi lên ở tâm ngắm (tầm 14 m), trồi dưới chân đối thủ thì hất tung, dưới chân mình thì nâng mình lên nóc · **Địa Chấn Toàn Sân**: tụ lực 1.4 s rồi dậm đất, mọi đối thủ đang đứng trên mặt đất trong 25 m bị choáng 1.2 s; ai đang ở trên không (nhảy, bay, đứng trên cột đá) thì **né được**. Cột đá vỡ tung bắn mảnh đá |
-| Kage | **Vạn Ảnh**: thân bóng đen mắt đỏ, 2 phân thân | Mọi đòn đánh sau lưng ×1.5 | Chém + **2 phân thân chém theo** · mưa phi đao · dịch chuyển **ra sau lưng** đối thủ · hóa bóng bất tử 1.6 s · lướt chém lần lượt 5 nhát vào các đối thủ |
+| Kage | **Vạn Ảnh**: thân bóng đen mắt đỏ, 2 phân thân | Mọi đòn đánh sau lưng ×1.5 | Chém + **2 phân thân chém theo** · mưa phi đao · **Hoán Ảnh**: đổi chỗ với phân thân mồi gần tâm ngắm (không có thì dịch chuyển ra sau lưng đối thủ) · **Phân Ảnh Mồi**: tàng hình 1 s và thả 2 phân thân giống hệt mình (cùng tên, cùng thanh máu) chạy chéo về phía trước 5 giây; đối thủ thấy như người thật, chiêu tự khoá có thể nhắm nhầm; trúng 1 đòn là tan, nổ bóng làm chậm · **Vạn Ảnh Táng**: lướt chém lần lượt 5 nhát, kèm **sương đêm**: đối thủ trong 15 m chỉ nhìn thấy người (và tên) trong 6 m suốt 4 giây |
 
 **Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze), mưa băng (Yuki) và vòng xoáy hắc đao (Kage) trôi theo tâm; Tinh Cầu Hủy Diệt (Raiga) và cây thương của Lôi Long Xuyên (Shiden) bẻ hướng bay cả lên/xuống; Phượng Hoàng (Homura) uốn cong đường lao. Ở dạng dị biến: rồng lốc (Kaze, lái cả độ cao), đường lao Bách Liệt Bạo Quyền (Raiga), phượng hoàng khổng lồ (Homura) lái theo tâm; rừng gai (Midori) trôi theo tâm; chưởng Bạo Long Chưởng (Raiga, KL) quét theo tâm cả chiều ngang lẫn chiều dọc. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
 
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
+
+### Đấu tập
+
+Tạo phòng ở chế độ **🎯 Đấu tập** (chọn map như Đối kháng). Trong phòng có sẵn:
+
+- **2 bia tập** 🎯 đứng yên, bị đánh văng thì tự đi về chỗ cũ, 2.5 giây không bị đánh thì hồi đầy máu.
+- **1 võ sĩ máy** 🤖 (nhân vật ngẫu nhiên) chạy vòng quanh bạn, thỉnh thoảng nhảy, đánh thường và bắn chiêu K (sát thương giảm một nửa). Hợp để thử ngắm dọc, thử né.
+- Bấm `P` (điện thoại: menu ☰ → **⚡ Nạp đầy thanh dị biến**) để nạp đầy thanh dị biến ngay, rồi `L` `L` để biến hình.
+
+Bạn bè vẫn vào phòng đấu tập được như phòng thường. Người thật cuối cùng rời đi thì phòng tự xoá.
 
 ### Đấu đội
 
@@ -171,7 +183,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 - **Nửa trái màn hình**: chạm ở đâu thì joystick hiện ở đó để di chuyển (đẩy nhẹ là đi chậm).
 - **Nửa phải**: vuốt để xoay camera / ngắm.
-- **Đối kháng**: mỗi chiêu có nút riêng, không cần bấm combo. Nút ⚡ (góc trên bên phải cụm nút) sáng lên khi thanh dị biến đầy, bấm để biến hình.
+- **Đối kháng**: mỗi chiêu có nút riêng, không cần bấm combo. Nút ⚡ (góc trên bên phải cụm nút) sáng lên khi thanh dị biến đầy, bấm để biến hình. Chiêu tụ lực của Raiga dị biến: giữ nút rồi thả để bắn.
 - **Bắn súng**: giữ nút 🎯 để bắn, vừa giữ vừa kéo để ngắm. Nút 💥 cầm lựu đạn (bấm tiếp đổi loại, rồi bấm 🎯 để ném), nút ✋ nhặt súng.
 - Nút ☰ mở menu (toàn màn hình, đổi phe, rời phòng); 🏆 bảng điểm; 💬 chat; 🛒 mua đồ.
 - Nên xoay ngang máy. Trên điện thoại game tự để đồ hoạ ở mức Thấp cho mượt.
@@ -211,13 +223,13 @@ Tên chiêu ở dạng dị biến:
 | Nhân vật | `J` | `K` | `J` `K` | `K` `L` | `J` `K` `L` ★ |
 |---|---|---|---|---|---|
 | Kaze | Phong Nhận | Bão Phi Tiêu | Phong Ảnh Bộ | Thiên Phong Bích | Phong Long Thiên Hành |
-| Raiga | Khí Quyền | Bạo Khí Đạn | Liên Hoàn Thiểm Quyền | Bạo Long Chưởng | Bách Liệt Bạo Quyền |
-| Homura | Viêm Hoàng Trảm | Song Nguyệt Viêm | Viêm Long Trụy | Hỏa Luân Trận | Phượng Hoàng Thiên Hỏa |
-| Yuki | Băng Tinh Đạn | Băng Thương Xuyên | Băng Hoạt Bộ | Băng Quan Phong Ấn | Vĩnh Đông Giới |
+| Raiga | Khí Quyền | Tụ Khí Đạn | Bạo Trảo Quăng | Bạo Long Chưởng | Bách Liệt Bạo Quyền |
+| Homura | Viêm Hoàng Trảm | Hồi Nguyệt Viêm | Viêm Long Trụy | Hỏa Luân Trận | Phượng Hoàng Niết Bàn |
+| Yuki | Băng Tinh Đạn | Băng Thương Xuyên | Băng Hoạt Bộ | Băng Tường | Thời Băng Giới |
 | Shiden | Lôi Thần Thương | Lôi Trụ Thương | Lôi Độn | Lôi Võng Thiên La | Thiên Lôi Phán Quyết |
-| Midori | Gai Tiên Câu | Gai Hoa Nổ | Cổ Thụ Căn | Hoa Viên Hồi Xuân | Vạn Gai Lâm |
+| Midori | Gai Tiên Câu | Gai Hoa Nổ | Trồng Gai Đài | Hoa Viên Hồi Xuân | Mộc Thần Hộ Vệ |
 | Gantetsu | Chấn Sơn Quyền | Nhổ Sơn Thạch | Sơn Thạch Cuộn | Dựng Sơn Trụ | Địa Chấn Toàn Sân |
-| Kage | Vạn Ảnh Trảm | Ảnh Đao Vũ | Bối Ảnh Bộ | Hóa Ảnh | Vạn Ảnh Táng |
+| Kage | Vạn Ảnh Trảm | Ảnh Đao Vũ | Hoán Ảnh | Phân Ảnh Mồi | Vạn Ảnh Táng |
 
 Đòn kết `J` `J` `J` ở dạng dị biến là bản cường hóa của đòn kết thường (sát thương ×1.5, tên thêm hậu tố "· Cực").
 
@@ -247,8 +259,8 @@ tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 
 ## Kiểm tra khi phát triển
 
-- Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `bomb`, `dm`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
-- Test dị biến: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn).
+- Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `practice`, `bomb`, `dm`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
+- Test dị biến và đấu tập: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn, mất khoảng 5 phút).
 - Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).
 - Số phiên bản hiện ở góc dưới menu và trong bảng tạm dừng (Esc). Lịch sử thay đổi theo từng phiên bản ở [CHANGELOG.md](CHANGELOG.md). Nếu thấy dòng chữ đỏ `vX ≠ server vY` thì trình duyệt đang chạy bản cũ: tải lại trang.
 

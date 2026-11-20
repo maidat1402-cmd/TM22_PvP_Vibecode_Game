@@ -1,6 +1,6 @@
 # Bản thảo: Dị biến v2, mỗi dạng biến hình đổi luôn cách chơi
 
-> Trạng thái: **đợt 1 đã làm** ở phiên bản 0.7.0 (Kaze, Shiden, Gantetsu, xem `CHANGELOG.md`). Đợt 2 (Homura, Kage) và đợt 3 (Yuki, Raiga, Midori) chưa làm.
+> Trạng thái: **đã làm đủ 3 đợt**: đợt 1 ở 0.7.0 (Kaze, Shiden, Gantetsu), đợt 2 và đợt 3 ở 0.8.0 (Homura, Kage, Yuki, Raiga, Midori), kèm chế độ Đấu tập. Xem `CHANGELOG.md`.
 > Mọi con số là điểm khởi đầu, đo lại bằng script cân bằng sau khi code.
 > Nền hiện tại: dị biến v1 (commit `b7fdd09`). Thanh 100 điểm, biến hình 17 s, chết mất nửa thanh, kích hoạt bằng `L` `L`, tuyệt kỹ dị biến tụ lực lâu.
 
@@ -50,7 +50,9 @@ Ký hiệu độ khó: 🟢 nhẹ (tái dụng code có sẵn), 🟡 vừa (thê
 - **Kỹ thuật:** 🟢. Bay là cơ chế client đã có, chỉ cần bỏ tiêu hao mana khi `awakened()`; server nới giới hạn độ cao. Lướt 3D: thêm `dash.free3d` (dùng thành phần y của `aimDir`). Phân thân gió: tái dụng `echo` của Kage.
 - **Câu hỏi mở:** có giới hạn độ cao không, ví dụ 12 m, để không bay ra khỏi tầm camera của đối thủ?
 
-### 3.2 Raiga: Bạo Khí Thân, "Tụ khí bùng nổ"
+### 3.2 Raiga: Bạo Khí Thân, "Tụ khí bùng nổ" ✅ đã làm (0.8.0)
+
+> Đã chốt: làm bản đầy đủ túm ném (server điều khiển vị trí nạn nhân 0.9 giây). Chưởng tụ tối đa 1.2 giây (×1.8), khí đạn tối đa 1.5 giây (×2.2).
 
 **Luật chơi riêng: Giữ phím để tụ khí.** K và KL khi giữ phím thì tụ khí: giữ càng lâu (tối đa 1.5 s) đạn càng to, sát thương ×1 đến ×2.2, nhưng đứng yên khi tụ. Thả phím thì bắn.
 
@@ -70,7 +72,9 @@ Ký hiệu độ khó: 🟢 nhẹ (tái dụng code có sẵn), 🟡 vừa (thê
   - Túm 🔴: server điều khiển vị trí nạn nhân trong 0.8 s (gói `grab` giống `tp` nhưng liên tục). Client nạn nhân phải tạm bỏ quyền tự di chuyển.
 - **Phương án nhẹ hơn cho JK:** "Khí Chấn Quyền", đấm hất đối thủ lên cao rồi tự bay theo đấm thêm 1 nhịp trên không (chỉ dùng `kbUp` và dash có sẵn) 🟢.
 
-### 3.3 Homura: Viêm Hoàng Giáp, "Biển lửa"
+### 3.3 Homura: Viêm Hoàng Giáp, "Biển lửa" ✅ đã làm (0.8.0)
+
+> Đã chốt: giữ hồi sinh. Vệt lửa từ bước chạy, nhát chém J và cú bổ JK (K boomerang không để lửa).
 
 **Luật chơi riêng: Đất cháy.** Mọi chiêu của Homura và cả bước chạy để lại **vệt lửa trên sàn** tồn tại 3 s. Đối thủ đứng trong vệt lửa bị bỏng (dùng lại nội tại bỏng v1). Homura đứng trên lửa thì hồi mana nhanh hơn.
 
@@ -87,7 +91,9 @@ Ký hiệu độ khó: 🟢 nhẹ (tái dụng code có sẵn), 🟡 vừa (thê
 - **Cách đối phó:** vệt lửa nhìn thấy rõ, nhảy hoặc bay qua thì không bị bỏng. Biết Homura sẽ hồi sinh thì giữ chiêu mạnh lại cho lần thứ hai.
 - **Kỹ thuật:** 🟢. Vệt lửa là danh sách vùng `{x, z, r, until}` ở server, kiểm tra mỗi tick (giống `trap` nhưng không bị xoá khi chạm). Client vẽ bằng một `InstancedMesh` decal để nhẹ ở `low`. Boomerang: thêm `return: true` cho projectile (đổi hướng ở nửa quãng đường). Hồi sinh: xử lý trong `kill()`.
 
-### 3.4 Yuki: Băng Hậu, "Sân băng"
+### 3.4 Yuki: Băng Hậu, "Sân băng" ✅ đã làm (0.8.0)
+
+> Đã chốt: trơn trượt chạy ở client, server không kiểm tra. Băng Tường chắn đạn của cả hai bên (cả Yuki).
 
 **Luật chơi riêng: Biến sàn thành băng.** Chiêu của Yuki đóng băng mặt sàn (vùng tròn tồn tại 5 s). Đối thủ trên băng bị **trơn trượt**: quán tính lớn, khó dừng và đổi hướng, lướt né đi xa gấp đôi nhưng không kiểm soát được. Yuki trên băng thì trượt nhanh hơn 30%.
 
@@ -126,7 +132,9 @@ Ký hiệu độ khó: 🟢 nhẹ (tái dụng code có sẵn), 🟡 vừa (thê
 - **Cách đối phó:** cọc có 30 máu, đối thủ đánh phá được. Hàng rào điện nhìn thấy rõ, nhảy qua thì né được.
 - **Kỹ thuật:** 🟢. Cọc tái dụng `trap` (tồn tại lâu, có giới hạn số lượng như Gieo Hạt của Midori). Hàng rào: mỗi tick kiểm tra người chơi cắt đoạn thẳng giữa 2 cọc. Dịch chuyển tới cọc: tái dụng `blink` tới dấu, như Thuấn Ảnh của Kage.
 
-### 3.6 Midori: Hồn Rừng, "Khu vườn sống"
+### 3.6 Midori: Hồn Rừng, "Khu vườn sống" ✅ đã làm (0.8.0)
+
+> Đã chốt: làm bản đầy đủ người cây có AI (người chơi giả do server điều khiển). Hút máu giảm còn 12%.
 
 **Luật chơi riêng: Triệu hồi đồng minh.** Midori không trực tiếp đánh mạnh hơn; sức mạnh nằm ở **cây** cô trồng ra.
 
@@ -165,7 +173,9 @@ Ký hiệu độ khó: 🟢 nhẹ (tái dụng code có sẵn), 🟡 vừa (thê
 - **Cách đối phó:** thấy Gantetsu tụ lực Địa Chấn (rung đất, vòng sáng lan rộng) thì **nhảy lên** đúng lúc. Đây là khoảnh khắc kịch tính cho cả phòng.
 - **Kỹ thuật:** cột đá 🟢 (tái dụng `walls` / `stoneWalls` + `dyn` đứng lên được). Nhổ cột ném 🟡 (xoá `dyn` rồi tạo projectile từ vị trí cột). Địa chấn 🟢 (server đã biết `y` của người chơi, chỉ cần so với `arenaGround`).
 
-### 3.8 Kage: Vạn Ảnh, "Thật giả lẫn lộn"
+### 3.8 Kage: Vạn Ảnh, "Thật giả lẫn lộn" ✅ đã làm (0.8.0)
+
+> Đã chốt: Màn Đêm làm theo dạng sương mù: đối thủ chỉ thấy người và tên trong 6 m. Lớp sương nằm dưới HUD để vẫn đọc được thanh máu.
 
 **Luật chơi riêng: Phân thân mồi.** Kage thả phân thân giống hệt mình (cùng tên, cùng thanh máu trên đầu). Đối thủ không phân biệt được, chiêu tự khoá có thể nhắm nhầm vào phân thân.
 

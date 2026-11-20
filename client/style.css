@@ -424,6 +424,11 @@ body.touch #clickToPlay { display: none !important; }
 
 /* ===== Đấu đội ===== */
 .room .mtag.team { background: rgba(155,93,229,.4); }
+.room .mtag.practice { background: rgba(82,183,136,.4); }
+/* sương đêm (dị biến Kage): rìa màn hình tối đen, chỉ thấy rõ ở giữa */
+#darkfog { position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, rgba(13,6,24,0) 18%, rgba(13,6,24,.75) 48%, rgba(8,3,16,.96) 75%); animation: darkIn .5s ease-out; }
+@keyframes darkIn { from { opacity: 0; } to { opacity: 1; } }
 #teamLobby { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 18; pointer-events: none; }
 #teamLobby .tl-box { pointer-events: auto; width: min(640px, 100%); max-height: 90vh; overflow-y: auto; }
 .tl-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }

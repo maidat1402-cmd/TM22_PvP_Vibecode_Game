@@ -559,6 +559,30 @@ function buildForm(look, rig) {
       }
       break;
     }
+    case 'treant': {
+      // người cây Mộc Thần (vật triệu hồi của Midori): cành cây mọc từ vai và đầu, tán lá, rêu, mắt phát sáng
+      const bark = toon(0x6b4f3a), bark2 = toon(0x4a3426), leaf = toon(0x40916c), leaf2 = toon(0x74c69d), moss = toon(0x588157);
+      for (const [x, y, z, rx, rz, h] of [[0.28, 1.0, -0.05, -0.2, -0.9, 0.55], [-0.28, 1.0, -0.05, -0.2, 0.9, 0.55], [0.12, 1.55, -0.1, -0.3, -0.5, 0.45], [-0.15, 1.6, -0.05, -0.2, 0.6, 0.4]]) {
+        const b = mesh(G.cyl(0.035, 0.07, h, 6), bark2, 0.015);
+        b.position.set(x, y, z); b.rotation.set(rx, 0, rz);
+        (y > 1.3 ? head : body).add(b);
+        const c = mesh(new THREE.IcosahedronGeometry(0.2, 0), Math.random() < 0.5 ? leaf : leaf2, 0.02);
+        c.position.set(x + Math.sign(x) * h * 0.45, y + h * 0.4, z);
+        (y > 1.3 ? head : body).add(c);
+      }
+      const crown = mesh(new THREE.IcosahedronGeometry(0.42, 0), leaf, 0.02);
+      crown.position.set(0, 0.45, -0.05); crown.scale.set(1.2, 0.7, 1.1);
+      head.add(crown);
+      for (const [x, y, z, r] of [[0.2, 0.7, 0.2, 0.09], [-0.15, 0.55, 0.22, 0.07], [0, 0.85, -0.22, 0.1]]) {
+        const m = mesh(G.sphere(r, 8, 6), moss, 0.01);
+        m.position.set(x, y, z); body.add(m);
+      }
+      for (const h of [rig.handR, rig.handL]) { const f = mesh(new THREE.DodecahedronGeometry(0.2, 0), bark, 0.02); h.add(f); }
+      const eyeGlow = glow(core, 0.9);
+      for (const sx of [-0.14, 0.14]) { const e = new THREE.Mesh(G.sphere(0.06, 8, 6), eyeGlow); e.position.set(sx, 0.02, 0.45); head.add(e); }
+      ups.push((dt, t) => { crown.rotation.y = Math.sin(t * 1.3) * 0.15; });
+      break;
+    }
     case 'thousandShadows': {
       // 2 phân thân bóng đi theo hai bên phía sau
       const dark = new THREE.MeshBasicMaterial({ color: 0x10002b, transparent: true, opacity: 0.6, depthWrite: false });

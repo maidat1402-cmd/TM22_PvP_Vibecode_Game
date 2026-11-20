@@ -1,8 +1,8 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle, arenaGround } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle, arenaGround, arenaCollide, dynCollide } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
-import { getChar, charMaxHp, charSkills, skillLifetime } from '../shared/characters.js';
+import { CHARACTERS, getChar, charMaxHp, charSkills, skillLifetime, holdSkill } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
 
 const BODY_R = GAME.bodyRadius;
@@ -28,13 +28,19 @@ const BURN_SKILL = { fx: { kind: 'burn', color: 0xff5400 }, noMark: true, noGaug
 // Hàng rào điện giữa 2 cọc sét (dị biến Shiden): mỗi lần chạm cộng 1 dấu điện
 const FENCE_SKILL = { fx: { kind: 'fence', color: 0xc77dff } };
 let nextPropId = 100000;   // id công trình (cọc sét, cột đá) — tách hẳn khỏi id người chơi
+let nextFakeId = 90000;    // id người chơi giả do server điều khiển (bia tập, võ sĩ máy, phân thân mồi, người cây)
+let nextZoneId = 1;        // vùng trên sàn (lửa, băng, ngưng đọng)
+const FAKE_WS = { readyState: 0, send() {} };
+const ANIM_ID = { idle: 0, run: 1, air: 3, stun: 8 };   // trùng ANIM ở client/js/chibi.js
+const FIRE_BURN = { dmg: 2, every: 0.5 };
 
 let nextRoomId = 1;
 let nextEntityId = 1;
 
 export class Room {
-  constructor(name, hub, mapId, team = false) {
+  constructor(name, hub, mapId, team = false, practice = false) {
     this.id = String(nextRoomId++);
+    this.practice = !team && practice;   // đấu tập: có bia tập + võ sĩ máy, nạp đầy thanh dị biến được
     this.name = name;
     this.arena = getArena(mapId);
     // Đấu đội: phòng chờ (lobby) → trận (play) → kết quả (end) → lại phòng chờ
@@ -57,17 +63,20 @@ export class Room {
     this.dyn = [];            // chướng ngại vật tạm thời { x, z, r, h, until, owner }
     this.props = [];          // công trình có máu (cọc sét, cột đá): đối thủ đánh phá được
     this.fenceCd = new Map(); // hàng rào điện: lần chạm gần nhất của từng (cặp cọc, người)
+    this.zones = [];          // vùng trên sàn { id, k: 'fire'|'ice'|'slow', owner, side, x, y, z, r, until, mul }
     this.lastTick = now();
     this.snapT = new Ticker(NET.snapRate);
     this.stopLoop = startLoop(NET.tickRate, () => this.tick());
+    if (this.practice) this.spawnPracticeBots();
   }
 
-  get count() { return this.players.size; }
+  // số người chơi thật (không tính người chơi giả do server điều khiển)
+  get count() { let n = 0; for (const p of this.players.values()) if (!p.fake) n++; return n; }
 
   destroy() { this.stopLoop(); }
 
   info() {
-    return { id: this.id, name: this.name, count: this.count, mode: this.team ? 'team' : 'brawl', map: this.arena.id, mapName: this.arena.name,
+    return { id: this.id, name: this.name, count: this.count, mode: this.team ? 'team' : this.practice ? 'practice' : 'brawl', map: this.arena.id, mapName: this.arena.name,
       phase: this.team ? this.phase : undefined };
   }
 
@@ -88,10 +97,291 @@ export class Room {
     return best;
   }
 
-  publicPlayer(p) {
-    return { id: p.id, name: p.name, char: p.char, x: r2(p.x), y: r2(p.y), z: r2(p.z), yaw: r2(p.yaw),
+  // viewer: người nhận. Phân thân mồi chỉ lộ là phân thân với chủ và đồng đội của chủ
+  publicPlayer(p, viewer) {
+    const o = { id: p.id, name: p.name, char: p.char, x: r2(p.x), y: r2(p.y), z: r2(p.z), yaw: r2(p.yaw),
       hp: Math.ceil(p.hp), mp: Math.floor(p.mp), dead: p.dead, kills: p.kills, deaths: p.deaths, team: p.team || null,
       awk: Math.floor(p.awk || 0), aw: p.awUntil > now() ? r2(p.awUntil - now()) : 0 };
+    if (p.fake && (p.fake !== 'decoy' || (viewer && this.allied(viewer, this.players.get(p.master))))) { o.fk = p.fake; o.ms = p.master || 0; }
+    return o;
+  }
+
+  // ---------- Đồng minh ----------
+  // phe của người chơi: người chơi giả có chủ (phân thân, người cây) cùng phe với chủ
+  side(p) { return p.sideId || p.master || p.id; }
+  allied(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (this.team && a.team && a.team === b.team) return true;
+    return this.side(a) === this.side(b);
+  }
+
+  // ---------- Người chơi giả (server điều khiển) ----------
+  // o: { fake: 'dummy'|'bot'|'decoy'|'pet', name, char, x, z, yaw, master, team, hp, maxHp, until, awUntil, ai }
+  addFake(o) {
+    const t = now(), ch = getChar(o.char);
+    const p = {
+      id: nextFakeId++, ws: FAKE_WS, name: o.name, char: ch.id, x: o.x, y: o.y || 0, z: o.z, yaw: o.yaw || 0, anim: 0, flags: 0,
+      hp: o.hp ?? charMaxHp(ch), maxHp: o.maxHp ?? charMaxHp(ch), mp: GAME.maxMana, dead: false, respawnAt: 0,
+      lastHit: -99, kills: o.kills || 0, deaths: o.deaths || 0, cds: {}, lockUntil: 0, healCd: 0, healUntil: 0, healRate: 0,
+      invulnUntil: 0, stunUntil: 0, lastSeen: t, team: o.team ?? null, ready: true, awk: 0, awUntil: o.awUntil || 0, tiredUntil: 0,
+      fake: o.fake, master: o.master || 0, until: o.until || 0, ai: o.ai || {}, home: o.home || null, vel: [0, 0, 0], kbT: 0,
+      sideId: o.sideId || 0,   // bia tập + võ sĩ máy chung một phe: không đánh nhau
+    };
+    this.players.set(p.id, p);
+    for (const q of this.players.values()) if (!q.fake) this.send(q, { t: 'pjoin', player: this.publicPlayer(p, q) });
+    return p;
+  }
+
+  // why: 'expire' (hết giờ), 'pop' (phân thân tan), 'die' (bị đánh gục)
+  removeFake(p, why) {
+    if (!this.players.has(p.id)) return;
+    this.players.delete(p.id);
+    this.entities = this.entities.filter(e => e.owner !== p.id);
+    this.broadcast({ t: 'pleave', id: p.id, why });
+  }
+
+  // Đấu tập: 2 bia đứng yên (tự hồi đầy máu) + 1 võ sĩ máy biết chạy, nhảy, đánh nhẹ
+  spawnPracticeBots() {
+    const R = this.arena.radius * 0.38;
+    const spot = (x, z) => this.freeSpot(x, z, 0, 0);
+    const chars = CHARACTERS.map(c => c.id);
+    const [ax, az] = spot(R, -R * 0.4), [bx, bz] = spot(-R, -R * 0.4), [cx, cz] = spot(0, R);
+    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'gantetsu', x: ax, z: az, home: [ax, az], yaw: Math.atan2(-ax, -az) });
+    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'kage', x: bx, z: bz, home: [bx, bz], yaw: Math.atan2(-bx, -bz) });
+    this.addFake({ fake: 'bot', sideId: 'bots', name: '🤖 Võ sĩ tập', char: chars[(Math.random() * chars.length) | 0], x: cx, z: cz, home: [cx, cz], ai: { range: 5 } });
+  }
+
+  // Vật lý đơn giản cho người chơi giả: (wx, wz) là vận tốc muốn đi; bị đánh thì văng theo đòn
+  stepFake(p, dt, wx, wz, t) {
+    const v = p.vel;
+    const g0 = arenaGround(this.arena, p.x, p.z, p.y, BODY_R);
+    const onG = p.y <= g0 + 0.05;
+    const ctrl = p.kbT > 0 ? 0.08 : 1;
+    p.kbT -= dt;
+    const a = Math.min(1, dt * (onG ? 10 : 2) * ctrl);
+    v[0] += (wx - v[0]) * a; v[2] += (wz - v[2]) * a;
+    v[1] -= MOVE.gravity * dt;
+    p.x += v[0] * dt; p.y += v[1] * dt; p.z += v[2] * dt;
+    const pos = { x: p.x, y: p.y, z: p.z };
+    arenaCollide(this.arena, pos, BODY_R);
+    if (this.dyn.length) dynCollide(this.dyn, pos, BODY_R);
+    p.x = pos.x; p.z = pos.z;
+    let gy = arenaGround(this.arena, p.x, p.z, p.y, BODY_R);
+    for (const o of this.dyn) if (!o.noBody && p.y >= o.h - 0.3 && Math.hypot(p.x - o.x, p.z - o.z) < o.r + BODY_R * 0.4) gy = Math.max(gy, o.h);
+    if (p.y <= gy) { p.y = gy; if (v[1] < 0) v[1] = 0; }
+    const hs = Math.hypot(v[0], v[2]);
+    if (hs > 0.5 && t >= (p.faceUntil || 0)) p.yaw = Math.atan2(v[0], v[2]);
+    p.anim = t < p.stunUntil ? ANIM_ID.stun : p.y > gy + 0.1 ? ANIM_ID.air : hs > 1 ? ANIM_ID.run : ANIM_ID.idle;
+  }
+
+  updateFake(p, t, dt) {
+    if (p.grab) return;   // đang bị túm: vị trí do người túm quyết định
+    const stun = t < p.stunUntil;
+    switch (p.fake) {
+      case 'dummy': {
+        // bia tập: 2.5 giây không bị đánh thì hồi đầy máu, bị đánh văng thì tự đi về chỗ cũ
+        if (t - p.lastHit > 2.5) p.hp = p.maxHp;
+        const dx = p.home[0] - p.x, dz = p.home[1] - p.z, d = Math.hypot(dx, dz), v = d > 0.6 && !stun ? Math.min(4, d * 2) : 0;
+        this.stepFake(p, dt, v ? dx / d * v : 0, v ? dz / d * v : 0, t);
+        break;
+      }
+      case 'bot': this.botAI(p, t, dt, stun); break;
+      case 'decoy': {
+        // phân thân mồi: chạy thẳng, máu hiện y như chủ
+        const M = this.players.get(p.master);
+        if (M) p.hp = Math.max(1, M.hp);
+        const run = t < p.ai.stopAt && !stun;
+        this.stepFake(p, dt, run ? p.ai.dir[0] * p.ai.speed : 0, run ? p.ai.dir[1] * p.ai.speed : 0, t);
+        break;
+      }
+      case 'pet': this.petAI(p, t, dt, stun); break;
+    }
+    if (p.until && t >= p.until) this.removeFake(p, 'expire');
+  }
+
+  // Võ sĩ máy: giữ khoảng cách ~5 m với người chơi gần nhất, chạy vòng, thỉnh thoảng nhảy, đánh J / bắn K
+  botAI(p, t, dt, stun) {
+    const A = p.ai;
+    let tgt = null, bd = 30;
+    for (const q of this.players.values()) {
+      if (q.dead || q.fake || this.allied(p, q)) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d < bd) { bd = d; tgt = q; }
+    }
+    let wx = 0, wz = 0;
+    if (tgt && !stun) {
+      const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+      const sp = MOVE.walk * 0.75, f = d > A.range + 1 ? 1 : d < A.range - 2 ? -0.7 : 0;
+      if (t > (A.sw || 0)) { A.str = A.str === 1 ? -1 : 1; A.sw = t + 1.5 + Math.random() * 2; }
+      wx = (ux * f - uz * A.str * 0.6) * sp; wz = (uz * f + ux * A.str * 0.6) * sp;
+      if (t > (A.jump || 0) && p.vel[1] === 0) { A.jump = t + 3 + Math.random() * 4; p.vel[1] = MOVE.jump; }
+      if (t > (A.next || 0) && t >= p.lockUntil) {
+        A.next = t + 1.3 + Math.random() * 1.2;
+        const dy = Math.max(-0.9, Math.min(0.9, (tgt.y - p.y) / Math.max(1, d)));
+        p.yaw = Math.atan2(ux, uz); p.faceUntil = t + 0.4;
+        this.handleCast(p, { sk: d < 3.2 ? 0 : 1, cs: 0, seed: (Math.random() * 2 ** 31) | 0, p: [p.x, p.y, p.z], d: [ux, dy, uz] }, t);
+      }
+    }
+    this.stepFake(p, dt, wx, wz, t);
+    p.mp = GAME.maxMana;
+  }
+
+  // Người cây: đi theo chủ, thấy đối thủ gần (trong 10 m) thì lao tới đấm
+  petAI(p, t, dt, stun) {
+    const M = this.players.get(p.master);
+    if (!M || M.dead) { this.removeFake(p, 'expire'); return; }
+    const ch = getChar(p.char), sp = ch.speed || 5;
+    let tgt = null, bd = 10;
+    for (const q of this.players.values()) {
+      if (q.dead || this.allied(p, q) || Math.hypot(q.x - M.x, q.z - M.z) > 14) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d < bd) { bd = d; tgt = q; }
+    }
+    let wx = 0, wz = 0;
+    if (!stun) {
+      if (tgt) {
+        const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz) || 1;
+        if (d > 2.2) { wx = dx / d * sp; wz = dz / d * sp; }
+        if (d < 3 && t >= p.lockUntil && t >= (p.cds[0] || 0)) {
+          p.yaw = Math.atan2(dx, dz); p.faceUntil = t + 0.6;
+          this.handleCast(p, { sk: 0, cs: 0, seed: 1, p: [p.x, p.y, p.z], d: [dx / d, 0, dz / d] }, t);
+        }
+      } else {
+        // đứng sau lưng chủ 2.5 m
+        const fx = M.x - Math.sin(M.yaw) * 2.5, fz = M.z - Math.cos(M.yaw) * 2.5, dx = fx - p.x, dz = fz - p.z, d = Math.hypot(dx, dz);
+        if (d > 1.2) { const v = Math.min(sp * 1.2, d * 2); wx = dx / d * v; wz = dz / d * v; }
+      }
+    }
+    this.stepFake(p, dt, wx, wz, t);
+  }
+
+  // Phân thân mồi tan: nổ bóng làm chậm đối thủ đứng gần
+  popDecoy(d) {
+    const M = this.players.get(d.master), P = d.ai.pop;
+    this.broadcast({ t: 'pulse', k: 'shadowPop', pts: [[r2(d.x), r2(d.y + 1), r2(d.z)]], c: 0x9d4edd, r: P.radius });
+    this.removeFake(d, 'pop');
+    if (!M) return;
+    const sk = { fx: { kind: 'shadowPop', color: 0x9d4edd }, slow: P.slow, noMark: true };
+    for (const q of [...this.players.values()]) {
+      if (q.dead || q.fake === 'decoy' || this.allied(M, q)) continue;
+      if (Math.hypot(q.x - d.x, q.z - d.z) < P.radius + BODY_R && Math.abs(q.y - d.y) < 3) this.damage(M, q, P.dmg, this.kbFrom(d.x, d.z, q, { kb: 4, kbUp: 2 }), sk, [q.x, q.y + 1, q.z]);
+    }
+  }
+
+  // Phân thân mồi của p gần hướng ngắm nhất trong tầm
+  aimDecoy(p, x, z, h, range) {
+    let best = null, bs = Infinity;
+    for (const q of this.players.values()) {
+      if (q.fake !== 'decoy' || q.master !== p.id) continue;
+      const vx = q.x - x, vz = q.z - z, d = Math.hypot(vx, vz);
+      if (d > range || d < 0.5) continue;
+      const ang = Math.acos(Math.max(-1, Math.min(1, (vx * h[0] + vz * h[1]) / d)));
+      const sc = ang * 3 + d * 0.05;
+      if (sc < bs) { bs = sc; best = q; }
+    }
+    return best;
+  }
+
+  // ---------- Vùng trên sàn: lửa (Homura), băng (Yuki), ngưng đọng (Yuki) ----------
+  addZone(k, owner, x, z, r, dur, opts = {}) {
+    const y = opts.y ?? arenaGround(this.arena, x, z, Math.max(0, owner.y) + 0.5, 0.3);
+    const zn = { id: nextZoneId++, k, owner: owner.id, side: this.side(owner), team: owner.team, x, y, z, r, until: now() + dur, mul: opts.mul || 1 };
+    this.zones.push(zn);
+    const m = { t: 'zone', id: zn.id, k, o: owner.id, p: [r2(x), r2(y), r2(z)], r, dur };
+    if (opts.mul) m.mul = opts.mul;
+    this.broadcast(m);
+    return zn;
+  }
+
+  // hệ số tốc độ đạn của phe side tại (x, z): vùng ngưng đọng của đối phương làm chậm
+  zoneSlow(x, z, src) {
+    let k = 1;
+    for (const zn of this.zones) {
+      if (zn.k !== 'slow' || (src && this.side(src) === zn.side) || (this.team && src && zn.team === src.team)) continue;
+      if (Math.hypot(x - zn.x, z - zn.z) < zn.r) k = Math.min(k, zn.mul);
+    }
+    return k;
+  }
+
+  updateZones(t, dt) {
+    this.zones = this.zones.filter(zn => t < zn.until);
+    const onFire = new Set();
+    for (const zn of this.zones) {
+      if (zn.k !== 'fire') continue;
+      const src = this.players.get(zn.owner);
+      if (!src) continue;
+      const B = this.awOf(src, t)?.passive.burn || FIRE_BURN;
+      for (const q of this.players.values()) {
+        if (q.dead || q.fake === 'decoy' || this.allied(src, q)) continue;
+        if (Math.hypot(q.x - zn.x, q.z - zn.z) > zn.r + BODY_R * 0.5 || q.y - zn.y > 0.6) continue;
+        // đứng trong lửa: bỏng liên tục (làm mới thời gian, không cộng dồn)
+        if (!q.burn || q.burn.until < t + 0.4) q.burn = { src: src.id, dmg: B.dmg, every: B.every, next: q.burn && q.burn.next > t ? q.burn.next : t + 0.2, until: t + 1.2 };
+      }
+      if (!src.dead && Math.hypot(src.x - zn.x, src.z - zn.z) < zn.r && src.y - zn.y < 0.6) onFire.add(src);
+    }
+    // Homura đứng trên lửa của mình: hồi mana nhanh hơn
+    for (const p of onFire) { const F = this.awOf(p, t)?.passive.fireTrail; if (F) p.mp = Math.min(GAME.maxMana, p.mp + F.mana * dt); }
+  }
+
+  // ---------- Túm ném (dị biến Raiga) ----------
+  startGrab(src, q, s, t) {
+    const G = s.grab;
+    q.grab = { by: src.id, t0: t, G, color: s.fx.color, slammed: false };
+    q.stunUntil = Math.max(q.stunUntil, t + G.dur + 0.1);
+    this.broadcast({ t: 'grab', id: q.id, by: src.id, dur: G.dur, slam: G.slam });
+  }
+
+  stepGrab(q, t) {
+    const g = q.grab, A = this.players.get(g.by), G = g.G;
+    if (!A || A.dead || q.dead) { q.grab = null; return; }
+    const el = t - g.t0, fx = Math.sin(A.yaw), fz = Math.cos(A.yaw);
+    // nhấc bổng lên trước mặt người túm, rồi quật xuống đất, rồi ném văng theo hướng nhìn
+    q.x = A.x + fx * 1.3; q.z = A.z + fz * 1.3;
+    q.y = el < G.slam ? A.y + 2.4 * Math.min(1, el / 0.25) : A.y;
+    if (q.vel) q.vel = [0, 0, 0];
+    if (el >= G.slam && !g.slammed) {
+      g.slammed = true;
+      this.broadcast({ t: 'pulse', k: 'slam', pts: [[r2(q.x), r2(A.y), r2(q.z)]], c: g.color, r: 2.5 });
+      this.damage(A, q, G.slamDmg, [0, 0, 0], { fx: { kind: 'grabSlam', color: g.color }, stun: G.stun }, [q.x, q.y + 0.5, q.z]);
+    }
+    if (el >= G.dur && q.grab) {
+      q.grab = null;
+      q.tpUntil = t + 0.3;
+      this.damage(A, q, G.throwDmg, [fx * G.kb, G.kbUp, fz * G.kb], { fx: { kind: 'grabThrow', color: g.color } }, [q.x, q.y + 1, q.z]);
+    }
+  }
+
+  // Bắn 1 viên đạn từ vị trí bất kỳ (cây bắn gai) — gửi 'cast' kèm extra để client vẽ
+  fireShot(src, s, x, y, z, d, extra) {
+    const t = now(), seed = (Math.random() * 2 ** 31) | 0;
+    const e = { id: nextEntityId++, owner: src.id, skill: s, t0: t, p: [x, y, z], d, hits: new Map(), seed, dead: false, end: t + skillLifetime(s), state: {} };
+    const hl = hlen(d[0], d[2]);
+    e.h = [d[0] / hl, d[2] / hl];
+    e.subs = [{ k: 0, d: [...d], pos: [x + d[0] * 0.3, y + CHEST + d[1] * 0.3, z + d[2] * 0.3], alive: true }];
+    this.entities.push(e);
+    this.broadcast({ t: 'cast', id: src.id, eid: e.id, p: [r2(x), r2(y), r2(z)], d: d.map(r2), seed, ...extra });
+  }
+
+  // Cây bắn gai: mỗi `every` giây bắn đối thủ gần nhất trong tầm
+  updateTurrets(t) {
+    for (const pr of this.props) {
+      const T = pr.tur;
+      if (!T || pr.dead || t < T.next) continue;
+      const src = this.players.get(pr.owner);
+      if (!src) continue;
+      let best = null, bd = T.range;
+      for (const q of this.players.values()) {
+        if (q.dead || this.allied(src, q)) continue;
+        const d = Math.hypot(q.x - pr.x, q.z - pr.z);
+        if (d < bd) { bd = d; best = q; }
+      }
+      if (!best) continue;
+      T.next = t + T.every;
+      const oy = pr.y + 0.7;
+      const v = [best.x - pr.x, best.y + CHEST - (oy + CHEST), best.z - pr.z], L = Math.hypot(...v) || 1;
+      this.fireShot(src, T.s, pr.x, oy, pr.z, v.map(c => c / L), { sk: T.sk, aw: 1, sub: 'tur' });
+    }
   }
 
   add(client) {
@@ -114,8 +404,10 @@ export class Room {
     this.players.set(p.id, p);
     client.room = this;
     if (this.team && !this.hostId) this.hostId = p.id;
-    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id, team: this.team },
-      players: [...this.players.values()].map(q => this.publicPlayer(q)), props: this.props.map(q => this.publicProp(q)) });
+    this.send(p, { t: 'joined', you: p.id, room: { id: this.id, name: this.name, map: this.arena.id, team: this.team, practice: this.practice },
+      players: [...this.players.values()].map(q => this.publicPlayer(q, p)), props: this.props.map(q => this.publicProp(q)),
+      zones: this.zones.map(z => ({ id: z.id, k: z.k, o: z.owner, p: [r2(z.x), r2(z.y), r2(z.z)], r: z.r, dur: r2(z.until - now()), mul: z.mul })) });
+    if (this.practice) this.send(p, { t: 'sys', msg: '🎯 Đấu tập: đánh bia hoặc võ sĩ máy để tích thanh dị biến. Bấm P (hoặc nút trong menu ☰) để nạp đầy thanh ngay.' });
     this.broadcast({ t: 'pjoin', player: this.publicPlayer(p) }, p.id);
     this.broadcast({ t: 'sys', msg: this.team ? `${p.name} đã vào ${TEAM.names[team]}` : `${p.name} đã vào phòng` });
     if (this.team) this.sendTeamState();
@@ -126,6 +418,7 @@ export class Room {
     const p = this.players.get(clientId);
     if (!p) return;
     this.players.delete(clientId);
+    for (const q of [...this.players.values()]) if (q.master === clientId) this.removeFake(q, 'expire');
     this.broadcast({ t: 'pleave', id: clientId });
     this.broadcast({ t: 'sys', msg: `${p.name} đã rời phòng` });
     this.entities = this.entities.filter(e => e.owner !== clientId);
@@ -182,6 +475,8 @@ export class Room {
     this.phaseEnd = t + TEAM.timeLimit;
     this.entities = [];
     for (const pr of [...this.props]) this.removeProp(pr, 'time');
+    this.zones = [];
+    for (const q of [...this.players.values()]) if (q.master) this.removeFake(q, 'expire');
     for (const p of this.players.values()) {
       const [sx, sz] = this.spawnPoint(p.team);
       Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
@@ -266,6 +561,7 @@ export class Room {
         p.yaw = +m.r || 0; p.anim = m.a | 0; p.flags = m.f | 0;
         // vừa dịch chuyển: gói vị trí cũ còn trên đường truyền thì bỏ qua
         if (t < (p.tpUntil || 0) && Math.hypot(x - p.x, z - p.z) > 3) break;
+        if (p.grab) break;   // đang bị túm: server quyết định vị trí
         p.x = x; p.y = Math.max(0, y); p.z = z;
         break;
       }
@@ -276,6 +572,18 @@ export class Room {
       case 'tteam': case 'tready': case 'tstart': if (this.team) this.onTeamMessage(p, m); break;
       case 'heal': this.handleHeal(p, t); break;
       case 'awk': this.handleAwaken(p, t); break;
+      case 'hold': { // bắt đầu giữ phím tụ lực (dị biến Raiga)
+        const hs = charSkills(getChar(p.char), p.awUntil > t)[m.sk | 0];
+        if (!hs?.hold || p.dead) return;
+        p.holdStart = t; p.holdSk = m.sk | 0;
+        this.broadcast({ t: 'hold', id: p.id, sk: m.sk | 0, max: hs.hold.max }, p.id);
+        break;
+      }
+      case 'pfill': // đấu tập: nạp đầy thanh dị biến
+        if (!this.practice || p.dead || p.awUntil > t) return;
+        p.awk = AWAKEN.max; p.mp = GAME.maxMana;
+        this.send(p, { t: 'sys', msg: '⚡ Đã nạp đầy thanh dị biến — bấm L L (nút ⚡) để biến hình' });
+        break;
       case 'steer': { // cập nhật tâm ngắm cho chiêu cuối đang chạy
         const e = p.steerEnt, a = validAim(m.a);
         if (!e || e.dead || !a) return;
@@ -347,6 +655,14 @@ export class Room {
       const pr = this.findRip(p, x, z, m.rp, s.rip.range);
       if (pr) { ripId = pr.id; x = pr.x; y = pr.y + 1.2; z = pr.z; this.removeProp(pr, 'rip'); s = s.ripSkill; }
     }
+    // giữ phím tụ lực: thời gian giữ client báo, server giới hạn theo lúc nhận gói 'hold'
+    let hk = 0;
+    if (s.hold) {
+      const held = Math.min(Number(m.hold) || 0, p.holdSk === sIdx ? t - p.holdStart + 0.2 : 0, s.hold.max);
+      s = holdSkill(s, Math.max(0, held / s.hold.max));
+      hk = s.hk || 0;
+      p.holdSk = -1;
+    }
 
     p.mp -= s.mana;
     p.cds[cdKey] = t + s.cd;
@@ -359,7 +675,7 @@ export class Room {
     const seed = (m.seed >>> 0) || ((Math.random() * 2 ** 31) | 0);
     const e = {
       id: nextEntityId++, owner: p.id, skill: s, t0: t, p: [x, y, z], d: [dx, dy, dz],
-      hits: new Map(), seed, dead: false, end: t + skillLifetime(s), state: {},
+      hits: new Map(), seed, dead: false, end: t + skillLifetime(s), state: {}, sk: sIdx,
     };
     const hl = hlen(dx, dz);
     e.h = [dx / hl, dz / hl];
@@ -390,9 +706,11 @@ export class Room {
       // dấu phi đao còn hạn và trong tầm thì tới đó, không thì lướt bóng về phía trước
       const mk = p.shadowMark;
       const bt = s.behind ? this.aimTarget(p, x, z, e.h, s.behind) : null;
-      // Lôi Độn (dị biến Shiden): tới cọc sét của mình gần tâm ngắm nhất
+      // Lôi Độn (dị biến Shiden): tới cọc sét của mình gần tâm ngắm nhất; Hoán Ảnh (Kage): đổi chỗ với phân thân
       const rod = s.toRod ? this.aimProp(p, x, z, e.h, s.toRod, 'rod') : null;
-      if (rod) {
+      const dc = s.swap ? this.aimDecoy(p, x, z, e.h, s.swap) : null;
+      if (dc) { tg = [dc.x, dc.z]; e.swapId = dc.id; }
+      else if (rod) {
         const rl = Math.hypot(x - rod.x, z - rod.z) || 1;
         tg = this.clampToArena(rod.x + (x - rod.x) / rl * 0.9, rod.z + (z - rod.z) / rl * 0.9);
       } else if (bt) tg = this.clampToArena(bt.x - Math.sin(bt.yaw) * 1.6, bt.z - Math.cos(bt.yaw) * 1.6);
@@ -409,7 +727,7 @@ export class Room {
     } else if (s.type === 'buff') {
       this.applyBuff(p, s, t + s.delay + s.dur);
       if (s.invuln) p.invulnUntil = Math.max(p.invulnUntil, t + s.delay + s.dur);
-    } else if (s.type === 'wall') {
+    } else if (s.type === 'wall' || s.type === 'icewall' || s.type === 'turret') {
       tg = this.clampToArena(x + e.h[0] * s.offset, z + e.h[1] * s.offset);
     }
     if (tg) e.tg = tg;
@@ -419,6 +737,7 @@ export class Room {
     if (aw) out.aw = 1;
     if (tg) out.tg = tg.map(r2);
     if (ripId) out.rp = ripId;
+    if (hk) out.hk = hk;
     this.broadcast(out, p.id);
     this.send(p, { ...out, cs: m.cs, mp: Math.floor(p.mp) });
   }
@@ -486,7 +805,7 @@ export class Room {
     for (let j = 0; j < jumps; j++) {
       let best = null, bd = range;
       for (const q of this.players.values()) {
-        if (q === src || q.dead || hitIds.has(q.id) || (this.team && q.team === src.team)) continue;
+        if (q === src || q.dead || hitIds.has(q.id) || this.allied(src, q)) continue;
         const d = Math.hypot(q.x - last.x, q.z - last.z);
         if (d < bd) { bd = d; best = q; }
       }
@@ -503,7 +822,7 @@ export class Room {
   aimTarget(p, x, z, h, range) {
     let best = null, bs = Infinity;
     for (const q of this.players.values()) {
-      if (q === p || q.dead || (this.team && q.team === p.team)) continue;
+      if (q === p || q.dead || this.allied(p, q)) continue;
       const vx = q.x - x, vz = q.z - z, d = Math.hypot(vx, vz);
       if (d > range || d < 0.5) continue;
       const ang = Math.acos(Math.max(-1, Math.min(1, (vx * h[0] + vz * h[1]) / d)));
@@ -553,6 +872,15 @@ export class Room {
     this.props = this.props.filter(q => q !== pr);
     if (pr.dyn) this.dyn = this.dyn.filter(o => o !== pr.dyn);
     this.broadcast({ t: 'prop', id: pr.id, end: why });
+    // tường băng bị đập vỡ: mảnh băng bắn ra làm chậm đối thủ của chủ tường đứng gần
+    const S = pr.shatter, M = S && why === 'break' ? this.players.get(pr.owner) : null;
+    if (M) {
+      const sk = { fx: { kind: 'iceShatter', color: 0x9bf6ff }, slow: S.slow, noMark: true };
+      for (const q of [...this.players.values()]) {
+        if (q.dead || this.allied(M, q)) continue;
+        if (Math.hypot(q.x - pr.x, q.z - pr.z) < S.radius + BODY_R && q.y - pr.y < 4) this.damage(M, q, S.dmg, this.kbFrom(pr.x, pr.z, q, { kb: 5, kbUp: 2 }), sk, [q.x, q.y + 1, q.z]);
+      }
+    }
   }
 
   damageProp(src, pr, amount) {
@@ -602,7 +930,7 @@ export class Room {
         const a = rods[i], b = rods[j], F = a.fence;
         if (Math.hypot(a.x - b.x, a.z - b.z) > F.range) continue;
         for (const q of this.players.values()) {
-          if (q === src || q.dead || (this.team && q.team === src.team)) continue;
+          if (q === src || q.dead || this.allied(src, q)) continue;
           if (q.y > Math.max(a.y, b.y) + F.h) continue;   // nhảy qua hàng rào thì né được
           if (distPointSeg(q.x, 0, q.z, a.x, 0, a.z, b.x, 0, b.z) > F.w + BODY_R * 0.5) continue;
           const key = a.id + ':' + b.id + ':' + q.id;
@@ -633,7 +961,7 @@ export class Room {
     // sóng xung kích lúc biến hình: đẩy văng đối thủ đứng gần
     const S = AWAKEN.shock, sk = { fx: { kind: 'awaken', color: A.color }, noGauge: true, noMark: true, noBurn: true };
     for (const q of this.players.values()) {
-      if (q === p || q.dead || (this.team && q.team === p.team)) continue;
+      if (q === p || q.dead || this.allied(p, q)) continue;
       if (Math.hypot(q.x - p.x, q.z - p.z) < S.radius + BODY_R && Math.abs(q.y - p.y) < 4) this.damage(p, q, S.dmg, this.kbFrom(p.x, p.z, q, S), sk, [q.x, q.y + 1, q.z]);
     }
   }
@@ -657,8 +985,12 @@ export class Room {
     if (tgt.isProp) return this.damageProp(src, tgt, amount);
     const t = now();
     if (tgt.dead || t < tgt.invulnUntil) return false;
-    // đấu đội: phòng chờ/kết quả không mất máu, không đánh được đồng đội
-    if (this.team && (this.phase !== 'play' || (src && src !== tgt && src.team === tgt.team))) return false;
+    // đấu đội: phòng chờ/kết quả không mất máu; không đánh được đồng đội / vật triệu hồi phe mình
+    if (this.team && this.phase !== 'play') return false;
+    if (src && src !== tgt && this.allied(src, tgt)) return false;
+    // phân thân mồi: trúng 1 đòn là tan
+    if (tgt.fake === 'decoy') { this.popDecoy(tgt); return true; }
+    if (src?.fake === 'bot') amount *= 0.5;   // võ sĩ máy đánh nhẹ
     let crit = false;
     const other = src && src !== tgt;
     const sa = other ? this.awOf(src, t)?.passive : null;   // nội tại dị biến của người đánh
@@ -684,6 +1016,8 @@ export class Room {
       // đang ở trên không (Kaze dị biến bay tự do) thì nhận thêm sát thương
       if (ta.airTaken && tgt.y - arenaGround(this.arena, tgt.x, tgt.z, tgt.y, BODY_R) > 1.2) amount *= ta.airTaken;
     }
+    // người chơi giả không tự xử lý đẩy lùi như client: server cho văng luôn
+    if (tgt.fake && tgt.vel && !tgt.grab) { tgt.vel[0] += kb[0]; tgt.vel[2] += kb[2]; tgt.vel[1] = Math.max(tgt.vel[1], kb[1]); tgt.kbT = 0.3; }
     amount = Math.max(1, Math.round(amount));
     tgt.hp -= amount;
     tgt.lastHit = t;
@@ -717,12 +1051,29 @@ export class Room {
   }
 
   kill(tgt, src) {
+    if (tgt.fake === 'decoy' || tgt.fake === 'pet') {
+      this.broadcast({ t: 'die', id: tgt.id, by: src ? src.id : 0, k: src ? src.kills : 0, d: 0 });
+      this.removeFake(tgt, 'die');
+      return;
+    }
+    // Viêm Hoàng (dị biến Homura): gục lần đầu khi đang biến hình thì sống lại tại chỗ, hết dị biến
+    const RV = src && src !== tgt ? this.awOf(tgt)?.passive.revive : 0;
+    if (RV) {
+      tgt.hp = Math.max(1, Math.round(tgt.maxHp * RV));
+      tgt.invulnUntil = now() + 1.5;
+      tgt.burn = null;
+      this.endAwaken(tgt);
+      this.broadcast({ t: 'revive', id: tgt.id, hp: Math.ceil(tgt.hp) });
+      this.broadcast({ t: 'sys', msg: `🔥 ${tgt.name} hồi sinh từ tro tàn!` });
+      return;
+    }
     tgt.hp = 0;
     tgt.dead = true;
     tgt.deaths++;
     tgt.respawnAt = now() + GAME.respawnTime;
     tgt.healUntil = 0;
     tgt.charges = null;
+    tgt.grab = null;
     tgt.burn = null; tgt.frost = null;
     this.endBuff(tgt);
     // dị biến: chết thì hết dị biến, thanh còn lại một nửa
@@ -813,7 +1164,10 @@ export class Room {
             if (ang <= s.arc) this.damage(src, q, s.dmg * mul, this.kbFrom(px, pz, q, s, mul), s, [q.x, q.y + 1, q.z]);
           }
         };
-        if (!e.state.m) { e.state.m = 1; swing(1); }
+        if (!e.state.m) {
+          e.state.m = 1; swing(1);
+          if (s.fireZone && src) this.addZone('fire', src, px + hx * s.fireZone.off, pz + hz * s.fireZone.off, s.fireZone.r, s.fireZone.dur);
+        }
         // phân thân chém theo sau mỗi nhát
         if (s.echo) {
           const i = Math.floor((el - s.delay) / s.echo.gap);
@@ -829,13 +1183,22 @@ export class Room {
           if (!sub.alive) continue;
           if (e.st) { steerStep(e.st, s, dt, el, sub.pos); sub.d = e.st.d; }
           if (sub.seek) this.seekStep(e, sub, s.seek * dt);
+          // boomerang: bay hết tầm thì quay đầu bay về tay người ném
+          if (s.boomerang && src) {
+            if (!sub.back && (sub.dist || 0) >= s.range) { sub.back = true; sub.dist = 0; }
+            if (sub.back) {
+              const v = [src.x - sub.pos[0], src.y + CHEST - sub.pos[1], src.z - sub.pos[2]], L = Math.hypot(...v) || 1;
+              sub.d = v.map(c => c / L);
+            }
+          }
           const [ox, oy, oz] = sub.pos;
-          const nx = ox + sub.d[0] * travel, ny = oy + sub.d[1] * travel, nz = oz + sub.d[2] * travel;
+          const tv = this.zones.length ? travel * this.zoneSlow(ox, oz, src) : travel;
+          const nx = ox + sub.d[0] * tv, ny = oy + sub.d[1] * tv, nz = oz + sub.d[2] * tv;
           sub.pos = [nx, ny, nz];
-          sub.dist = (sub.dist || 0) + travel;
+          sub.dist = (sub.dist || 0) + tv;
           let ended = false;
           for (const q of this.targets(e)) {
-            const key = q.id * 16 + sub.k;
+            const key = q.id * 16 + sub.k + (sub.back ? 8 : 0);
             if (e.hits.has(key)) continue;
             // công trình: thân trụ đứng (bán kính r, cao h); người chơi: hình cầu ở ngực
             const d = q.isProp ? (ny >= q.y - 0.3 && ny <= q.y + q.h ? distPointSeg(q.x, 0, q.z, ox, 0, oz, nx, 0, nz) - q.r + BODY_R : 1e9)
@@ -849,11 +1212,15 @@ export class Room {
               if (!s.pierce) { ended = true; break; }
             }
           }
-          if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius, this.arena, this.dyn, e.owner, src?.team))) ended = true;
+          if (!ended) {
+            if (sub.back) ended = !src || Math.hypot(src.x - nx, src.y + CHEST - ny, src.z - nz) < 1.2 || sub.dist >= s.range * 1.8;
+            else if ((!s.boomerang && sub.dist >= s.range) || hitsObstacle(nx, ny, nz, s.radius, this.arena, this.dyn, e.owner, src?.team)) ended = true;
+          }
           if (ended) {
             sub.alive = false;
             // thương sét không trúng ai: cắm xuống chỗ rơi thành cọc sét
             if (s.rod && src && !sub.hitP) this.spawnRod(e, src, s.rod, nx - sub.d[0] * 0.5, ny, nz - sub.d[2] * 0.5, t);
+            if (s.iceAt && src) this.addZone('ice', src, ...this.clampToArena(nx, nz), s.iceAt.r, s.iceAt.dur, { y: arenaGround(this.arena, nx, nz, Math.max(0, ny), 0.3) });
             if (s.mark && sub.k === 0 && src) {
               // dấu phi đao: Thuấn Ảnh dịch chuyển tới đây
               const [mx, mz] = this.clampToArena(nx - sub.d[0] * 0.8, nz - sub.d[2] * 0.8);
@@ -885,6 +1252,12 @@ export class Room {
         if (e.st) { [x, z] = e.st.pos; [dhx, dhz] = e.st.h; if (e.st.y != null) y = e.st.y; }
         const prev = e.state.prev || [px, py, pz];
         e.state.prev = [x, y, z];
+        // vệt băng theo đường trượt
+        const IT = s.iceTrail;
+        if (IT && src && !e.state.fin) {
+          const li = e.state.li;
+          if (!li || Math.hypot(x - li[0], z - li[1]) >= IT.gap) { e.state.li = [x, z]; this.addZone('ice', src, x, z, IT.r, IT.dur); }
+        }
         if (!e.state.fin) for (const q of this.targets(e)) {
           // multi: lướt đánh nhiều nhịp — mỗi mục tiêu trúng tối đa s.multi lần, cách nhau s.multiInt giây
           const hc = e.hits.get(q.id);
@@ -892,7 +1265,12 @@ export class Room {
           const d = distPointSeg(q.x, q.y, q.z, prev[0], prev[1], prev[2], x, y, z);
           if (d < s.radius + BODY_R && Math.abs(q.y - y) < 2.5) {
             e.hits.set(q.id, s.multi ? { n: (hc?.n || 0) + 1, t } : t);
-            this.damage(src, q, s.dmg, [dhx * s.kb, s.kbUp || 3, dhz * s.kb], s, [q.x, q.y + 1, q.z]);
+            const hit = this.damage(src, q, s.dmg, [dhx * s.kb, s.kbUp ?? 3, dhz * s.kb], s, [q.x, q.y + 1, q.z]);
+            // túm ném: người đầu tiên trúng (không bất tử, không miễn đẩy lùi)
+            if (s.grab && hit && src && !e.state.grabbed && !q.isProp && !q.grab && !this.awOf(q, t)?.passive.noKb && !(q.buff?.noKb && t < q.buff.until) && !q.dead) {
+              e.state.grabbed = q.id;
+              this.startGrab(src, q, s, t);
+            }
             // phân thân gió: hẹn giờ chém lại đúng chỗ vừa lướt qua
             if (s.clone && !q.isProp) (e.state.cl ||= []).push({ id: q.id, at: t + s.clone.delay, x: q.x, y: q.y, z: q.z });
           }
@@ -909,6 +1287,20 @@ export class Room {
         if (f >= 1 && !e.state.fin) {
           e.state.fin = true;
           if (s.explode) this.explode(e, src, x, y + 0.5, z, s.explode);
+          // Phượng Hoàng Niết Bàn: mọi vệt lửa của chủ chiêu bùng thành cột lửa
+          if (s.ignite && src) {
+            const IG = s.ignite, pts = [], hitSet = new Set(), sk = { fx: { kind: 'flameBurst', color: s.fx.color } };
+            for (const zn of this.zones) {
+              if (zn.k !== 'fire' || zn.owner !== src.id) continue;
+              if (pts.length < 30) pts.push([r2(zn.x), r2(zn.y), r2(zn.z)]);
+              for (const q of this.targets(e, false)) {
+                if (hitSet.has(q.id) || Math.hypot(q.x - zn.x, q.z - zn.z) > zn.r + BODY_R || q.y - zn.y > 4) continue;
+                hitSet.add(q.id);
+                this.damage(src, q, IG.dmg, this.kbFrom(zn.x, zn.z, q, IG), sk, [q.x, q.y + 1, q.z]);
+              }
+            }
+            if (pts.length) this.broadcast({ t: 'pulse', k: 'flame', pts, c: s.fx.color, r: 1.6 });
+          }
         }
         if (e.state.fin && !(e.state.cl && e.state.cl.some(c => !c.done))) e.dead = true;
         break;
@@ -1008,7 +1400,7 @@ export class Room {
             e.state.n = n;
             for (const q of this.players.values()) {
               if (q.dead || Math.hypot(q.x - cx, q.z - cz) > s.aura.radius) continue;
-              const friend = q.id === e.owner || (this.team && src && q.team === src.team);
+              const friend = q.id === e.owner || (src && this.allied(src, q));
               if (friend) q.hp = Math.min(q.maxHp, q.hp + s.aura.heal);
             }
           }
@@ -1024,6 +1416,101 @@ export class Room {
           if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < 4) this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
         }
         if (s.walls) this.spawnWalls(cx, cz, s.walls, e, t);
+        if (s.fireZone && src) this.addZone('fire', src, cx, cz, s.fireZone.r, s.fireZone.dur);
+        e.dead = true;
+        break;
+      }
+      case 'decoy': {
+        // tàng hình chốc lát + thả phân thân mồi chạy chéo về phía trước
+        if (e.state.done) break;
+        e.state.done = true;
+        if (src && !src.dead) {
+          for (const q of [...this.players.values()]) if (q.fake === 'decoy' && q.master === src.id) this.removeFake(q, 'expire');
+          this.applyBuff(src, { fx: s.fx, stealth: true, nextHitMul: s.nextHitMul || 1 }, t + s.stealth);
+          const base = Math.atan2(hx, hz);
+          for (let i = 0; i < s.count; i++) {
+            const a = base + (s.count > 1 ? (i / (s.count - 1) * 2 - 1) * s.spread : 0);
+            this.addFake({ fake: 'decoy', master: src.id, team: src.team, char: src.char, name: src.name, x: src.x, y: src.y, z: src.z, yaw: a,
+              hp: src.hp, maxHp: src.maxHp, kills: src.kills, deaths: src.deaths, awUntil: src.awUntil, until: t + s.dur,
+              ai: { dir: [Math.sin(a), Math.cos(a)], speed: s.speed, stopAt: t + s.dur * 0.75, pop: s.pop } });
+          }
+        }
+        e.dead = true;
+        break;
+      }
+      case 'icewall': {
+        // tường băng cong: các đoạn là công trình có máu, chắn đường và chắn đạn
+        if (e.state.up) break;
+        e.state.up = true;
+        const [cx, cz] = e.tg, w = s.width / 2;
+        for (const q of this.props.filter(q => q.owner === e.owner && q.kind === 'iceWall')) this.removeProp(q, 'time');
+        for (let i = 0; i < s.segs; i++) {
+          const f = s.segs > 1 ? i / (s.segs - 1) * 2 - 1 : 0;
+          // hai đầu tường cong về phía Yuki
+          const sx = cx - hz * f * w - hx * s.curve * f * f, sz = cz + hx * f * w - hz * s.curve * f * f;
+          this.addProp({ kind: 'iceWall', owner: e.owner, team: src?.team || null, x: sx, y: 0, z: sz, r: s.r, h: s.h, hp: s.hp, until: t + s.dur, solid: true, shatter: s.shatter });
+          for (const q of this.targets(e, false)) {
+            if (e.hits.has(q.id) || Math.hypot(q.x - sx, q.z - sz) > s.r + BODY_R + 0.4 || q.y > s.h) continue;
+            e.hits.set(q.id, t);
+            this.damage(src, q, s.dmg, [hx * s.kb, s.kbUp, hz * s.kb], s, [q.x, q.y + 1, q.z]);
+          }
+        }
+        e.dead = true;
+        break;
+      }
+      case 'timezone': {
+        // vùng ngưng đọng: làm chậm đối thủ và đạn đối thủ, sàn đóng băng, mất máu theo nhịp, hết giờ vỡ tung
+        if (!e.state.up) {
+          e.state.up = true;
+          e.state.c = src ? [src.x, src.z] : [px, pz];
+          if (src) {
+            this.addZone('slow', src, e.state.c[0], e.state.c[1], s.radius, s.dur, { mul: s.slowMul });
+            this.addZone('ice', src, e.state.c[0], e.state.c[1], s.radius, s.dur);
+          }
+        }
+        const [cx, cz] = e.state.c, run = el - s.delay;
+        const n = Math.floor(run / s.tickInt);
+        if (run < s.dur && n > (e.state.n ?? -1)) {
+          e.state.n = n;
+          for (const q of this.targets(e, false)) {
+            if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < 6) this.damage(src, q, s.dmg, [0, s.kbUp, 0], s, [q.x, q.y + 1, q.z]);
+          }
+        }
+        if (run >= s.dur) {
+          const sk = { ...s, stun: s.endStun, slow: null };
+          for (const q of this.targets(e, false)) {
+            if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < 6) this.damage(src, q, s.endDmg, this.kbFrom(cx, cz, q, { kb: 5, kbUp: 6 }), sk, [q.x, q.y + 1, q.z]);
+          }
+          this.broadcast({ t: 'pulse', k: 'iceBurst', pts: [[r2(cx), 0, r2(cz)]], c: s.fx.color, r: s.radius });
+          e.dead = true;
+        }
+        break;
+      }
+      case 'turret': {
+        // trồng cây bắn gai (tối đa s.max cây)
+        if (e.state.up) break;
+        e.state.up = true;
+        const [cx, cz] = e.tg;
+        const mine = this.props.filter(q => q.owner === e.owner && q.kind === 'turret');
+        while (mine.length >= s.max) this.removeProp(mine.shift(), 'time');
+        this.addProp({ kind: 'turret', owner: e.owner, team: src?.team || null, x: cx, y: arenaGround(this.arena, cx, cz, 0.5, 0.3), z: cz, r: 0.7, h: 1.6, hp: s.hp, until: t + s.dur,
+          tur: { s: s.shot, range: s.range, every: s.every, next: t + 0.4, sk: e.sk } });
+        e.dead = true;
+        break;
+      }
+      case 'pet': {
+        // người cây Mộc Thần trồi lên trước mặt (mỗi người 1 cây), hất tung đối thủ quanh đó
+        if (e.state.up) break;
+        e.state.up = true;
+        if (src && !src.dead) {
+          for (const q of [...this.players.values()]) if (q.fake === 'pet' && q.master === src.id) this.removeFake(q, 'expire');
+          const [cx, cz] = this.freeSpot(...this.clampToArena(px + hx * s.offset, pz + hz * s.offset), px, pz);
+          for (const q of this.targets(e, false)) {
+            if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < 4) this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
+          }
+          const ch = getChar(s.pet);
+          this.addFake({ fake: 'pet', master: src.id, team: src.team, char: ch.id, name: `${ch.name} (${src.name})`, x: cx, z: cz, yaw: Math.atan2(hx, hz), until: t + s.dur });
+        }
         e.dead = true;
         break;
       }
@@ -1110,6 +1597,13 @@ export class Room {
       case 'multiblink': {
         // lướt chém lần lượt: mỗi nhịp dịch chuyển ra sau lưng đối thủ bị chém ít nhất (gần nhất) rồi chém
         const i = Math.floor((el - s.delay) / s.interval);
+        // sương đêm: đối thủ trong tầm chỉ nhìn thấy người ở gần
+        if (s.dark && !e.state.dk && src) {
+          e.state.dk = 1;
+          const ids = [];
+          for (const q of this.players.values()) if (!q.fake && !q.dead && !this.allied(src, q) && Math.hypot(q.x - src.x, q.z - src.z) < s.dark.range) ids.push(q.id);
+          this.broadcast({ t: 'dark', by: src.id, ids, dur: s.dark.dur, see: s.dark.see });
+        }
         while (!e.dead && (e.state.n ?? -1) < Math.min(i, s.strikes - 1)) {
           e.state.n = (e.state.n ?? -1) + 1;
           if (!src || src.dead) { e.dead = true; break; }
@@ -1140,7 +1634,10 @@ export class Room {
         e.state.done = true;
         if (src && !src.dead) {
           const [cx, cz] = e.tg;
+          const dc = e.swapId ? this.players.get(e.swapId) : null;
+          const ox = src.x, oz = src.z;
           this.teleport(src, cx, cz, t);
+          if (dc) this.teleport(dc, ox, oz, t);   // phân thân về chỗ cũ của Kage
           for (const q of this.targets(e)) {
             if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && Math.abs(q.y - 0) < 3) this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
           }
@@ -1175,10 +1672,10 @@ export class Room {
     const dt = Math.min(0.1, t - this.lastTick);
     this.lastTick = t;
 
-    for (const p of this.players.values()) {
+    for (const p of [...this.players.values()]) {
       if (p.dead) {
         if (t >= p.respawnAt) {
-          const [sx, sz] = this.spawnPoint(p.team);
+          const [sx, sz] = p.home || this.spawnPoint(p.team);
           Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz,
             invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0 });
           this.broadcast({ t: 'respawn', id: p.id, p: [sx, 0, sz] });
@@ -1191,6 +1688,15 @@ export class Room {
       if (t < p.healUntil) p.hp += p.healRate * dt;
       // Dị biến hết giờ
       if (p.awUntil && t >= p.awUntil) this.endAwaken(p);
+      // đang bị túm / người chơi giả do server điều khiển
+      if (p.grab) this.stepGrab(p, t);
+      if (p.fake) { this.updateFake(p, t, dt); if (!this.players.has(p.id)) continue; }
+      // Viêm Hoàng (Homura): vệt lửa theo bước chạy
+      const FT = p.awUntil > t ? getChar(p.char).awaken?.passive.fireTrail : null;
+      if (FT && p.y - arenaGround(this.arena, p.x, p.z, p.y, BODY_R) < 0.4) {
+        const lt = p.lastTrail;
+        if (!lt || Math.hypot(p.x - lt[0], p.z - lt[1]) >= FT.gap) { p.lastTrail = [p.x, p.z]; this.addZone('fire', p, p.x, p.z, FT.r, FT.dur); }
+      }
       // Bỏng (nội tại dị biến Homura)
       const B = p.burn;
       if (B && t >= B.next) {
@@ -1208,6 +1714,7 @@ export class Room {
       p.mp = Math.max(0, Math.min(GAME.maxMana, p.mp));
       // Rơi khỏi đấu trường
       if (p.y < -15 || Math.hypot(p.x, p.z) > this.arena.radius + 25) this.kill(p, null);
+      if (p.dead) continue;
     }
 
     if (this.team) {
@@ -1228,7 +1735,9 @@ export class Room {
     if (this.props.length) {
       for (const pr of this.props) if (t >= pr.until) this.removeProp(pr, 'time');
       this.updateFences(t);
+      this.updateTurrets(t);
     }
+    if (this.zones.length) this.updateZones(t, dt);
     if (this.dyn.length) this.dyn = this.dyn.filter(o => t < o.until);
     for (const p of this.players.values()) if (p.buff && t >= p.buff.until) this.endBuff(p);
 

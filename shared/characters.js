@@ -328,7 +328,10 @@ export const CHARACTERS = [
 //   burn {dmg, every, dur} (đốt), frost {stacks, window, stun, immune} (đóng băng cộng dồn),
 //   chargeStacks (số dấu điện cần), lifesteal (hút máu), backAll (mọi đòn sau lưng ×)
 // Kiểu chiêu chỉ có ở dạng dị biến: wall (tường chắn đạn), smite (sét đánh mọi đối thủ trong tầm),
-// multiblink (lướt chém lần lượt nhiều đối thủ), pillar (dựng cột đá), quake (động đất cả sân).
+// multiblink (lướt chém lần lượt nhiều đối thủ), pillar (dựng cột đá), quake (động đất cả sân), decoy (phân thân mồi),
+// icewall (tường băng vỡ được), timezone (vùng ngưng đọng), turret (cây bắn gai), pet (người cây Mộc Thần).
+// Trường dị biến v2 đợt 2–3: fireZone / fireTrail / ignite / revive / boomerang (Homura), iceAt / iceTrail / iceSpeed (Yuki),
+// hold (giữ phím tụ lực, holdSkill) / grab (túm ném) (Raiga), swap / dark (Kage).
 // Công trình (server: room.props, client: game.props) là vật có máu, đối thủ đánh phá được: cọc sét (rod), cột đá (pillar).
 // Trường dị biến v2: rod (đạn cắm thành cọc), toRod (blink tới cọc), rodPulse (aoe phóng thêm ở từng cọc),
 // rodDmg/rodRange (smite có thêm tia từ cọc), rip (nhổ cột đá ném), free3d (lướt theo cả chiều dọc), clone (phân thân
@@ -378,24 +381,30 @@ const AWAKEN = {
   }),
   raiga: c => ({
     name: 'Bạo Khí Thân', form: 'magma', color: 0xff7b00, core: 0xfff3b0,
-    desc: 'Da nứt vân dung nham, hai tay bọc găng khí khổng lồ. Không bị đẩy lùi, giảm 15% sát thương nhận vào.',
+    desc: 'Da nứt vân dung nham, hai tay bọc găng khí khổng lồ. Giữ phím K / K L để tụ khí: giữ càng lâu đạn và chưởng càng to, càng mạnh. J K lao tới túm đối thủ, nhấc lên quật xuống rồi ném đi. Không bị đẩy lùi, giảm 15% sát thương nhận vào.',
     look: { hair: 0x2b1d14, skin: 0xffb48a, outfit: 0x7a1f00, outfit2: 0x1a0a05, aura: 0xff7b00 },
     passive: { noKb: true, dmgTaken: 0.85 },
     skills: [
       { id: 'rg_a_fist', name: 'Khí Quyền', combo: 'J', mana: 0, cd: 0.28, lock: 0.24, instant: true,
         type: 'projectile', speed: 40, radius: 0.65, range: 7, dmg: 7, kb: 4, count: 1, spread: 0, delay: 0.06, pose: 'punch',
         fx: { color: 0xffa94d, core: 0xfff3b0, kind: 'kiFist' } },
-      { id: 'rg_a_ki', name: 'Bạo Khí Đạn', combo: 'K', mana: 7, cd: 0.35, lock: 0.22,
+      { id: 'rg_a_ki', name: 'Tụ Khí Đạn', combo: 'K', mana: 7, cd: 0.35, lock: 0.22,
+        // chạm để bắn nhanh; giữ phím để tụ quả cầu lớn dần (tối đa 1.5 giây: sát thương ×2.2, to ×1.9, nổ rộng hơn)
         type: 'projectile', speed: 34, radius: 0.6, range: 30, dmg: 8, kb: 3, count: 1, spread: 0, delay: 0.06, pose: 'push',
         explode: { radius: 2.4, dmg: 5, kb: 5, kbUp: 3 },
+        hold: { max: 1.5, dmg: 2.2, size: 1.9 },
         fx: { color: 0xff922b, core: 0xfff3b0, kind: 'kiBlast' } },
-      { id: 'rg_a_rush', name: 'Liên Hoàn Thiểm Quyền', combo: 'JK', mana: 18, cd: 3, lock: 0.5,
-        type: 'dash', dist: 10, dur: 0.4, radius: 1.5, dmg: 9, kb: 2, kbUp: 1.5, multi: 3, multiInt: 0.1, delay: 0.06, pose: 'punch', invuln: true,
+      { id: 'rg_a_grab', name: 'Bạo Trảo Quăng', combo: 'JK', mana: 18, cd: 3.5, lock: 0.5,
+        // lao tới túm đối thủ đầu tiên trúng: nhấc lên, quật xuống đất (14 + choáng 0.6 giây) rồi ném văng theo hướng nhìn (12).
+        // Không túm được người đang bất tử / không bị đẩy lùi
+        type: 'dash', dist: 9, dur: 0.3, radius: 1.6, dmg: 6, kb: 0, kbUp: 0, delay: 0.06, pose: 'punch', invuln: true,
+        grab: { dur: 0.9, slam: 0.45, slamDmg: 14, stun: 0.6, throwDmg: 12, kb: 22, kbUp: 9 },
         fx: { color: 0xff922b, core: 0xfff3b0, kind: 'flurry' } },
       { id: 'rg_a_wave', name: 'Bạo Long Chưởng', combo: 'KL', mana: 40, cd: 8, lock: 2.6, root: true,
         // chưởng dài 2 giây, xoay chuột để quét tia theo tâm ngắm
         type: 'beam', length: 30, width: 1.5, dmg: 4, tickInt: 0.12, dur: 2.0, kb: 3, delay: 0.55, pose: 'beam',
         steer: { mode: 'aim', turn: 1.4 },
+        hold: { max: 1.2, dmg: 1.8, size: 1.8 },          // giữ L để tụ: tia to và mạnh hơn
         fx: { color: 0xff6b00, core: 0xfff3b0, kind: 'beam' } },
       { id: 'rg_a_burst', name: 'Bách Liệt Bạo Quyền', combo: 'JKL', mana: 65, cd: 13, lock: 2.0, root: true, bigCharge: true,
         // tụ khí 1.3 giây, lao chậm 7 m đấm loạn 5 nhịp rồi nổ khí tung đối thủ lên trời
@@ -408,27 +417,34 @@ const AWAKEN = {
   }),
   homura: c => ({
     name: 'Viêm Hoàng Giáp', form: 'flameEmpress', color: 0xff5400, core: 0xffd60a,
-    desc: 'Giáp lửa, đôi cánh lửa sau lưng, kiếm dài thêm. Mọi đòn đánh gây bỏng 2 sát thương mỗi 0.5 giây trong 2 giây.',
+    desc: 'Giáp lửa, đôi cánh lửa sau lưng. Mọi đòn đánh gây bỏng; bước chạy và đòn chém để lại vệt lửa trên sàn 3 giây (đối thủ đứng vào bị bỏng, Homura đứng trên lửa hồi mana nhanh). Gục khi đang biến hình thì hồi sinh 1 lần tại chỗ với 30% máu.',
     look: { hair: 0xff4d00, outfit: 0x3d0000, outfit2: 0xff7b00, accColor: 0xffd60a },
-    passive: { burn: { dmg: 2, every: 0.5, dur: 2 } },
+    // fireTrail: vệt lửa theo bước chạy (r bán kính, dur giây, gap khoảng cách giữa 2 vệt, mana: hồi thêm mỗi giây khi đứng trên lửa)
+    // revive: gục khi đang dị biến thì sống lại với tỉ lệ máu này (hết dị biến)
+    passive: { burn: { dmg: 2, every: 0.5, dur: 2 }, fireTrail: { r: 1.3, dur: 3, gap: 1.6, mana: 8 }, revive: 0.3 },
     skills: [
       { id: 'hm_a_slash', name: 'Viêm Hoàng Trảm', combo: 'J', mana: 0, cd: 0.34, lock: 0.28, instant: true,
         type: 'melee', range: 3.4, arc: 1.5, dmg: 8, kb: 3, delay: 0.1, lunge: 4, pose: 'slash',
+        fireZone: { r: 1.7, dur: 3, off: 2.2 },          // vệt lửa nằm lại trên sàn theo cung chém
         fx: { color: 0xff7b00, core: 0xffd60a, kind: 'flameSlash' } },
-      { id: 'hm_a_twin', name: 'Song Nguyệt Viêm', combo: 'K', mana: 10, cd: 0.9, lock: 0.35,
-        type: 'projectile', speed: 26, radius: 1.1, range: 24, dmg: 10, kb: 4, count: 2, spread: 0.28, pierce: true, delay: 0.12, pose: 'slash',
+      { id: 'hm_a_boomer', name: 'Hồi Nguyệt Viêm', combo: 'K', mana: 10, cd: 1.0, lock: 0.35,
+        // trăng lửa bay đi 13 m rồi quay về tay Homura như boomerang, trúng được cả lượt đi lẫn lượt về
+        type: 'projectile', speed: 24, radius: 1.0, range: 13, dmg: 9, kb: 3, count: 1, spread: 0, pierce: true, boomerang: true, delay: 0.12, pose: 'slash',
         fx: { color: 0xff5400, core: 0xffd60a, kind: 'crescent' } },
       { id: 'hm_a_dive', name: 'Viêm Long Trụy', combo: 'JK', mana: 20, cd: 4, lock: 0.7,
         // bay vọt lên rồi bổ xuống điểm tâm ngắm
         type: 'leap', range: 10, dur: 0.5, height: 4, delay: 0.12, radius: 3.2, dmg: 24, kb: 6, kbUp: 9, pose: 'slam',
+        fireZone: { r: 4, dur: 3.5 },                    // chỗ đáp thành vũng lửa lớn
         fx: { color: 0xff6d00, core: 0xffea00, kind: 'flameDive' } },
       { id: 'hm_a_ring', name: 'Hỏa Luân Trận', combo: 'KL', mana: 28, cd: 7, lock: 0.5,
         // vòng lửa bám theo người 1.5 giây
         type: 'aoe', at: 'self', follow: true, radius: 4.2, dmg: 6, kb: 2, kbUp: 1, ticks: 6, tickInt: 0.25, delay: 0.2, pose: 'spin',
         fx: { color: 0xff5400, core: 0xffd60a, kind: 'flameRing' } },
-      { id: 'hm_a_phoenix', name: 'Phượng Hoàng Thiên Hỏa', combo: 'JKL', mana: 65, cd: 13, lock: 2.3, root: true, bigCharge: true,
-        type: 'dash', dist: 24, dur: 0.9, radius: 3, dmg: 36, kb: 12, kbUp: 7, delay: 1.3, pose: 'thrust',
-        explode: { radius: 7, dmg: 26, kb: 14, kbUp: 9 },
+      { id: 'hm_a_phoenix', name: 'Phượng Hoàng Niết Bàn', combo: 'JKL', mana: 65, cd: 13, lock: 2.3, root: true, bigCharge: true,
+        // phượng hoàng lao theo tâm rồi nổ; mọi vệt lửa của Homura trên sàn cùng bùng thành cột lửa (ignite)
+        type: 'dash', dist: 24, dur: 0.9, radius: 3, dmg: 32, kb: 12, kbUp: 7, delay: 1.3, pose: 'thrust',
+        explode: { radius: 7, dmg: 22, kb: 14, kbUp: 9 },
+        ignite: { dmg: 16, kb: 3, kbUp: 9 },
         steer: { mode: 'turn', turn: 4.5 },
         fx: { color: 0xff5400, core: 0xfff3b0, kind: 'phoenix', scale: 1.7 } },
       finA(c, { radius: 3.8, fx: { color: 0xff5400 } }),
@@ -436,13 +452,15 @@ const AWAKEN = {
   }),
   yuki: c => ({
     name: 'Băng Hậu', form: 'iceQueen', color: 0x8ecae6, core: 0xffffff,
-    desc: 'Vương miện và áo choàng băng tinh. Trúng đòn 3 lần trong 3 giây thì đối thủ bị đóng băng 1 giây.',
+    desc: 'Vương miện và áo choàng băng tinh. Chiêu đóng băng mặt sàn: đối thủ đứng trên băng bị trơn trượt, khó dừng và khó đổi hướng; Yuki trên băng chạy nhanh hơn 30%. Trúng đòn 3 lần trong 3 giây thì đối thủ bị đóng băng 1 giây.',
     look: { hair: 0xffffff, eye: 0x7df9ff, outfit: 0xbde0fe, outfit2: 0xe8f6ff, accColor: 0x90e0ef },
-    passive: { frost: { stacks: 3, window: 3, stun: 1.0, immune: 2.5 } },
+    // iceSpeed: hệ số tốc chạy của Yuki khi đứng trên băng của mình
+    passive: { frost: { stacks: 3, window: 3, stun: 1.0, immune: 2.5 }, iceSpeed: 1.3 },
     skills: [
       { id: 'yk_a_bolt', name: 'Băng Tinh Đạn', combo: 'J', mana: 0, cd: 0.34, lock: 0.28, instant: true,
         type: 'projectile', speed: 34, radius: 0.45, range: 14, dmg: 7, kb: 2, count: 1, spread: 0, delay: 0.08, pose: 'slash',
         slow: { mul: 0.8, dur: 0.8 },
+        iceAt: { r: 1.6, dur: 4 },                       // chỗ đạn trúng / rơi đóng băng sàn
         fx: { color: 0xa0e7ff, core: 0xffffff, kind: 'iceShard' } },
       { id: 'yk_a_lance', name: 'Băng Thương Xuyên', combo: 'K', mana: 10, cd: 0.85, lock: 0.3,
         type: 'projectile', speed: 34, radius: 0.55, range: 28, dmg: 9, kb: 2, count: 3, spread: 0.14, pierce: true, delay: 0.1, pose: 'push',
@@ -451,17 +469,20 @@ const AWAKEN = {
       { id: 'yk_a_skate', name: 'Băng Hoạt Bộ', combo: 'JK', mana: 16, cd: 3, lock: 0.45,
         type: 'dash', dist: 10, dur: 0.35, radius: 1.7, dmg: 16, kb: 4, kbUp: 4, delay: 0.08, pose: 'thrust', invuln: true,
         slow: { mul: 0.55, dur: 1.6 },
+        iceTrail: { r: 1.5, dur: 5, gap: 1.5 },          // đường trượt để lại vệt băng
         fx: { color: 0x9bf6ff, core: 0xffffff, kind: 'iceSkate' } },
-      { id: 'yk_a_tomb', name: 'Băng Quan Phong Ấn', combo: 'KL', mana: 32, cd: 9, lock: 0.7, root: true,
-        // nhốt mọi đối thủ trong 7 m vào quan tài băng 1.4 giây
-        type: 'aoe', at: 'self', radius: 7, dmg: 16, kb: 0, kbUp: 1, ticks: 1, tickInt: 0, delay: 0.4, pose: 'raise',
-        stun: 1.4,
-        fx: { color: 0x9bf6ff, core: 0xffffff, kind: 'iceTomb' } },
-      { id: 'yk_a_winter', name: 'Vĩnh Đông Giới', combo: 'JKL', mana: 60, cd: 14, lock: 1.6, root: true, bigCharge: true,
-        // tụ băng 1.3 giây, bão tuyết 11 m bám theo người 3 giây: làm chậm và cộng dấu băng liên tục
-        type: 'aoe', at: 'self', follow: true, radius: 11, dmg: 5, kb: 1, kbUp: 0, ticks: 10, tickInt: 0.3, delay: 1.3, pose: 'raise',
-        slow: { mul: 0.5, dur: 1 },
-        fx: { color: 0x8ecae6, core: 0xffffff, kind: 'eternalWinter' } },
+      { id: 'yk_a_wall', name: 'Băng Tường', combo: 'KL', mana: 26, cd: 8, lock: 0.4,
+        // tường băng cong 5 đoạn ở 4 m phía trước, 7 giây: chắn đường và chắn đạn của cả hai bên, đối thủ đứng sát bị hất ra.
+        // Mỗi đoạn 25 máu: đối thủ đập vỡ thì mảnh băng bắn ra làm chậm người đứng gần
+        type: 'icewall', offset: 4, width: 8, segs: 5, curve: 1.4, r: 0.95, h: 3, hp: 25, dur: 7, dmg: 8, kb: 6, kbUp: 3, delay: 0.25, pose: 'raise',
+        shatter: { radius: 2.6, dmg: 6, slow: { mul: 0.5, dur: 1.5 } },
+        fx: { color: 0x9bf6ff, core: 0xffffff, kind: 'iceWall' } },
+      { id: 'yk_a_time', name: 'Thời Băng Giới', combo: 'JKL', mana: 60, cd: 14, lock: 1.6, root: true, bigCharge: true,
+        // tụ băng 1.3 giây rồi đóng băng thời gian vùng 10 m quanh mình trong 4 giây: đối thủ và đạn của đối thủ
+        // đi vào bị chậm 60%, sàn trong vùng thành băng, cứ 0.5 giây mất máu; hết giờ băng vỡ tung làm choáng
+        type: 'timezone', radius: 10, dur: 4, tickInt: 0.5, dmg: 4, kb: 0, kbUp: 0.5, slowMul: 0.4, delay: 1.3, pose: 'raise',
+        slow: { mul: 0.6, dur: 0.6 }, endDmg: 22, endStun: 0.8,
+        fx: { color: 0x8ecae6, core: 0xffffff, kind: 'timeFreeze' } },
       finA(c, { fx: { color: 0xd8f6ff } }),
     ],
   }),
@@ -504,9 +525,9 @@ const AWAKEN = {
   }),
   midori: c => ({
     name: 'Hồn Rừng', form: 'forestSoul', color: 0x52b788, core: 0xffafcc,
-    desc: 'Hoa lá mọc khắp thân, sừng cành cây trên đầu, hoa nở theo bước chân. Hồi máu bằng 20% sát thương gây ra.',
+    desc: 'Hoa lá mọc khắp thân, sừng cành cây trên đầu. Sức mạnh nằm ở cây cối cô trồng ra: cây bắn gai tự động và người cây Mộc Thần đi theo đánh hộ. Hồi máu bằng 12% sát thương gây ra.',
     look: { hair: 0x74c69d, outfit: 0xd8f3dc, outfit2: 0x2d6a4f, accColor: 0xff4d8d },
-    passive: { lifesteal: 0.2 },
+    passive: { lifesteal: 0.12 },
     skills: [
       { id: 'md_a_whip', name: 'Gai Tiên Câu', combo: 'J', mana: 0, cd: 0.4, lock: 0.32, instant: true,
         // roi gai dài kéo đối thủ về phía mình
@@ -516,21 +537,23 @@ const AWAKEN = {
         type: 'projectile', speed: 28, radius: 0.45, range: 26, dmg: 5, kb: 1.5, count: 3, spread: 0.14, delay: 0.1, pose: 'push',
         slow: { mul: 0.75, dur: 1 }, explode: { radius: 2.2, dmg: 4, kb: 3, kbUp: 2 },
         fx: { color: 0x57cc99, core: 0xffafcc, kind: 'thorn' } },
-      { id: 'md_a_roots', name: 'Cổ Thụ Căn', combo: 'JK', mana: 20, cd: 4.5, lock: 0.55, root: true,
-        type: 'line', start: 2, spacing: 2.0, count: 9, interval: 0.06, radius: 1.4, dmg: 13, kb: 1, kbUp: 3, delay: 0.15, pose: 'slam',
-        stun: 1.0,
-        fx: { color: 0x6a994e, core: 0xb5e48c, kind: 'vineSpike', spike: 0x588157, spikeGlow: 0x1b4332 } },
+      { id: 'md_a_turret', name: 'Trồng Gai Đài', combo: 'JK', mana: 20, cd: 3, lock: 0.4,
+        // trồng cây bắn gai ở 3 m phía trước (tối đa 2 cây, 10 giây, 40 máu): tự bắn gai làm chậm vào đối thủ gần nhất trong 12 m mỗi 0.9 giây
+        type: 'turret', offset: 3, max: 2, dur: 10, hp: 40, range: 12, every: 0.9, delay: 0.3, pose: 'slam',
+        shot: { id: 'md_a_tshot', name: 'Gai Đài', combo: '', mana: 0, cd: 0, lock: 0,
+          type: 'projectile', speed: 30, radius: 0.4, range: 16, dmg: 5, kb: 1.5, count: 1, spread: 0, delay: 0, slow: { mul: 0.8, dur: 0.6 },
+          fx: { color: 0x57cc99, core: 0xc7f9cc, kind: 'thorn' } },
+        fx: { color: 0x52b788, core: 0xffafcc, kind: 'thornTurret' } },
       { id: 'md_a_garden', name: 'Hoa Viên Hồi Xuân', combo: 'KL', mana: 26, cd: 10, lock: 0.4,
         // thảm hoa nở quanh mình 5 giây: hất đối thủ, hồi máu cho bạn + đồng đội đứng trong
         type: 'summon', offset: 0, radius: 4.5, dmg: 10, kb: 3, kbUp: 4, delay: 0.3, dur: 5, pose: 'raise',
         aura: { radius: 5, heal: 3, every: 0.5 },
         fx: { color: 0xff8fab, core: 0xfff3b0, kind: 'flowerField' } },
-      { id: 'md_a_forest', name: 'Vạn Gai Lâm', combo: 'JKL', mana: 65, cd: 14, lock: 1.6, root: true, bigCharge: true,
-        // tụ lực 1.3 giây, rừng gai trồi lên khắp vùng 7 m, kéo theo tâm ngắm
-        type: 'rain', offset: 8, area: 7, count: 26, interval: 0.08, radius: 1.8, dmg: 9, kb: 1, kbUp: 6, delay: 1.3, fall: 0.25, pose: 'slam',
-        slow: { mul: 0.6, dur: 1 },
-        steer: { mode: 'follow', speed: 6, range: 16 },
-        fx: { color: 0x40916c, core: 0xffafcc, kind: 'thornForest' } },
+      { id: 'md_a_treant', name: 'Mộc Thần Hộ Vệ', combo: 'JKL', mana: 65, cd: 15, lock: 1.6, root: true, bigCharge: true,
+        // tụ lực 1.3 giây, người cây Mộc Thần cao 3 m trồi lên trước mặt (hất tung đối thủ quanh đó), đi theo Midori 10 giây,
+        // tự đấm đối thủ gần và lấy thân chặn đạn. Đối thủ đánh gục được (130 máu)
+        type: 'pet', pet: 'treant', offset: 2.5, dur: 10, radius: 4, dmg: 16, kb: 6, kbUp: 8, delay: 1.3, pose: 'raise',
+        fx: { color: 0x40916c, core: 0xb7e4c7, kind: 'treantRise' } },
       finA(c, { stun: 0.7, fx: { color: 0x95d5b2 } }),
     ],
   }),
@@ -570,7 +593,7 @@ const AWAKEN = {
   }),
   kage: c => ({
     name: 'Vạn Ảnh', form: 'thousandShadows', color: 0x9d4edd, core: 0xff4d6d,
-    desc: 'Thân hóa bóng đen mắt đỏ, 2 phân thân bóng đi theo và chém cùng. Mọi đòn đánh từ sau lưng gây ×1.5 sát thương.',
+    desc: 'Thân hóa bóng đen mắt đỏ, 2 phân thân bóng đi theo và chém cùng. Thả phân thân mồi giống hệt mình, đổi chỗ với phân thân, tuyệt kỹ phủ sương đêm: đối thủ chỉ thấy người trong 6 m. Mọi đòn đánh từ sau lưng gây ×1.5 sát thương.',
     look: { skin: 0x3c2a4d, hair: 0x10002b, eye: 0xff2d55, outfit: 0x0b0014, outfit2: 0x3c096c, accColor: 0x10002b },
     passive: { backAll: 1.5 },
     skills: [
@@ -583,17 +606,21 @@ const AWAKEN = {
         type: 'projectile', speed: 38, radius: 0.35, range: 26, dmg: 6, kb: 2, count: 5, spread: 0.12, delay: 0.06, pose: 'throw',
         mark: 4,
         fx: { color: 0x7b2cbf, core: 0xff4d6d, kind: 'shuriken' } },
-      { id: 'kg_a_behind', name: 'Bối Ảnh Bộ', combo: 'JK', mana: 14, cd: 2.6, lock: 0.3,
-        // dịch chuyển ra sau lưng đối thủ gần tâm ngắm nhất (16 m); không có ai thì như Thuấn Ảnh
-        type: 'blink', behind: 16, dist: 8, markRange: 24, radius: 2.2, dmg: 18, kb: 6, kbUp: 2, delay: 0.08, pose: 'thrust',
+      { id: 'kg_a_swap', name: 'Hoán Ảnh', combo: 'JK', mana: 14, cd: 2.6, lock: 0.3,
+        // đổi chỗ với phân thân mồi gần tâm ngắm nhất (26 m); không có phân thân thì dịch chuyển ra sau lưng đối thủ gần tâm ngắm
+        type: 'blink', swap: 26, behind: 16, dist: 8, markRange: 24, radius: 2.2, dmg: 18, kb: 6, kbUp: 2, delay: 0.08, pose: 'thrust',
         fx: { color: 0x5a189a, core: 0xff4d6d, kind: 'shadowStep' } },
-      { id: 'kg_a_shade', name: 'Hóa Ảnh', combo: 'KL', mana: 22, cd: 8, lock: 0.2,
-        // hóa bóng 1.6 giây: tàng hình và không nhận sát thương; đòn đầu tiên sau đó ×1.8
-        type: 'buff', dur: 1.6, stealth: true, invuln: true, nextHitMul: 1.8, delay: 0.05, pose: 'spin',
+      { id: 'kg_a_decoy', name: 'Phân Ảnh Mồi', combo: 'KL', mana: 22, cd: 8, lock: 0.2,
+        // tàng hình 1 giây, đồng thời thả 2 phân thân giống hệt mình chạy chéo về phía trước (5 giây). Đối thủ nhìn như người thật,
+        // chiêu tự khoá có thể nhắm nhầm. Trúng 1 đòn là tan, nổ bóng làm chậm đối thủ đứng gần
+        type: 'decoy', count: 2, dur: 5, speed: 8, spread: 0.6, stealth: 1, nextHitMul: 1.5, delay: 0.05, pose: 'spin',
+        pop: { radius: 3, dmg: 6, slow: { mul: 0.5, dur: 1.5 } },
         fx: { color: 0x3c096c, core: 0xff4d6d, kind: 'stealth' } },
       { id: 'kg_a_massacre', name: 'Vạn Ảnh Táng', combo: 'JKL', mana: 65, cd: 13, lock: 2.8, root: true, bigCharge: true,
         // tụ bóng 1.2 giây rồi lướt chém lần lượt 5 nhát vào các đối thủ trong 18 m (luân phiên nếu ít người)
+        // kèm sương đêm: đối thủ trong 15 m chỉ nhìn thấy người (và tên) trong 6 m quanh mình suốt 4 giây
         type: 'multiblink', range: 18, strikes: 5, interval: 0.28, radius: 2.4, dmg: 11, kb: 4, kbUp: 4, delay: 1.2, pose: 'spin',
+        dark: { range: 15, dur: 4, see: 6 },
         fx: { color: 0x9d4edd, core: 0xff4d6d, kind: 'shadowStep' } },
       finA(c, { fx: { color: 0xff4d6d } }),
     ],
@@ -610,7 +637,43 @@ export function charSkills(c, aw) {
   return aw && c.awaken ? c.awaken.skills : c.skills;
 }
 
-export const CHAR_BY_ID = Object.fromEntries(CHARACTERS.map(c => [c.id, c]));
+// Vật triệu hồi điều khiển bởi server (không chọn được ở menu): dùng chung khung nhân vật để hiện như người chơi
+export const SUMMONS = {
+  treant: {
+    id: 'treant', name: 'Mộc Thần', title: 'Người cây', hp: 130, speedMul: 1, speed: 5.5, summon: true,
+    look: {
+      skin: 0x7f5539, hair: 0x40916c, hairStyle: 'spiky', eye: 0xb7e4c7,
+      outfit: 0x6b4f3a, outfit2: 0x40916c, accessory: 'flowerCrown', accColor: 0xff8fab,
+      weapon: 'none', scale: 1.7, form: 'treant', formColor: 0x52b788, formCore: 0xffafcc,
+    },
+    skills: [
+      { id: 'tr_punch', name: 'Mộc Quyền', combo: 'J', mana: 0, cd: 1.1, lock: 0.6,
+        type: 'melee', range: 2.9, arc: 1.2, dmg: 10, kb: 7, kbUp: 4, delay: 0.25, lunge: 0, pose: 'punch',
+        fx: { color: 0x6a994e, kind: 'impact' } },
+    ],
+  },
+};
+
+export const CHAR_BY_ID = Object.fromEntries([...CHARACTERS, ...Object.values(SUMMONS)].map(c => [c.id, c]));
+
+// Chiêu giữ phím tụ lực (hold): bản phóng to theo mức tụ k (0..1). Kết quả được lưu lại theo từng nấc 0.1
+const HOLD_CACHE = new Map();
+export function holdSkill(s, k) {
+  if (!s.hold || !(k > 0)) return s;
+  k = Math.min(1, Math.round(k * 10) / 10);
+  if (!k) return s;
+  const key = s.id + ':' + k;
+  let r = HOLD_CACHE.get(key);
+  if (r) return r;
+  const H = s.hold, dm = 1 + (H.dmg - 1) * k, sz = 1 + (H.size - 1) * k;
+  r = { ...s, hk: k, dmg: Math.round(s.dmg * dm), fx: { ...s.fx, scale: sz } };
+  if (s.radius) r.radius = +(s.radius * sz).toFixed(2);
+  if (s.width) r.width = +(s.width * sz).toFixed(2);
+  if (s.length) r.length = Math.round(s.length * (1 + 0.3 * k));
+  if (s.explode) r.explode = { ...s.explode, radius: +(s.explode.radius * sz).toFixed(2), dmg: Math.round(s.explode.dmg * dm) };
+  HOLD_CACHE.set(key, r);
+  return r;
+}
 
 export function getChar(id) {
   return CHAR_BY_ID[id] || CHARACTERS[0];
@@ -625,7 +688,9 @@ export function charMaxHp(c) {
 export function skillLifetime(s) {
   switch (s.type) {
     case 'melee': return s.delay + (s.echo ? s.echo.n * s.echo.gap : 0) + 0.05;
-    case 'projectile': return s.delay + s.range / s.speed + (s.seek ? 0.4 : 0) + 0.1;
+    case 'projectile': return s.delay + s.range * (s.boomerang ? 2.8 : 1) / s.speed + (s.seek ? 0.4 : 0) + 0.1;
+    case 'decoy': case 'icewall': case 'turret': case 'pet': return s.delay + 0.2;
+    case 'timezone': return s.delay + s.dur + 0.3;
     case 'wall': return s.delay + s.dur;
     case 'smite': return s.delay + 0.2;
     case 'multiblink': return s.delay + s.strikes * s.interval + 0.1;
