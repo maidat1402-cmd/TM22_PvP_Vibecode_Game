@@ -147,7 +147,7 @@ Chọn map khi tạo phòng (phe Công luôn xuất phát ở phía nam, phe Th�
 
 **Súng rơi**: người chết làm rơi súng tốt nhất (súng chính, nếu không có thì súng lục). Đi qua là tự nhặt nếu ô súng đó đang trống; nhấn `F` để đổi lấy súng đang cầm. Mua súng mới thì súng cũ cùng ô rơi xuống, nên có thể mua giúp đồng đội rồi vứt (`G`) cho họ. Súng trên đất được giữ qua các vòng, xoá khi đổi phe; ở Sinh tử súng tự biến mất sau 25 giây.
 
-**Cơ chế bắn**: headshot sát thương gấp ~4 lần; giáp + mũ giảm sát thương (súng mạnh xuyên giáp tốt hơn); sát thương giảm dần theo khoảng cách; đạn tản rộng khi chạy hoặc nhảy, chính xác khi đứng yên hoặc ngồi; bắn liên tục thì súng giật lên.
+**Cơ chế bắn**: headshot sát thương gấp ~4 lần; giáp + mũ giảm sát thương (súng mạnh xuyên giáp tốt hơn); sát thương giảm dần theo khoảng cách; đứng yên, ngồi hoặc đi bộ (`Shift`) thì bắn chuẩn, chạy càng nhanh đạn càng tản (chạy hết tốc mới tản nhiều; tiểu liên và shotgun ít bị ảnh hưởng), nhảy thì tản rộng; vòng tâm xanh giãn ra đúng bằng độ tản thật, kể cả khi ngắm scope mà vẫn di chuyển; bắn liên tục thì súng giật lên.
 
 Súng: P9 Lục Tiêu, Đại Bàng .50, Ong Vò Vẽ (tiểu liên), Sấm Sét 12 (shotgun), Hổ Vằn AR, Rồng Xanh K4, Diều Hâu SR (bắn tỉa). Thông số trong [shared/weapons.js](shared/weapons.js), map trong [shared/maps.js](shared/maps.js) (map là danh sách khối hộp nên dễ chỉnh hoặc thêm map mới).
 

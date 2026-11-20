@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { NET, Ticker } from '/shared/config.js';
 import { getMap, PLAYER, moveAndCollide, rayMap, rayPlayer, inRect, newNade, stepNade, NADE_STEP } from '/shared/maps.js';
-import { WEAPONS, WEAPON_LIST, BUY_MENU, GRENADES, NADE_LIST, THROW_SPEED, itemInfo, TEAMS, SHOOTER as S, moveSpeedFor } from '/shared/weapons.js';
+import { WEAPONS, WEAPON_LIST, BUY_MENU, GRENADES, NADE_LIST, THROW_SPEED, itemInfo, TEAMS, SHOOTER as S, moveSpeedFor, shotSpread } from '/shared/weapons.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
 import { buildMapView } from './mapview.js';
@@ -793,14 +793,7 @@ export class ShooterGame {
 
   spreadNow(w) {
     const P = this.P;
-    const speed = Math.hypot(P.vel.x, P.vel.z);
-    const frac = clamp((speed / moveSpeedFor(w.id) - 0.3) / 0.7, 0, 1);
-    let s = w.scope ? (P.scoped ? 0.0005 : w.unscoped) : w.spread;
-    s += w.moveSpread * frac;
-    if (!P.grounded) s += 0.09;
-    if (P.crouch && P.grounded) s *= 0.7;
-    s += P.punch * 0.35;
-    return s;
+    return shotSpread(w, { speed: Math.hypot(P.vel.x, P.vel.z), grounded: P.grounded, crouch: P.crouch, scoped: P.scoped, punch: P.punch });
   }
 
   tryFire() {
@@ -826,10 +819,12 @@ export class ShooterGame {
     const spread = this.spreadNow(w);
     const pellets = w.pellets || 1;
     const out = [];
-    const muzzleW = this.muzzleWorld();
+    // hướng bắn = hướng nhìn + độ giật + tản ngẫu nhiên
+    const pitch = P.pitch + P.punch, yaw = P.yaw + P.punchYaw;
+    // đầu nòng tính từ vị trí mắt và hướng bắn của CHÍNH khung hình này (camera còn ở khung trước,
+    // lấy theo camera thì khi chạy ngang tia đạn xuất phát lệch hẳn sang một bên)
+    const muzzleW = this.muzzleAt(eye, pitch, yaw);
     for (let i = 0; i < pellets; i++) {
-      // hướng bắn = hướng nhìn + độ giật + tản ngẫu nhiên
-      const pitch = P.pitch + P.punch, yaw = P.yaw + P.punchYaw;
       const r = Math.sqrt(Math.random()) * spread, th = Math.random() * Math.PI * 2;
       const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch + Math.sin(th) * r, yaw + Math.cos(th) * r, 0, 'YXZ'));
       const d = [dir.x, dir.y, dir.z];
@@ -879,11 +874,10 @@ export class ShooterGame {
     return v3(P.pos.x, P.pos.y + PLAYER.eye - (PLAYER.eye - PLAYER.crouchEye) * P.crouchK, P.pos.z);
   }
 
-  muzzleWorld() {
-    // ước lượng đầu nòng trong thế giới (cho tia đạn đẹp)
-    const cam = this.camera;
-    const p = v3(0.14, -0.13, -0.6).applyQuaternion(cam.quaternion).add(cam.position);
-    return p;
+  // ước lượng đầu nòng trong thế giới (cho tia đạn đẹp), theo mắt + góc ngắm truyền vào
+  muzzleAt(eye, pitch, yaw) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    return v3(0.14, -0.13, -0.6).applyQuaternion(q).add(eye);
   }
 
   tracer(a, b, color) {
@@ -1214,9 +1208,12 @@ export class ShooterGame {
     }
     // dấu tâm động (giãn theo độ tản đạn)
     const w = WEAPONS[this.curW()];
-    const gap = 4 + this.spreadNow(w) * 900 * (75 / this.camera.fov) * (innerHeight / 900);
-    $('sCross').style.setProperty('--gap', Math.min(60, gap) + 'px');
-    $('sCross').hidden = !P.alive || P.scoped || (w.scope && !P.scoped && false);
+    // khe hở = đúng bán kính nón tản trên màn hình (theo FOV hiện tại)
+    const spr = this.spreadNow(w);
+    const gap = 3 + Math.tan(spr) / Math.tan(this.camera.fov * Math.PI / 360) * innerHeight / 2;
+    $('sCross').style.setProperty('--gap', Math.min(90, gap) + 'px');
+    // trong scope chỉ hiện tâm xanh khi đang bị tản (chạy/nhảy) để biết phải đứng lại
+    $('sCross').hidden = !P.alive || (P.scoped && spr < 0.004);
     $('sScope').hidden = !(P.alive && P.scoped);
     // gợi ý + tiến trình cài/gỡ bom + nhặt súng
     const near = P.alive ? this.nearestDrop() : null;
