@@ -88,6 +88,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   2. Chạy server và mở 2 tab trình duyệt vào cùng phòng, xem cả 2 người chơi có thấy nhau, đánh hay bắn trúng nhau không.
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
 - Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
+- `tests/awaken.mjs`: kiểm tra dị biến (thanh tích, biến hình, nội tại, các kiểu chiêu dị biến, ngắm dọc). Chạy server ở cổng 3123 rồi `node tests/awaken.mjs`; sửa dị biến hay `damage()` thì chạy lại.
 - **Mở nhanh để test:** `/?quick&mode=brawl|bomb|dm&map=<id map>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn.
 - **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
@@ -117,6 +118,9 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Lựu đạn mô phỏng tất định:** bước cố định `NADE_STEP` (1/60 giây), dữ liệu đầu vào làm tròn 3 chữ số. Code phải giống hệt nhau ở server và client để quỹ đạo khớp. Sửa `stepNade` là ảnh hưởng cả hai bên.
 - **Tuyệt kỹ lái theo tâm:** mỗi chiêu có cấu hình `skill.steer`. `shared/steer.js` chạy ở cả hai bên: server dùng để tính sát thương, client dùng cho hiệu ứng. Client gửi gói `steer` khoảng 15 lần/giây, server chuyển tiếp cho người khác. Thêm tuyệt kỹ mới thì chọn một trong các chế độ `follow`, `homing`, `turn` hoặc viết thêm chế độ trong `steer.js`.
 - **Thứ tự gói khi vào phòng bắn súng:** server phải gửi `sj` trước `sspawn`. Đảo thứ tự thì client bỏ qua lần xuất hiện đầu tiên.
+- **Dị biến** (`AWAKEN` ở `shared/config.js`, `awaken` của từng nhân vật ở `shared/characters.js`): server giữ thanh `p.awk` (cộng trong `damage()` khi chưa dị biến, trừ khi chiêu có `noGauge`) và `p.awUntil`. Client gửi `awk` để biến hình; server gửi `awk` (`on`, `dur`, `tf` / `tired`) cho cả phòng, `awkno` khi chưa đủ thanh. Snapshot thêm phần tử thứ 10 là thanh dị biến, `flags & 64` là đang dị biến. Chiêu dị biến gửi `cast` kèm `aw: 1`, hồi chiêu lưu ở chỉ số `sk + 10` (cả server `p.cds` lẫn client `L.cds`). Chọn bộ chiêu luôn qua `charSkills(char, aw)`, không đọc thẳng `char.skills`. Nội tại dị biến (`awaken.passive`) xử lý trong `damage()` và `tick()` (bỏng). Thêm dạng biến hình mới thì viết thêm một `case` trong `buildForm` ở `client/js/chibi.js` và một `case` hạt trang trí trong `formParticles` ở `client/js/game.js`.
+- **Ngắm dọc:** `aimDir()` ở client nhắm thẳng vào ngực mục tiêu đang khoá (kể cả đang bay); server cho phép thành phần dọc của hướng ra chiêu tới ±0.95. Đạn có `seek` tự bẻ hướng 3D.
+- **Tường gió** là chướng ngại vật tạm thời có `pass` (id chủ tường) / `passTeam` và `noBody`: `hitsObstacle(..., owner, team)` cho đạn của chủ tường bay xuyên, `dynCollide` bỏ qua `noBody`.
 - **Đấu đội** dùng chung `server/room.js` với cờ `this.team`. Gói tin có tiền tố `t`: client gửi `tteam`, `tready`, `tstart`; server gửi `tstate` (giai đoạn, chủ phòng, tỉ số, thời gian còn lại, lý do chưa bắt đầu được, danh sách `[id, đội, sẵn sàng, hạ, gục]`). Mọi chỗ chọn mục tiêu (`targets()` ở server, `aimDir`/`steerAim` ở client) phải bỏ qua đồng đội. Ngoài giai đoạn `play`, `damage()` không trừ máu.
 
 ## 6. Đồ hoạ và hiệu ứng
@@ -160,8 +164,10 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Nội tại nhân vật: `passive` (hiện có `charge` của Shiden, xử lý trong `addCharge()` ở `server/room.js`). Đòn có `noMark` không cộng dấu. Đòn kết có thể có `marks` (cộng nhiều dấu) hoặc `backstab` (nhân sát thương khi đứng sau lưng mục tiêu, dựa vào `yaw`).
   - Chướng ngại vật tạm thời: server giữ `room.dyn`, client giữ `fx.dynObs` (hiệu ứng tự thêm/bớt). Đạn ở cả hai phía phải truyền `dyn` vào `hitsObstacle()`.
   - Dịch chuyển do server quyết định và gửi gói `tp`; trong 0.35 s sau đó server bỏ qua vị trí cũ client gửi lên (`p.tpUntil`).
-  - Gói tin mới: `tp`, `buff`, `mark`, `chain`, `kmark`; `cast` có thể kèm `tg` (điểm đích) và `pend` có thể kèm `fire` (bẫy sập).
+  - Gói tin mới: `tp`, `buff`, `mark`, `chain` (`sky`: sét giáng từ trời xuống từng điểm, `nosky`: bỏ tia đầu), `kmark`, `awk`, `awkno`; `cast` có thể kèm `tg` (điểm đích) và `aw` (chiêu dị biến), `pend` có thể kèm `fire` (bẫy sập), `boom` có thể kèm `k` (viên đạn nào nổ), `hit` có thể kèm `burn`, `frost`, `frz`.
   - Thêm nhiều tia sét hay đèn chớp cùng lúc rất dễ trắng xoá màn hình: dùng `fx.bolt(..., light = false)` cho các tia phụ.
+  - Kiểu chiêu chỉ có ở dạng dị biến: `wall` (tường chắn đạn), `smite` (sét đánh mọi đối thủ trong tầm, `perMark` cộng theo dấu điện), `multiblink` (lướt chém lần lượt `strikes` nhát). Trường mới cho chiêu: `seek` (đạn tự tìm), `bounce` (sét nảy khi trúng), `multi`/`multiInt` (lướt đánh nhiều nhịp), `echo` (phân thân chém theo), `follow` (vùng aoe bám theo người), `walls` cho aoe, `height` (độ cao cú nhảy), `behind` (blink ra sau lưng), `invuln` cho buff, `bigCharge` (tụ lực lâu, hiệu ứng `chargeUp`; dash có `bigCharge` không được bất tử lúc tụ lực).
+  - Mỗi nhân vật mới cần cả bộ `awaken` (6 chiêu cùng combo). Dạng dị biến nên mạnh hơn dạng thường khoảng 40–50% (sát thương/giây × máu), tuyệt kỹ dị biến tụ lực 1.2–1.4 giây.
   - Chạy lại các test chiêu: mỗi chiêu phải trúng được đối thủ đứng đúng tầm.
   - Kiểu chiêu mới cần sửa cả 3 nơi: mô phỏng ở `server/room.js`, hiệu ứng ở `client/js/effects.js`, thời gian tồn tại ở `skillLifetime`.
 - **Súng mới:** thêm vào `WEAPONS` và `BUY_MENU` trong `shared/weapons.js`. Mô hình súng thêm trong `client/js/shooter/guns.js`.

@@ -348,6 +348,256 @@ function buildWeapon(look, hand) {
   return w;
 }
 
+// ---------------- Ngoại hình dị biến ----------------
+// look.form: tên dạng biến hình (shared/characters.js → awaken.form), look.formColor/formCore: màu năng lượng.
+// Phần phát sáng dùng MeshBasicMaterial (không cần ánh sáng, rẻ). rig.formUpdate chạy mỗi frame để làm chuyển động.
+const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+
+function buildForm(look, rig) {
+  const fc = look.formColor ?? 0xffffff, core = look.formCore ?? 0xffffff;
+  const { body, head } = rig;
+  const ups = [];   // các hàm chuyển động: (dt, t, speed, state) => void
+  switch (look.form) {
+    case 'windGod': {
+      // 4 dải gió dài bay phía sau + 2 vòng gió quanh eo, người lơ lửng
+      const rm = glow(fc, 0.75);
+      const ribbons = [];
+      for (let k = 0; k < 4; k++) {
+        const root = new THREE.Group();
+        root.position.set((k - 1.5) * 0.12, 0.9, -0.2);
+        body.add(root);
+        let parent = root;
+        const segs = [];
+        for (let i = 0; i < 5; i++) {
+          const seg = new THREE.Group();
+          seg.position.z = i ? -0.26 : 0;
+          const m = new THREE.Mesh(G.box(0.09 - i * 0.012, 0.02, 0.28), rm);
+          m.position.z = -0.13;
+          seg.add(m);
+          parent.add(seg);
+          segs.push(seg);
+          parent = seg;
+        }
+        root.rotation.y = (k - 1.5) * 0.35;
+        ribbons.push(segs);
+      }
+      const rings = [0.45, 0.62].map((r, i) => {
+        const m = new THREE.Mesh(G.torus(r, 0.018), glow(i ? 0xffffff : fc, 0.6));
+        m.rotation.x = Math.PI / 2 + (i ? 0.25 : -0.2);
+        m.position.y = 0.45 + i * 0.25;
+        body.add(m);
+        return m;
+      });
+      ups.push((dt, t, speed) => {
+        ribbons.forEach((segs, k) => segs.forEach((sg, i) => { sg.rotation.x = 0.35 + Math.sin(t * 7 + i * 0.9 + k) * 0.28 + speed * 0.02; sg.rotation.y = Math.sin(t * 5 + i + k * 2) * 0.2; }));
+        rings[0].rotation.z += dt * 5; rings[1].rotation.z -= dt * 7;
+        body.position.y += 0.22 + Math.sin(t * 3) * 0.06;   // lơ lửng
+      });
+      break;
+    }
+    case 'magma': {
+      // găng khí khổng lồ quanh hai nắm tay + vân dung nham trên thân + lửa trên tóc
+      const shell = glow(fc, 0.45), hot = glow(core);
+      const fists = [rig.handR, rig.handL].map(h => {
+        const g = new THREE.Group();
+        g.add(new THREE.Mesh(G.sphere(0.24, 14, 10), shell), new THREE.Mesh(G.sphere(0.12, 10, 8), hot));
+        h.add(g);
+        return g;
+      });
+      const vein = glow(0xff7b00);
+      for (const [x, y, z, rz] of [[0.12, 0.7, 0.22, 0.6], [-0.1, 0.62, 0.22, -0.8], [0.02, 0.8, 0.21, 0.1], [0.2, 0.58, 0.15, 1.2]]) {
+        const v = new THREE.Mesh(G.box(0.02, 0.16, 0.01), vein);
+        v.position.set(x, y, z); v.rotation.z = rz;
+        body.add(v);
+      }
+      const flames = [];
+      for (let i = 0; i < 5; i++) {
+        const f = new THREE.Mesh(G.cone(0.07, 0.28, 5), glow(i % 2 ? 0xffd166 : 0xff5400, 0.85));
+        const a = (i / 5) * Math.PI * 2;
+        f.position.set(Math.sin(a) * 0.22, 0.62, Math.cos(a) * 0.2 - 0.05);
+        head.add(f);
+        flames.push(f);
+      }
+      ups.push((dt, t) => {
+        fists.forEach((g, i) => g.scale.setScalar(1 + Math.sin(t * 12 + i * 2) * 0.08));
+        flames.forEach((f, i) => { f.scale.y = 0.8 + Math.abs(Math.sin(t * 9 + i * 1.7)) * 0.7; });
+      });
+      break;
+    }
+    case 'flameEmpress': {
+      // đôi cánh lửa + vương miện lửa, kiếm dài thêm
+      const wm = glow(fc, 0.8), wm2 = glow(core, 0.7);
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.bezierCurveTo(0.3, 0.35, 0.8, 0.6, 1.3, 0.55);
+      shape.lineTo(1.05, 0.3); shape.lineTo(1.3, 0.18); shape.lineTo(0.95, 0.02); shape.lineTo(1.1, -0.16);
+      shape.bezierCurveTo(0.7, -0.1, 0.35, -0.12, 0, 0);
+      const wg = new THREE.ShapeGeometry(shape, 10);
+      const wings = [-1, 1].map(sx => {
+        const holder = new THREE.Group();
+        holder.position.set(sx * 0.1, 0.88, -0.22);
+        const w = new THREE.Mesh(wg, wm);
+        w.scale.set(sx, 1, 1);
+        const w2 = new THREE.Mesh(wg, wm2);
+        w2.scale.set(sx * 0.6, 0.6, 1); w2.position.z = 0.01;
+        holder.add(w, w2);
+        body.add(holder);
+        return { holder, sx };
+      });
+      for (const m of [wings[0].holder.children, wings[1].holder.children].flat()) m.material.side = THREE.DoubleSide;
+      const crown = [];
+      for (let i = 0; i < 5; i++) {
+        const f = new THREE.Mesh(G.cone(0.06, 0.26, 5), glow(i === 2 ? core : fc, 0.9));
+        f.position.set((i - 2) * 0.12, 0.5 - Math.abs(i - 2) * 0.04, 0.12);
+        f.rotation.z = -(i - 2) * 0.18;
+        head.add(f);
+        crown.push(f);
+      }
+      if (rig.weapon) rig.weapon.scale.set(1, 1.35, 1);
+      ups.push((dt, t, speed) => {
+        const flap = Math.sin(t * (speed > 1 ? 10 : 4)) * 0.3;
+        for (const { holder, sx } of wings) holder.rotation.set(0.2, sx * (0.6 + flap), 0);
+        crown.forEach((f, i) => { f.scale.y = 0.8 + Math.abs(Math.sin(t * 8 + i)) * 0.5; });
+      });
+      break;
+    }
+    case 'iceQueen': {
+      // vương miện băng, áo choàng băng, 3 mảnh băng bay quanh người
+      const ice = glow(0xbdf0ff), iceT = glow(fc, 0.5);
+      for (let i = 0; i < 5; i++) {
+        const c = new THREE.Mesh(new THREE.OctahedronGeometry(i === 2 ? 0.12 : 0.08), ice);
+        const a = (i - 2) * 0.32;
+        c.position.set(Math.sin(a) * 0.45, 0.42 + (i === 2 ? 0.12 : 0.04), Math.cos(a) * 0.3);
+        c.scale.y = 1.8;
+        head.add(c);
+      }
+      const cape = new THREE.Mesh(G.cone(0.42, 0.9, 10), iceT);
+      cape.position.set(0, 0.5, -0.12);
+      cape.scale.set(1, 1, 0.5);
+      body.add(cape);
+      const shards = [0, 1, 2].map(i => {
+        const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), ice);
+        m.scale.y = 2;
+        rig.root.add(m);
+        return m;
+      });
+      ups.push((dt, t) => {
+        shards.forEach((m, i) => { const a = t * 1.8 + i * 2.1; m.position.set(Math.cos(a) * 0.85, 1.1 + Math.sin(t * 2 + i) * 0.2, Math.sin(a) * 0.85); m.rotation.y += dt * 3; });
+      });
+      break;
+    }
+    case 'thunderGod': {
+      // sừng vàng trên đầu, thương dài gấp đôi, vòng điện xoay quanh người
+      const gold = toon(0xffd23f, { params: { emissive: 0x6a4a00 } });
+      for (const sx of [-1, 1]) {
+        const h = mesh(G.cone(0.06, 0.55, 6), gold, 0.012);
+        h.position.set(sx * 0.3, 0.42, 0.05);
+        h.rotation.set(-0.3, 0, -sx * 0.5);
+        head.add(h);
+      }
+      if (rig.weapon) rig.weapon.scale.set(1, 1.7, 1);
+      const rings = [0, 1].map(i => {
+        const m = new THREE.Mesh(G.torus(0.55 + i * 0.12, 0.015), glow(i ? core : fc, 0.8));
+        m.position.y = 0.8;
+        rig.root.add(m);
+        return m;
+      });
+      ups.push((dt, t) => {
+        rings[0].rotation.set(t * 3, t * 2, 0);
+        rings[1].rotation.set(-t * 2, 0, t * 3);
+        const f = Math.random() < 0.15 ? 0.3 : 1;   // chập chờn như điện
+        rings[0].material.opacity = 0.8 * f;
+      });
+      break;
+    }
+    case 'forestSoul': {
+      // sừng cành cây có lá, hoa mọc trên vai và thân
+      const wood = toon(0x7f5539), leaf = toon(0x52b788);
+      for (const sx of [-1, 1]) {
+        const br = new THREE.Group();
+        br.position.set(sx * 0.25, 0.4, -0.02);
+        br.rotation.z = -sx * 0.4;
+        head.add(br);
+        const main = mesh(G.cyl(0.025, 0.04, 0.5, 6), wood, 0.01);
+        main.position.y = 0.25;
+        br.add(main);
+        for (const [y, a, l] of [[0.25, 0.9, 0.25], [0.4, -0.8, 0.2], [0.5, 0.5, 0.18]]) {
+          const tw = mesh(G.cyl(0.015, 0.025, l, 5), wood, 0.008);
+          tw.position.set(Math.sin(a) * l * 0.4 * sx, y + l * 0.3, 0);
+          tw.rotation.z = -a * sx;
+          br.add(tw);
+          const lf = mesh(G.sphere(0.06, 6, 4), leaf, 0.006);
+          lf.scale.set(1, 0.5, 1.5);
+          lf.position.set(Math.sin(a) * l * 0.9 * sx, y + l * 0.65, 0);
+          br.add(lf);
+        }
+      }
+      const blossom = [toon(0xff8fab), toon(0xfff3b0), toon(0xffc8dd)];
+      for (const [x, y, z, i] of [[0.28, 0.95, 0.05, 0], [-0.3, 0.93, 0, 1], [0.12, 0.72, 0.23, 2], [-0.14, 0.58, 0.22, 0], [0.24, 0.5, 0.12, 1]]) {
+        const f = mesh(G.sphere(0.065, 8, 6), blossom[i], 0.008);
+        f.position.set(x, y, z);
+        body.add(f);
+      }
+      break;
+    }
+    case 'mountain': {
+      // giáp đá trên vai, lưng, ngực; nắm tay bọc đá khổng lồ
+      const rock = toon(0x8d6e53), rock2 = toon(0x6b4f3a);
+      for (const [x, y, z, r, m] of [[0.32, 0.95, 0, 0.2, rock], [-0.32, 0.95, 0, 0.2, rock], [0, 0.8, -0.24, 0.24, rock2], [0, 0.72, 0.22, 0.14, rock2], [0.15, 1.0, -0.12, 0.13, rock2]]) {
+        const p = mesh(new THREE.DodecahedronGeometry(r, 0), m, 0.015);
+        p.position.set(x, y, z);
+        p.rotation.set(x * 3, y * 2, z * 4);
+        body.add(p);
+      }
+      const veins = glow(fc, 0.9);
+      for (const h of [rig.handR, rig.handL]) {
+        const f = mesh(new THREE.DodecahedronGeometry(0.27, 0), rock, 0.02);
+        h.add(f);
+        const crack = new THREE.Mesh(G.box(0.02, 0.3, 0.02), veins);
+        crack.position.z = 0.24; crack.rotation.z = 0.5;
+        h.add(crack);
+      }
+      break;
+    }
+    case 'thousandShadows': {
+      // 2 phân thân bóng đi theo hai bên phía sau
+      const dark = new THREE.MeshBasicMaterial({ color: 0x10002b, transparent: true, opacity: 0.6, depthWrite: false });
+      const eye = glow(0xff2d55);
+      const clones = [-1, 1].map(sx => {
+        const c = new THREE.Group();
+        const torso = new THREE.Mesh(G.capsule(0.22, 0.2), dark);
+        torso.position.y = 0.65;
+        const hd = new THREE.Mesh(G.sphere(0.4, 14, 10), dark);
+        hd.position.y = 1.25;
+        const hood = new THREE.Mesh(G.cone(0.18, 0.45, 8), dark);
+        hood.position.set(0, 1.5, -0.35); hood.rotation.x = -2.2;
+        c.add(torso, hd, hood);
+        for (const ex of [-1, 1]) {
+          const e = new THREE.Mesh(G.sphere(0.05, 6, 4), eye);
+          e.position.set(ex * 0.14, 1.22, 0.36);
+          e.scale.y = 1.4;
+          c.add(e);
+        }
+        const blade = new THREE.Mesh(G.box(0.04, 0.5, 0.08), glow(0x9d4edd, 0.8));
+        blade.position.set(-sx * 0.3, 0.6, 0.2);
+        blade.rotation.x = 1.2;
+        c.add(blade);
+        c.scale.setScalar(0.85);
+        rig.root.add(c);
+        return { c, sx };
+      });
+      ups.push((dt, t, speed) => {
+        for (const { c, sx } of clones) {
+          c.position.set(sx * 0.95, Math.sin(t * 3 + sx) * 0.08 + 0.05, -0.75 - Math.min(0.6, speed * 0.04));
+          c.rotation.y = sx * -0.15;
+        }
+      });
+      break;
+    }
+  }
+  if (ups.length) rig.formUpdate = (dt, t, speed, state) => { for (const f of ups) f(dt, t, speed, state); };
+}
+
 // ---------------- Dựng nhân vật ----------------
 export function buildChibi(look) {
   const root = new THREE.Group();     // đặt ở chân, xoay theo yaw
@@ -447,6 +697,7 @@ export function buildChibi(look) {
   buildAccessory(look, rig);
   rig.weapon = buildWeapon(look, rig.handR);
   if (look.weapon === 'gauntlet') buildWeapon(look, rig.handL);   // găng cả hai tay
+  if (look.form) buildForm(look, rig);   // ngoại hình dị biến
 
   // Bóng tròn dưới chân (rẻ hơn shadow map rất nhiều)
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20),
@@ -623,6 +874,7 @@ export class ChibiAnimator {
     if (r.scarf) r.scarf.rotation.x = 0.3 + Math.sin(t * 9) * 0.15 + speed * 0.04;
     if (r.head.userData.tail) r.head.userData.tail.rotation.x = 0.1 + Math.sin(t * 6) * 0.08 + speed * 0.03;
     if (r.weapon.userData.gem) r.weapon.userData.gem.rotation.y += dt * 2;
+    if (r.formUpdate && state !== ANIM.dead) r.formUpdate(dt, t, speed, state);
 
     // Chớp mắt
     const blink = (t % 3.7) < 0.12 || state === ANIM.dead ? 0.12 : 1;

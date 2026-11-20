@@ -1,6 +1,6 @@
 // Giao diện HUD bằng DOM (nhẹ, sắc nét, dễ chỉnh CSS).
 import * as THREE from 'three';
-import { GAME } from '/shared/config.js';
+import { GAME, AWAKEN } from '/shared/config.js';
 
 const $ = id => document.getElementById(id);
 const hex = c => '#' + c.toString(16).padStart(6, '0');
@@ -14,6 +14,7 @@ export class HUD {
     this.el = $('hud');
     this.hpFill = $('hpFill'); this.hpGhost = $('hpGhost'); this.hpText = $('hpText');
     this.mpFill = $('mpFill'); this.mpText = $('mpText');
+    this.awkBar = $('awkBar'); this.awkFill = $('awkFill'); this.awkText = $('awkText');
     this.skillbar = $('skillbar');
     this.feed = $('killfeed');
     this.plates = $('plates');
@@ -29,19 +30,24 @@ export class HUD {
 
   setRoom(name) { $('roomName').textContent = name; }
 
-  buildSkillbar(char) {
-    $('portrait').style.background = `radial-gradient(circle at 40% 35%, ${hex(char.look.hair)}, ${hex(char.look.outfit)})`;
-    $('portraitName').textContent = char.name;
+  // skills: bộ chiêu đang dùng; off: độ lệch chỉ số hồi chiêu (dị biến +10); aw: dữ liệu dị biến khi đang biến hình
+  buildSkillbar(char, skills = char.skills, off = 0, aw = null) {
+    const look = aw ? { ...char.look, ...aw.look } : char.look;
+    $('portrait').style.background = `radial-gradient(circle at 40% 35%, ${hex(look.hair)}, ${hex(look.outfit)})`;
+    $('portrait').classList.toggle('aw', !!aw);
+    $('portrait').style.setProperty('--c', hex(aw ? aw.color : char.look.hair));
+    $('portraitName').textContent = aw ? `⚡ ${aw.name}` : char.name;
     this.skillbar.innerHTML = '';
-    this.slots = char.skills.map((s, i) => {
+    this.skillbar.classList.toggle('aw', !!aw);
+    this.slots = skills.map((s, i) => {
       const d = document.createElement('div');
-      d.className = 'slot' + (s.combo.length === 3 ? ' ult' : '');
+      d.className = 'slot' + (s.combo.length === 3 ? ' ult' : '') + (aw ? ' aw' : '');
       d.style.setProperty('--c', hex(s.fx.color));
       d.innerHTML = `<div class="keys">${[...s.combo].map(k => `<kbd>${COMBO_KEYS[k]}</kbd>`).join('')}</div>
         <div class="sname">${esc(s.name)}</div><div class="cost">${s.mana ? s.mana + ' MP' : 'Free'}</div>
         <div class="cd"></div><div class="cdt"></div>`;
       this.skillbar.appendChild(d);
-      return { d, cd: d.querySelector('.cd'), cdt: d.querySelector('.cdt'), s, i };
+      return { d, cd: d.querySelector('.cd'), cdt: d.querySelector('.cdt'), s, i: i + off };
     });
     // các phím chung
     const extra = [
@@ -86,6 +92,30 @@ export class HUD {
     }
   }
 
+  // Thanh dị biến của mình: tích dần → đầy (bấm L L) → đang dị biến (đếm ngược)
+  updateAwaken(me, now) {
+    const A = me.char.awaken;
+    let p, txt, cls;
+    if (me.aw && now < me.awUntil) {
+      const left = me.awUntil - now;
+      p = Math.min(1, left / AWAKEN.dur); txt = `⚡ ${A.name} · ${left.toFixed(left < 5 ? 1 : 0)}s`; cls = 'on';
+    } else if (now < me.tiredUntil) {
+      p = 0; txt = 'Kiệt sức…'; cls = 'tired';
+    } else {
+      const v = Math.floor(me.awk || 0);
+      p = v / AWAKEN.max;
+      cls = v >= AWAKEN.max ? 'full' : '';
+      txt = cls ? (document.body.classList.contains('touch') ? '⚡ ĐẦY! Bấm nút ⚡' : '⚡ ĐẦY! Bấm L L') : `Dị biến ${v}%`;
+    }
+    const key = cls + '|' + txt + '|' + Math.round(p * 200);
+    if (key === this.awKey) return;
+    this.awKey = key;
+    this.awkFill.style.width = p * 100 + '%';
+    this.awkText.textContent = txt;
+    this.awkBar.className = 'bar awk ' + cls;
+    this.awkBar.style.setProperty('--c', hex(A.color));
+  }
+
   flashSlot(i) {
     const sl = this.slots[i];
     if (!sl) return;
@@ -108,9 +138,9 @@ export class HUD {
     if (!p) {
       const d = document.createElement('div');
       d.className = 'plate' + (av.isMe ? ' me' : '');
-      d.innerHTML = `<div class="pn">${esc(av.name)}</div><div class="pb"><i></i></div>`;
+      d.innerHTML = `<div class="pn">${esc(av.name)}</div><div class="pb"><i></i></div><div class="pa"><i></i></div>`;
       this.plates.appendChild(d);
-      p = { d, bar: d.querySelector('i'), name: d.querySelector('.pn') };
+      p = { d, bar: d.querySelector('.pb i'), awk: d.querySelector('.pa i'), name: d.querySelector('.pn') };
       this.plateMap.set(av.id, p);
     }
     return p;
@@ -134,6 +164,11 @@ export class HUD {
       p.bar.style.width = Math.max(0, av.hp / (av.char.hp || GAME.maxHp)) * 100 + '%';
       p.d.classList.toggle('target', !!av.targeted);
       p.d.classList.toggle('buffed', !!(av.buff && av.buff.kind === 'stoneSkin'));
+      // thanh dị biến dưới thanh máu: ai sắp biến hình thì đối thủ đều thấy
+      const aw = av.aw, full = (av.awk || 0) >= AWAKEN.max;
+      p.awk.style.width = (aw ? 100 : Math.min(100, (av.awk || 0) / AWAKEN.max * 100)) + '%';
+      p.d.classList.toggle('awfull', full && !aw);
+      p.d.classList.toggle('awon', !!aw);
       if (p.d.dataset.team !== (av.team || '')) p.d.dataset.team = av.team || '';
     }
   }

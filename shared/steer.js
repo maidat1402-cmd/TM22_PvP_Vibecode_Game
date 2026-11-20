@@ -3,6 +3,7 @@
 //   follow: vùng chiêu (lốc xoáy, mưa băng) trôi về điểm tâm trên mặt đất với tốc độ giới hạn
 //   homing: đạn (cầu năng lượng) bẻ hướng 3D về điểm tâm với tốc độ quay giới hạn
 //   turn  : chiêu lao tới (phượng hoàng) bẻ hướng lao trên mặt phẳng ngang
+//   aim   : tia chưởng (beam) xoay hướng 3D về điểm tâm, gốc tia đứng yên ở ngực người ra chiêu
 // st.aim do người ra chiêu cập nhật liên tục (client gửi 'steer' ~15 lần/giây).
 
 export const STEER_SEND_HZ = 15;
@@ -16,6 +17,9 @@ export function initSteer(s, p, d, h) {
     st.c = [p[0] + h[0] * off, 0, p[2] + h[1] * off];
   } else if (g.mode === 'homing') {
     st.d = [d[0], d[1], d[2]];
+  } else if (g.mode === 'aim') {
+    st.d = [d[0], d[1], d[2]];
+    st.p = [p[0], p[1] + 0.85, p[2]];
   } else if (g.mode === 'turn') {
     st.h = [h[0], h[1]];
     st.pos = [p[0], p[2]];
@@ -41,6 +45,12 @@ export function steerStep(st, s, dt, el, pos) {
       const wx = a[0] - pos[0], wy = a[1] - pos[1], wz = a[2] - pos[2];
       const L = Math.hypot(wx, wy, wz);
       if (L > 0.5) turn3(st.d, [wx / L, wy / L, wz / L], g.turn * dt);
+    }
+  } else if (st.mode === 'aim') {
+    if (a) {
+      const wx = a[0] - st.p[0], wy = a[1] - st.p[1], wz = a[2] - st.p[2];
+      const L = Math.hypot(wx, wy, wz);
+      if (L > 1) turn3(st.d, [wx / L, wy / L, wz / L], g.turn * dt);
     }
   } else if (st.mode === 'turn') {
     // client truyền vị trí thật của nhân vật; server tự tích phân đường lao

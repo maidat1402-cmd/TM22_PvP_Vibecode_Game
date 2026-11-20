@@ -1,8 +1,8 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, TEAM, rainPoints, hitsObstacle } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
-import { getChar, charMaxHp, skillLifetime } from '../shared/characters.js';
+import { getChar, charMaxHp, charSkills, skillLifetime } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
 
 const BODY_R = GAME.bodyRadius;
@@ -22,6 +22,9 @@ function distPointSeg(px, py, pz, ax, ay, az, bx, by, bz) {
   const cx = ax + abx * t - px, cy = ay + aby * t - py, cz = az + abz * t - pz;
   return Math.hypot(cx, cy, cz);
 }
+
+// Sát thương bỏng mỗi nhịp: không cộng dấu, không tích thanh dị biến, không gây bỏng tiếp
+const BURN_SKILL = { fx: { kind: 'burn', color: 0xff5400 }, noMark: true, noGauge: true, noBurn: true };
 
 let nextRoomId = 1;
 let nextEntityId = 1;
@@ -82,7 +85,8 @@ export class Room {
 
   publicPlayer(p) {
     return { id: p.id, name: p.name, char: p.char, x: r2(p.x), y: r2(p.y), z: r2(p.z), yaw: r2(p.yaw),
-      hp: Math.ceil(p.hp), mp: Math.floor(p.mp), dead: p.dead, kills: p.kills, deaths: p.deaths, team: p.team || null };
+      hp: Math.ceil(p.hp), mp: Math.floor(p.mp), dead: p.dead, kills: p.kills, deaths: p.deaths, team: p.team || null,
+      awk: Math.floor(p.awk || 0), aw: p.awUntil > now() ? r2(p.awUntil - now()) : 0 };
   }
 
   add(client) {
@@ -100,6 +104,7 @@ export class Room {
       lastHit: -99, kills: 0, deaths: 0, cds: {}, lockUntil: 0, healCd: 0,
       healUntil: 0, healRate: 0, invulnUntil: 0, stunUntil: 0, lastSeen: now(),
       team, ready: false,
+      awk: 0, awUntil: 0, tiredUntil: 0,   // thanh dị biến, hết dị biến lúc, kiệt sức tới lúc
     };
     this.players.set(p.id, p);
     client.room = this;
@@ -173,7 +178,9 @@ export class Room {
     for (const p of this.players.values()) {
       const [sx, sz] = this.spawnPoint(p.team);
       Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
-        invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0, healUntil: 0, ready: false });
+        invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0, healUntil: 0, ready: false, burn: null, frost: null });
+      this.endAwaken(p, true);
+      p.awk = 0;
       this.broadcast({ t: 'respawn', id: p.id, p: [sx, 0, sz] });
     }
     this.broadcast({ t: 'sys', msg: `⚔ Trận đấu bắt đầu! Đội nào hạ ${TEAM.killLimit} mạng trước sẽ thắng.` });
@@ -261,6 +268,7 @@ export class Room {
       case 'cast': this.handleCast(p, m, t); break;
       case 'tteam': case 'tready': case 'tstart': if (this.team) this.onTeamMessage(p, m); break;
       case 'heal': this.handleHeal(p, t); break;
+      case 'awk': this.handleAwaken(p, t); break;
       case 'steer': { // cập nhật tâm ngắm cho chiêu cuối đang chạy
         const e = p.steerEnt, a = validAim(m.a);
         if (!e || e.dead || !a) return;
@@ -270,6 +278,9 @@ export class Room {
       }
       case 'char': {
         const c = getChar(m.char);
+        // đổi nhân vật: mất dị biến và thanh dị biến
+        this.endAwaken(p, true);
+        p.awk = 0;
         p.char = c.id;
         // đổi nhân vật: giữ nguyên tỉ lệ máu hiện tại theo máu tối đa mới
         const ratio = p.maxHp ? p.hp / p.maxHp : 1;
@@ -299,10 +310,14 @@ export class Room {
   handleCast(p, m, t) {
     const ch = getChar(p.char);
     const sIdx = m.sk | 0;
-    const s = ch.skills[sIdx];
-    const reject = () => this.send(p, { t: 'castno', cs: m.cs, sk: sIdx, mp: Math.floor(p.mp) });
+    // dạng dị biến: client báo aw = 1, server chấp nhận nếu còn dị biến (dung sai trễ mạng 0.25 s)
+    const aw = !!m.aw;
+    if (aw && !(p.awUntil > t - 0.25)) return this.send(p, { t: 'castno', cs: m.cs, sk: sIdx, aw: 1, mp: Math.floor(p.mp) });
+    const s = charSkills(ch, aw)[sIdx];
+    const cdKey = sIdx + (aw ? 10 : 0);
+    const reject = () => this.send(p, { t: 'castno', cs: m.cs, sk: sIdx, aw: aw ? 1 : 0, mp: Math.floor(p.mp) });
     if (!s || p.dead || t < p.stunUntil - 0.05) return reject();
-    if (t < (p.cds[sIdx] || 0) - 0.08) return reject();      // dung sai nhỏ cho lag
+    if (t < (p.cds[cdKey] || 0) - 0.08) return reject();      // dung sai nhỏ cho lag
     if (t < p.lockUntil - 0.12) return reject();
     if (p.mp < s.mana) return reject();
     // đòn kết chuỗi J: chỉ hợp lệ ngay sau 2 đòn J liên tiếp
@@ -313,17 +328,20 @@ export class Room {
     if (![x, y, z, dx, dy, dz].every(Number.isFinite)) return reject();
     // Không tin vị trí cast lệch quá xa vị trí server biết
     if (Math.hypot(x - p.x, z - p.z) > 6) { x = p.x; y = p.y; z = p.z; }
-    dy = Math.max(-0.6, Math.min(0.6, dy));
+    // cho phép ngắm lên/xuống dốc (đối thủ đang bay, hoặc mình đang bay bắn xuống)
+    const hl0 = Math.hypot(dx, dz);
+    if (hl0 < 0.3) { const k = 0.3 / (hl0 || 1); dx = hl0 ? dx * k : 0.3; dz *= k; }
+    dy = Math.max(-0.95, Math.min(0.95, dy));
     const L = Math.hypot(dx, dy, dz) || 1;
     dx /= L; dy /= L; dz /= L;
 
     p.mp -= s.mana;
-    p.cds[sIdx] = t + s.cd;
+    p.cds[cdKey] = t + s.cd;
     p.lockUntil = t + s.lock;
     // đếm chuỗi J
     if (sIdx === 0) { p.jn = t - (p.jLast || 0) < 1.3 ? (p.jn || 0) + 1 : 1; p.jLast = t; }
     else p.jn = 0;
-    if (s.invuln && s.type === 'dash') p.invulnUntil = Math.max(p.invulnUntil, t + s.delay + s.dur + 0.05);
+    if (s.invuln && s.type === 'dash' && !s.bigCharge) p.invulnUntil = Math.max(p.invulnUntil, t + s.delay + s.dur + 0.05);
 
     const seed = (m.seed >>> 0) || ((Math.random() * 2 ** 31) | 0);
     const e = {
@@ -340,6 +358,7 @@ export class Room {
         // xoay hướng quanh trục Y
         const ddx = dx * c - dz * sn, ddz = dx * sn + dz * c;
         e.subs.push({ k, d: [ddx, dy, ddz], pos: [x + ddx * 0.6, y + CHEST + dy * 0.6, z + ddz * 0.6], alive: true });
+        if (s.seek) e.subs[k].seek = true;
       }
     }
     if (s.type === 'rain') e.pts = rainPoints(s, seed);
@@ -354,9 +373,12 @@ export class Room {
       if (L2 > s.range) { tx = x + (tx - x) / L2 * s.range; tz = z + (tz - z) / L2 * s.range; }
       tg = this.clampToArena(tx, tz);
     } else if (s.type === 'blink') {
+      // ra sau lưng đối thủ gần tâm ngắm nhất (dị biến Kage); không có thì như Thuấn Ảnh:
       // dấu phi đao còn hạn và trong tầm thì tới đó, không thì lướt bóng về phía trước
       const mk = p.shadowMark;
-      if (mk && t < mk.until && Math.hypot(mk.x - x, mk.z - z) <= s.markRange) { tg = [mk.x, mk.z]; p.shadowMark = null; this.broadcast({ t: 'kmark', id: p.id, off: 1 }); }
+      const bt = s.behind ? this.aimTarget(p, x, z, e.h, s.behind) : null;
+      if (bt) tg = this.clampToArena(bt.x - Math.sin(bt.yaw) * 1.6, bt.z - Math.cos(bt.yaw) * 1.6);
+      else if (mk && t < mk.until && Math.hypot(mk.x - x, mk.z - z) <= s.markRange) { tg = [mk.x, mk.z]; p.shadowMark = null; this.broadcast({ t: 'kmark', id: p.id, off: 1 }); }
       else tg = this.clampToArena(x + e.h[0] * s.dist, z + e.h[1] * s.dist);
       tg = this.freeSpot(tg[0], tg[1], x, z);
     } else if (s.type === 'trap' || s.type === 'summon') {
@@ -368,11 +390,15 @@ export class Room {
       }
     } else if (s.type === 'buff') {
       this.applyBuff(p, s, t + s.delay + s.dur);
+      if (s.invuln) p.invulnUntil = Math.max(p.invulnUntil, t + s.delay + s.dur);
+    } else if (s.type === 'wall') {
+      tg = this.clampToArena(x + e.h[0] * s.offset, z + e.h[1] * s.offset);
     }
     if (tg) e.tg = tg;
     this.entities.push(e);
 
     const out = { t: 'cast', id: p.id, sk: sIdx, eid: e.id, p: [r2(x), r2(y), r2(z)], d: [r2(dx), r2(dy), r2(dz)], seed };
+    if (aw) out.aw = 1;
     if (tg) out.tg = tg.map(r2);
     this.broadcast(out, p.id);
     this.send(p, { ...out, cs: m.cs, mp: Math.floor(p.mp) });
@@ -416,10 +442,11 @@ export class Room {
   addCharge(src, tgt, n, t) {
     const ps = getChar(src.char).passive;
     if (!ps || ps.kind !== 'charge' || tgt.dead) return;
+    const stacks = this.awOf(src, t)?.passive.chargeStacks || ps.stacks;
     const mk = (tgt.charges ||= new Map());
     const cur = mk.get(src.id);
     let cnt = (cur && t < cur.until ? cur.n : 0) + n;
-    if (cnt < ps.stacks) {
+    if (cnt < stacks) {
       mk.set(src.id, { n: cnt, until: t + ps.dur });
       this.broadcast({ t: 'mark', tid: tgt.id, sid: src.id, n: cnt, dur: ps.dur });
       return;
@@ -427,13 +454,18 @@ export class Room {
     mk.delete(src.id);
     this.broadcast({ t: 'mark', tid: tgt.id, sid: src.id, n: 0 });
     // sét nảy: mục tiêu chính rồi tối đa ps.jumps đối thủ gần nhất
-    const chainSkill = { fx: { kind: 'chain', color: 0xc77dff }, stun: ps.stun, noMark: true };
-    const pts = [[r2(tgt.x), r2(tgt.y + 1), r2(tgt.z)]];
-    const hitIds = new Set([tgt.id]);
-    let last = tgt;
-    this.damage(src, tgt, ps.dmg, [0, 2, 0], chainSkill, [tgt.x, tgt.y + 1, tgt.z]);
-    for (let j = 0; j < ps.jumps; j++) {
-      let best = null, bd = ps.range;
+    this.chainFrom(src, tgt, ps.dmg, ps.jumps, ps.jumpDmg, ps.range, ps.stun, 0xc77dff);
+  }
+
+  // Sét nảy từ first sang tối đa jumps đối thủ gần nhất (firstDmg = 0: first đã trúng đòn rồi)
+  chainFrom(src, first, firstDmg, jumps, jumpDmg, range, stun, color) {
+    const chainSkill = { fx: { kind: 'chain', color }, stun, noMark: true };
+    const pts = [[r2(first.x), r2(first.y + 1), r2(first.z)]];
+    const hitIds = new Set([first.id]);
+    let last = first;
+    if (firstDmg) this.damage(src, first, firstDmg, [0, 2, 0], chainSkill, [first.x, first.y + 1, first.z]);
+    for (let j = 0; j < jumps; j++) {
+      let best = null, bd = range;
       for (const q of this.players.values()) {
         if (q === src || q.dead || hitIds.has(q.id) || (this.team && q.team === src.team)) continue;
         const d = Math.hypot(q.x - last.x, q.z - last.z);
@@ -442,10 +474,65 @@ export class Room {
       if (!best) break;
       hitIds.add(best.id);
       pts.push([r2(best.x), r2(best.y + 1), r2(best.z)]);
-      this.damage(src, best, ps.jumpDmg, [0, 2, 0], chainSkill, [best.x, best.y + 1, best.z]);
+      this.damage(src, best, jumpDmg, [0, 2, 0], chainSkill, [best.x, best.y + 1, best.z]);
       last = best;
     }
-    this.broadcast({ t: 'chain', pts, c: 0xc77dff });
+    if (firstDmg || pts.length > 1) this.broadcast({ t: 'chain', pts, c: color, nosky: firstDmg ? undefined : 1 });
+  }
+
+  // Đối thủ gần hướng nhìn nhất trong tầm (dịch chuyển ra sau lưng)
+  aimTarget(p, x, z, h, range) {
+    let best = null, bs = Infinity;
+    for (const q of this.players.values()) {
+      if (q === p || q.dead || (this.team && q.team === p.team)) continue;
+      const vx = q.x - x, vz = q.z - z, d = Math.hypot(vx, vz);
+      if (d > range || d < 0.5) continue;
+      const ang = Math.acos(Math.max(-1, Math.min(1, (vx * h[0] + vz * h[1]) / d)));
+      if (ang > 0.8) continue;
+      const sc = ang * 3 + d * 0.05;
+      if (sc < bs) { bs = sc; best = q; }
+    }
+    return best;
+  }
+
+  // Vòng cột đá tạm thời quanh (cx, cz)
+  spawnWalls(cx, cz, W, e, t) {
+    for (let i = 0; i < W.count; i++) {
+      const a = (i / W.count) * Math.PI * 2 + e.seed % 7;
+      this.dyn.push({ x: cx + Math.cos(a) * W.ring, z: cz + Math.sin(a) * W.ring, r: W.r, h: W.h, until: t + W.dur, owner: e.owner });
+    }
+  }
+
+  // ---------- Dị biến ----------
+  awOf(p, t = now()) { return p && p.awUntil > t ? getChar(p.char).awaken : null; }
+
+  handleAwaken(p, t) {
+    if (p.dead || p.awUntil > t || (p.awk || 0) < AWAKEN.max - 0.01 || t < p.stunUntil) return this.send(p, { t: 'awkno', awk: Math.floor(p.awk || 0) });
+    const A = getChar(p.char).awaken;
+    p.awk = 0;
+    p.awUntil = t + AWAKEN.transform + AWAKEN.dur;
+    p.tiredUntil = 0;
+    p.invulnUntil = Math.max(p.invulnUntil, t + AWAKEN.transform);
+    p.lockUntil = Math.max(p.lockUntil, t + AWAKEN.transform);
+    p.mp = GAME.maxMana;
+    p.jn = 0;
+    this.broadcast({ t: 'awk', id: p.id, on: 1, dur: r2(p.awUntil - t), tf: AWAKEN.transform });
+    this.broadcast({ t: 'sys', msg: `⚡ ${p.name} dị biến: ${A.name}!` });
+    // sóng xung kích lúc biến hình: đẩy văng đối thủ đứng gần
+    const S = AWAKEN.shock, sk = { fx: { kind: 'awaken', color: A.color }, noGauge: true, noMark: true, noBurn: true };
+    for (const q of this.players.values()) {
+      if (q === p || q.dead || (this.team && q.team === p.team)) continue;
+      if (Math.hypot(q.x - p.x, q.z - p.z) < S.radius + BODY_R && Math.abs(q.y - p.y) < 4) this.damage(p, q, S.dmg, this.kbFrom(p.x, p.z, q, S), sk, [q.x, q.y + 1, q.z]);
+    }
+  }
+
+  // Hết dị biến (silent: chết / đổi nhân vật / trận mới — không kiệt sức)
+  endAwaken(p, silent) {
+    if (!p.awUntil) return;
+    p.awUntil = 0;
+    for (const k of Object.keys(p.cds)) if (+k >= 10) delete p.cds[k];
+    p.tiredUntil = silent ? 0 : now() + AWAKEN.tired;
+    this.broadcast({ t: 'awk', id: p.id, on: 0, tired: silent ? 0 : AWAKEN.tired });
   }
 
   hitsDyn(x, y, z, r) {
@@ -460,13 +547,17 @@ export class Room {
     // đấu đội: phòng chờ/kết quả không mất máu, không đánh được đồng đội
     if (this.team && (this.phase !== 'play' || (src && src !== tgt && src.team === tgt.team))) return false;
     let crit = false;
-    if (src && src !== tgt) {
+    const other = src && src !== tgt;
+    const sa = other ? this.awOf(src, t)?.passive : null;   // nội tại dị biến của người đánh
+    const ta = this.awOf(tgt, t)?.passive;                   // nội tại dị biến của người bị đánh
+    if (other) {
       // đòn đầu tiên khi đang tàng hình
       if (src.buff?.stealth && t < src.buff.until) { amount *= src.buff.nextHitMul; crit = true; this.endBuff(src); }
       // đâm sau lưng: kẻ tấn công nằm phía sau hướng nhìn của mục tiêu
-      if (s.backstab) {
+      const back = s.backstab || (s.noMark ? 0 : sa?.backAll);
+      if (back) {
         const fx = Math.sin(tgt.yaw), fz = Math.cos(tgt.yaw);
-        if (fx * (src.x - tgt.x) + fz * (src.z - tgt.z) < 0) { amount *= s.backstab; crit = true; }
+        if (fx * (src.x - tgt.x) + fz * (src.z - tgt.z) < 0) { amount *= back; crit = true; }
       }
     }
     // giáp đá: giảm sát thương, không bị đẩy lùi
@@ -474,13 +565,34 @@ export class Room {
       amount *= tgt.buff.dmgTaken;
       if (tgt.buff.noKb) kb = [0, 0, 0];
     }
+    if (ta) {
+      if (ta.dmgTaken) amount *= ta.dmgTaken;
+      if (ta.noKb) kb = [0, 0, 0];
+    }
     amount = Math.max(1, Math.round(amount));
     tgt.hp -= amount;
     tgt.lastHit = t;
-    if (src && src !== tgt) src.mp = Math.min(GAME.maxMana, src.mp + amount * GAME.manaOnHitRatio);
+    if (other) src.mp = Math.min(GAME.maxMana, src.mp + amount * GAME.manaOnHitRatio);
+    // thanh dị biến: chỉ tích khi chưa dị biến
+    if (other && !s.noGauge && !(src.awUntil > t)) src.awk = Math.min(AWAKEN.max, (src.awk || 0) + amount * AWAKEN.gain);
     const msg = { t: 'hit', tid: tgt.id, sid: src ? src.id : 0, dmg: amount, hp: Math.max(0, Math.ceil(tgt.hp)),
       kb: kb.map(r2), at: at.map(r2), fx: s.fx.kind, c: s.fx.color };
-    if (s.stun && !(tgt.buff?.noKb && t < tgt.buff.until)) { msg.stun = s.stun; tgt.stunUntil = t + s.stun; }
+    let stun = s.stun || 0;
+    if (sa && !s.noBurn) {
+      if (sa.lifesteal) src.hp = Math.min(src.maxHp, src.hp + amount * sa.lifesteal);
+      if (sa.burn) { const B = sa.burn; tgt.burn = { src: src.id, dmg: B.dmg, every: B.every, next: t + B.every, until: t + B.dur }; msg.burn = 1; }
+      if (sa.frost) {
+        // dấu băng: đủ số dấu trong khoảng thời gian thì đóng băng
+        const F = sa.frost, fr = tgt.frost ||= { n: 0, until: 0, immune: 0 };
+        if (t >= fr.immune) {
+          fr.n = (t < fr.until ? fr.n : 0) + 1;
+          fr.until = t + F.window;
+          if (fr.n >= F.stacks) { fr.n = 0; fr.immune = t + F.stun + F.immune; stun = Math.max(stun, F.stun); msg.frz = 1; }
+          else msg.frost = fr.n;
+        }
+      }
+    }
+    if (stun && !(tgt.buff?.noKb && t < tgt.buff.until) && !ta?.noStun) { msg.stun = stun; tgt.stunUntil = t + stun; }
     if (s.slow) msg.slow = s.slow;
     if (crit) msg.crit = 1;
     this.broadcast(msg);
@@ -496,7 +608,11 @@ export class Room {
     tgt.respawnAt = now() + GAME.respawnTime;
     tgt.healUntil = 0;
     tgt.charges = null;
+    tgt.burn = null; tgt.frost = null;
     this.endBuff(tgt);
+    // dị biến: chết thì hết dị biến, thanh còn lại một nửa
+    this.endAwaken(tgt, true);
+    tgt.awk = Math.floor((tgt.awk || 0) * AWAKEN.deathKeep);
     if (src && src !== tgt) src.kills++;
     this.broadcast({ t: 'die', id: tgt.id, by: src ? src.id : 0, k: src ? src.kills : 0, d: tgt.deaths });
     if (this.team && this.phase === 'play') {
@@ -506,6 +622,21 @@ export class Room {
       if (this.score[scorer] >= TEAM.killLimit) this.endMatch(scorer);
       else this.sendTeamState();
     }
+  }
+
+  // Đạn tự tìm: bẻ hướng dần về đối thủ gần nhất phía trước (trong 12 m)
+  seekStep(e, sub, k) {
+    const [x, y, z] = sub.pos;
+    let best = null, bd = 12;
+    for (const q of this.targets(e)) {
+      const vx = q.x - x, vy = q.y + CHEST - y, vz = q.z - z, d = Math.hypot(vx, vy, vz);
+      if (d > bd || d < 0.3 || (vx * sub.d[0] + vy * sub.d[1] + vz * sub.d[2]) / d < 0.5) continue;
+      bd = d; best = [vx / d, vy / d, vz / d];
+    }
+    if (!best) return;
+    k = Math.min(1, k);
+    const d = sub.d.map((v, i) => v + (best[i] - v) * k), L = Math.hypot(...d) || 1;
+    sub.d = d.map(v => v / L);
   }
 
   kbFrom(fx, fz, tgt, s, mul = 1) {
@@ -527,8 +658,8 @@ export class Room {
     }
   }
 
-  explode(e, src, x, y, z, ex) {
-    this.broadcast({ t: 'boom', eid: e.id, at: [r2(x), r2(y), r2(z)], r: ex.radius, c: e.skill.fx.color });
+  explode(e, src, x, y, z, ex, k) {
+    this.broadcast({ t: 'boom', eid: e.id, k, at: [r2(x), r2(y), r2(z)], r: ex.radius, c: e.skill.fx.color });
     const s = e.skill;
     for (const q of this.targets(e)) {
       const d = Math.hypot(q.x - x, q.y + CHEST - y, q.z - z);
@@ -553,14 +684,22 @@ export class Room {
 
     switch (s.type) {
       case 'melee': {
-        for (const q of this.targets(e)) {
-          const vx = q.x - px, vz = q.z - pz;
-          const d = Math.hypot(vx, vz);
-          if (d > s.range + BODY_R || Math.abs(q.y - py) > 2.2) continue;
-          const ang = d < 0.5 ? 0 : Math.acos(Math.max(-1, Math.min(1, (vx * hx + vz * hz) / d)));
-          if (ang <= s.arc) this.damage(src, q, s.dmg, this.kbFrom(px, pz, q, s), s, [q.x, q.y + 1, q.z]);
-        }
-        e.dead = true;
+        const swing = mul => {
+          for (const q of this.targets(e)) {
+            const vx = q.x - px, vz = q.z - pz;
+            const d = Math.hypot(vx, vz);
+            if (d > s.range + BODY_R || Math.abs(q.y - py) > 2.2) continue;
+            const ang = d < 0.5 ? 0 : Math.acos(Math.max(-1, Math.min(1, (vx * hx + vz * hz) / d)));
+            if (ang <= s.arc) this.damage(src, q, s.dmg * mul, this.kbFrom(px, pz, q, s, mul), s, [q.x, q.y + 1, q.z]);
+          }
+        };
+        if (!e.state.m) { e.state.m = 1; swing(1); }
+        // phân thân chém theo sau mỗi nhát
+        if (s.echo) {
+          const i = Math.floor((el - s.delay) / s.echo.gap);
+          while ((e.state.ei || 0) < Math.min(i, s.echo.n)) { e.state.ei = (e.state.ei || 0) + 1; swing(s.echo.mul); }
+          if ((e.state.ei || 0) >= s.echo.n) e.dead = true;
+        } else e.dead = true;
         break;
       }
       case 'projectile': {
@@ -569,6 +708,7 @@ export class Room {
         for (const sub of e.subs) {
           if (!sub.alive) continue;
           if (e.st) { steerStep(e.st, s, dt, el, sub.pos); sub.d = e.st.d; }
+          if (sub.seek) this.seekStep(e, sub, s.seek * dt);
           const [ox, oy, oz] = sub.pos;
           const nx = ox + sub.d[0] * travel, ny = oy + sub.d[1] * travel, nz = oz + sub.d[2] * travel;
           sub.pos = [nx, ny, nz];
@@ -581,11 +721,12 @@ export class Room {
             if (d < s.radius + BODY_R) {
               e.hits.set(key, t);
               const kb = [sub.d[0] * s.kb, s.kbUp != null ? s.kbUp : s.kb * 0.3, sub.d[2] * s.kb];
-              this.damage(src, q, s.dmg, kb, s, [q.x, q.y + 1, q.z]);
+              const hit = this.damage(src, q, s.dmg, kb, s, [q.x, q.y + 1, q.z]);
+              if (hit && s.bounce && src) this.chainFrom(src, q, 0, s.bounce.n, s.bounce.dmg, s.bounce.range, 0, s.fx.color);
               if (!s.pierce) { ended = true; break; }
             }
           }
-          if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius, this.arena, this.dyn))) ended = true;
+          if (!ended && (sub.dist >= s.range || hitsObstacle(nx, ny, nz, s.radius, this.arena, this.dyn, e.owner, src?.team))) ended = true;
           if (ended) {
             sub.alive = false;
             if (s.mark && sub.k === 0 && src) {
@@ -603,7 +744,7 @@ export class Room {
               for (const q of this.targets(e)) {
                 if (Math.hypot(q.x - tx, q.z - tz) < tp.radius + BODY_R && q.y < 4) this.damage(src, q, tp.dmg, this.kbFrom(tx, tz, q, { kb: tp.kb, kbUp: tp.kbUp }), ps, [q.x, q.y + 1, q.z]);
               }
-            } else if (s.explode) this.explode(e, src, nx, ny, nz, s.explode);
+            } else if (s.explode) this.explode(e, src, nx, ny, nz, s.explode, sub.k);
             else this.broadcast({ t: 'pend', eid: e.id, k: sub.k, at: [r2(nx), r2(ny), r2(nz)] });
           } else any = true;
         }
@@ -618,10 +759,12 @@ export class Room {
         const prev = e.state.prev || [px, pz];
         e.state.prev = [x, z];
         for (const q of this.targets(e)) {
-          if (e.hits.has(q.id)) continue;
+          // multi: lướt đánh nhiều nhịp — mỗi mục tiêu trúng tối đa s.multi lần, cách nhau s.multiInt giây
+          const hc = e.hits.get(q.id);
+          if (s.multi ? hc && (hc.n >= s.multi || t - hc.t < s.multiInt) : hc) continue;
           const d = distPointSeg(q.x, q.y, q.z, prev[0], py, prev[1], x, py, z);
           if (d < s.radius + BODY_R && Math.abs(q.y - py) < 2.5) {
-            e.hits.set(q.id, t);
+            e.hits.set(q.id, s.multi ? { n: (hc?.n || 0) + 1, t } : t);
             this.damage(src, q, s.dmg, [dhx * s.kb, s.kbUp || 3, dhz * s.kb], s, [q.x, q.y + 1, q.z]);
           }
         }
@@ -635,7 +778,7 @@ export class Room {
         const n = Math.floor((el - s.delay) / s.tickInt);
         if (n > (e.state.n ?? -1) && el <= s.delay + s.dur) {
           e.state.n = n;
-          const [dx, dy, dz] = e.d;
+          const [dx, dy, dz] = e.st?.mode === 'aim' ? e.st.d : e.d;
           const ax = px + dx * 0.8, ay = py + CHEST + dy * 0.8, az = pz + dz * 0.8;
           const bx = ax + dx * s.length, by = ay + dy * s.length, bz = az + dz * s.length;
           for (const q of this.targets(e)) {
@@ -653,8 +796,10 @@ export class Room {
           e.state.n = n;
           let cx = px, cy = py, cz = pz;
           if (s.at === 'front') { cx = px + hx * s.offset; cz = pz + hz * s.offset; cy = 0; }
+          if (s.follow && src && !src.dead) { cx = src.x; cy = src.y; cz = src.z; }   // vùng bám theo người ra chiêu
           if (e.st) { cx = e.st.c[0]; cz = e.st.c[2]; }
           if (n === 0 && s.healSelf && src && !src.dead) src.hp = Math.min(src.maxHp, src.hp + s.healSelf);
+          if (n === 0 && s.walls) this.spawnWalls(cx, cz, s.walls, e, t);
           for (const q of this.targets(e)) {
             const d = Math.hypot(q.x - cx, q.z - cz);
             if (d < s.radius + BODY_R && q.y - cy > -1.5 && q.y - cy < 5) {
@@ -726,14 +871,70 @@ export class Room {
         for (const q of this.targets(e)) {
           if (Math.hypot(q.x - cx, q.z - cz) < s.radius + BODY_R && q.y < 4) this.damage(src, q, s.dmg, this.kbFrom(cx, cz, q, s), s, [q.x, q.y + 1, q.z]);
         }
-        if (s.walls) {
-          const W = s.walls;
-          for (let i = 0; i < W.count; i++) {
-            const a = (i / W.count) * Math.PI * 2 + e.seed % 7;
-            this.dyn.push({ x: cx + Math.cos(a) * W.ring, z: cz + Math.sin(a) * W.ring, r: W.r, h: W.h, until: t + W.dur, owner: e.owner });
-          }
-        }
+        if (s.walls) this.spawnWalls(cx, cz, s.walls, e, t);
         e.dead = true;
+        break;
+      }
+      case 'wall': {
+        // tường gió: một hàng trụ vô hình chặn đạn của đối thủ (đạn của chủ tường bay xuyên, người đi xuyên)
+        if (e.state.up) break;
+        e.state.up = true;
+        const [cx, cz] = e.tg, w = s.width / 2;
+        for (let i = 0; i < s.segs; i++) {
+          const f = s.segs > 1 ? i / (s.segs - 1) * 2 - 1 : 0;
+          this.dyn.push({ x: cx - hz * f * w, z: cz + hx * f * w, r: s.segR, h: s.height, until: e.end, owner: e.owner,
+            pass: e.owner, passTeam: this.team ? src?.team : null, noBody: true });
+        }
+        // người đứng sát tường bị gió hất văng ra xa
+        for (const q of this.targets(e)) {
+          const d = distPointSeg(q.x, 0, q.z, cx - hz * w, 0, cz + hx * w, cx + hz * w, 0, cz - hx * w);
+          if (d < 1.6 + BODY_R && q.y < s.height) this.damage(src, q, s.dmg, [hx * s.kb, s.kbUp, hz * s.kb], s, [q.x, q.y + 1, q.z]);
+        }
+        break;
+      }
+      case 'smite': {
+        // sét giáng xuống mọi đối thủ trong tầm, dấu điện trên người thêm sát thương
+        if (e.state.done) break;
+        e.state.done = true;
+        const pts = [], sm = { ...s, noMark: true };
+        for (const q of this.targets(e)) {
+          if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
+          const mk = q.charges?.get(e.owner);
+          const marks = mk && t < mk.until ? mk.n : 0;
+          if (marks) { q.charges.delete(e.owner); this.broadcast({ t: 'mark', tid: q.id, sid: e.owner, n: 0 }); }
+          pts.push([r2(q.x), r2(q.y + 1), r2(q.z)]);
+          this.damage(src, q, s.dmg + marks * (s.perMark || 0), [0, s.kbUp, 0], sm, [q.x, q.y + 1, q.z]);
+        }
+        if (pts.length) this.broadcast({ t: 'chain', pts, c: s.fx.color, sky: 1 });
+        e.dead = true;
+        break;
+      }
+      case 'multiblink': {
+        // lướt chém lần lượt: mỗi nhịp dịch chuyển ra sau lưng đối thủ bị chém ít nhất (gần nhất) rồi chém
+        const i = Math.floor((el - s.delay) / s.interval);
+        while (!e.dead && (e.state.n ?? -1) < Math.min(i, s.strikes - 1)) {
+          e.state.n = (e.state.n ?? -1) + 1;
+          if (!src || src.dead) { e.dead = true; break; }
+          let best = null, bs = Infinity;
+          for (const q of this.targets(e)) {
+            if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
+            const sc = (e.hits.get(q.id) || 0) * 100 + Math.hypot(q.x - src.x, q.z - src.z);
+            if (sc < bs) { bs = sc; best = q; }
+          }
+          if (!best) {
+            // không có ai trong tầm: lướt bóng về phía trước
+            const [tx, tz] = this.freeSpot(...this.clampToArena(src.x + hx * 8, src.z + hz * 8), src.x, src.z);
+            this.teleport(src, tx, tz, t);
+            e.dead = true;
+            break;
+          }
+          e.hits.set(best.id, (e.hits.get(best.id) || 0) + 1);
+          const [bx, bz] = this.freeSpot(...this.clampToArena(best.x - Math.sin(best.yaw) * 1.4, best.z - Math.cos(best.yaw) * 1.4), best.x, best.z);
+          this.teleport(src, bx, bz, t);
+          src.yaw = Math.atan2(best.x - bx, best.z - bz);
+          this.damage(src, best, s.dmg, this.kbFrom(bx, bz, best, s), s, [best.x, best.y + 1, best.z]);
+        }
+        if ((e.state.n ?? -1) >= s.strikes - 1) e.dead = true;
         break;
       }
       case 'blink': {
@@ -790,8 +991,18 @@ export class Room {
       if (t - p.lastHit > GAME.hpRegenDelay) p.hp += GAME.hpRegen * dt;
       // Chiêu hồi máu
       if (t < p.healUntil) p.hp += p.healRate * dt;
-      // Mana: thụ động + vận khí (flag 2) - bay (flag 1)
-      let mr = GAME.manaRegen;
+      // Dị biến hết giờ
+      if (p.awUntil && t >= p.awUntil) this.endAwaken(p);
+      // Bỏng (nội tại dị biến Homura)
+      const B = p.burn;
+      if (B && t >= B.next) {
+        B.next += B.every;
+        if (B.next > B.until + 0.01) p.burn = null;
+        this.damage(this.players.get(B.src) || null, p, B.dmg, [0, 0, 0], BURN_SKILL, [p.x, p.y + 1, p.z]);
+        if (p.dead) continue;
+      }
+      // Mana: thụ động (gấp đôi khi dị biến) + vận khí (flag 2) - bay (flag 1)
+      let mr = GAME.manaRegen * (p.awUntil > t ? AWAKEN.manaRegenMul : 1);
       if (p.flags & 2) mr += GAME.chargeManaRate;
       if (p.flags & 1) mr -= MOVE.flyManaPerSec + GAME.manaRegen;
       p.mp += mr * dt;
@@ -822,7 +1033,8 @@ export class Room {
     if (this.snapT.due(dt)) {
       const ps = [];
       for (const p of this.players.values()) {
-        ps.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), p.anim, Math.ceil(p.hp), Math.floor(p.mp), p.flags | (p.dead ? 128 : 0)]);
+        ps.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), p.anim, Math.ceil(p.hp), Math.floor(p.mp),
+          p.flags | (p.dead ? 128 : 0) | (p.awUntil > t ? 64 : 0), Math.floor(p.awk || 0)]);
       }
       this.broadcast({ t: 'snap', ps });
     }

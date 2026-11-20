@@ -70,13 +70,27 @@ Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng p
 | `J`→`K` | Chiêu 2 |
 | `K`→`L` | Chiêu 3 |
 | `J`→`K`→`L` | Tuyệt kỹ |
+| `L`→`L` | **Dị biến** (khi thanh dị biến đầy) |
 | `H` | Hồi máu (tốn mana, có hồi chiêu) |
 | giữ `U` | Vận khí: hồi mana rất nhanh nhưng phải đứng yên |
 | `Tab` / `Enter` / `F1` / `Esc` | Bảng điểm / chat / hướng dẫn / menu |
 
-Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất.
+Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất và **ngắm cả theo chiều dọc**: đối thủ đang bay cao (hoặc mình đang bay bắn xuống) thì đạn, tia chưởng bay chếch thẳng tới ngực đối thủ. Không khoá được ai thì ngẩng camera lên để bắn chếch lên trời.
 
 **Chuỗi đòn J:** bấm `J` (hoặc nút ⚔ trên điện thoại) 3 lần liên tiếp, đòn thứ 3 thành **đòn kết** riêng của mỗi nhân vật: Kaze phóng kunai xuyên thấu, Raiga đấm hất tung, Homura xoay kiếm lửa, Yuki chém băng làm chậm, Shiden đâm thương dài (thêm 2 dấu điện), Midori quấn dây leo (choáng), Gantetsu đập đất, Kage đâm sau lưng (×2.2 sát thương nếu đứng sau đối thủ).
+
+**Dị biến:** thanh vàng dưới thanh mana bắt đầu trận ở 0 và chỉ tăng khi **đánh trúng đối thủ** (1 sát thương = 1 điểm). Đầy 100 điểm thì bấm `L` `L` (điện thoại: nút ⚡) để biến hình: 0.8 giây bất tử, sóng xung kích hất văng người xung quanh, hồi đầy mana, rồi **17 giây** ở dạng siêu cấp. Trong lúc dị biến cả 6 chiêu (kể cả đánh thường và đòn kết JJJ) đổi sang bộ chiêu mới, chạy nhanh hơn 15%, hồi mana gấp đôi, có nội tại riêng; tuyệt kỹ JKL tụ lực lâu hơn hẳn (1.2–1.4 giây, dễ bị ngắt nếu đứng gần đối thủ). Hết giờ thì kiệt sức 2 giây (chạy chậm). Đang dị biến không tích thanh; chết mất một nửa thanh. Bảng tên trên đầu mọi người có vạch vàng cho biết thanh dị biến, đầy thì hiện ⚡.
+
+| Nhân vật | Dạng dị biến | Nội tại khi biến hình | Bộ chiêu mới (J · K · JK · KL · JKL) |
+|---|---|---|---|
+| Kaze | **Phong Thần Hóa**: khăn tách thành 4 dải gió, lơ lửng | Chạy nhanh hơn 25%, lướt né hồi nhanh gấp đôi | Lưỡi gió bay · 5 phi tiêu tự tìm mục tiêu · lướt gió hất tung · **tường gió** chặn đạn đối thủ (đạn mình bay xuyên) · cưỡi **rồng lốc** lái theo tâm 2.2 s |
+| Raiga | **Bạo Khí Thân**: vân dung nham, găng khí khổng lồ | Không bị đẩy lùi, giảm 15% sát thương | Khí quyền bay 7 m · khí đạn nổ lan · lướt đấm 3 nhịp · chưởng 2 s **quét theo tâm** · lao tới đấm loạn rồi nổ khí tung lên trời |
+| Homura | **Viêm Hoàng Giáp**: cánh lửa, vương miện lửa | Mọi đòn gây **bỏng** (2 sát thương × 4 nhịp) | Chém để lại lửa · 2 trăng lửa chéo · bay lên bổ xuống tâm ngắm · vòng lửa bám theo người · phượng hoàng khổng lồ lao theo tâm |
+| Yuki | **Băng Hậu**: vương miện, áo choàng băng | Trúng 3 đòn trong 3 s thì **đóng băng** 1 s | Băng đạn · 3 băng thương xuyên · trượt băng · quan tài băng nhốt mọi người trong 7 m · bão tuyết 11 m bám theo người |
+| Shiden | **Lôi Kỵ Thần**: sừng vàng, thương dài gấp đôi | Chỉ cần 2 dấu điện là sét nảy | Thương đâm 4.6 m · lôi tiễn **nảy sang 2 người** · lướt sét hồi nhanh · lưới sét kéo vào giữa · **Thiên Lôi Phán Quyết**: sét giáng mọi đối thủ trong 22 m (+10 mỗi dấu điện) |
+| Midori | **Hồn Rừng**: sừng cành cây, hoa mọc khắp người | **Hút máu** 20% sát thương gây ra | Roi gai kéo đối thủ về · gai nổ chùm · rễ trói 1 s · thảm hoa hồi máu · rừng gai trồi lên kéo theo tâm |
+| Gantetsu | **Sơn Thần Giáp**: giáp đá, to ×1.3 | Giảm 30% sát thương, không bị đẩy, không bị choáng (không được tăng tốc chạy) | Đấm chấn động hình nón · cự thạch nổ · cuộn đá lăn · **Thạch Lao** dựng vòng cột nhốt đối thủ · vọt lên trời rơi như **thiên thạch** |
+| Kage | **Vạn Ảnh**: thân bóng đen mắt đỏ, 2 phân thân | Mọi đòn đánh sau lưng ×1.5 | Chém + **2 phân thân chém theo** · mưa phi đao · dịch chuyển **ra sau lưng** đối thủ · hóa bóng bất tử 1.6 s · lướt chém lần lượt 5 nhát vào các đối thủ |
 
 **Lái tuyệt kỹ theo tâm:** trong lúc tuyệt kỹ còn hiệu lực, xoay chuột (điện thoại: giữ nút ★ rồi kéo, hoặc vuốt nửa phải màn hình) để điều khiển chiêu theo vòng tâm; một vòng sáng trên mặt đất cho biết điểm đang lái tới. Lốc xoáy (Kaze) và mưa băng (Yuki) trôi theo tâm, Tinh Cầu Hủy Diệt (Raiga) bẻ hướng bay cả lên/xuống, Phượng Hoàng (Homura) uốn cong đường lao. Tốc độ lái chỉnh ở `steer` của từng chiêu trong `shared/characters.js`.
 
@@ -157,7 +171,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 - **Nửa trái màn hình**: chạm ở đâu thì joystick hiện ở đó để di chuyển (đẩy nhẹ là đi chậm).
 - **Nửa phải**: vuốt để xoay camera / ngắm.
-- **Đối kháng**: mỗi chiêu có nút riêng, không cần bấm combo.
+- **Đối kháng**: mỗi chiêu có nút riêng, không cần bấm combo. Nút ⚡ (góc trên bên phải cụm nút) sáng lên khi thanh dị biến đầy, bấm để biến hình.
 - **Bắn súng**: giữ nút 🎯 để bắn, vừa giữ vừa kéo để ngắm. Nút 💥 cầm lựu đạn (bấm tiếp đổi loại, rồi bấm 🎯 để ném), nút ✋ nhặt súng.
 - Nút ☰ mở menu (toàn màn hình, đổi phe, rời phòng); 🏆 bảng điểm; 💬 chat; 🛒 mua đồ.
 - Nên xoay ngang máy. Trên điện thoại game tự để đồ hoạ ở mức Thấp cho mượt.
@@ -166,7 +180,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 Các nhân vật là **nhân vật nguyên bản** theo các hình mẫu quen thuộc của anime/manga:
 
-Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 5 chiêu, bấm vào một dòng chiêu để xem riêng chiêu đó.
+Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến, bấm vào một dòng chiêu để xem riêng chiêu đó.
 
 | Nhân vật | Máu | Phong cách | Chiêu nổi bật |
 |---|---|---|---|
@@ -186,6 +200,7 @@ Mọi thứ nằm trong [shared/characters.js](shared/characters.js):
 - `hp`: máu tối đa riêng (mặc định 150). Nhân vật to con/chậm nhiều máu hơn, nhân vật nhanh/sát thương cao ít máu hơn.
 - `look`: màu da, tóc, kiểu tóc (`spiky`, `superSpiky`, `ponytail`, `long`, `short`, `braids`, `mohawk`, `hooded`), trang phục, phụ kiện (`scarf`, `belt`, `sash`, `hat`, `pauldrons`, `flowerCrown`, `mask`), vũ khí (`kunai`, `katana`, `staff`, `spear`, `gauntlet`, `branch`, `dagger`, `none`), `scale` (to/nhỏ, chỉ đổi hình).
 - `skills`: mỗi chiêu có `combo`, `mana`, `cd` (hồi chiêu), `dmg`, `type` (`melee`, `projectile`, `dash`, `beam`, `aoe`, `line`, `rain`) và `fx` (màu + kiểu hiệu ứng).
+- `awaken` (bảng `AWAKEN` cuối file): tên, `form` (ngoại hình, dựng trong `client/js/chibi.js` → `buildForm`), `look` (màu đè lên), `passive` (nội tại) và 6 chiêu dị biến. Thông số chung của dị biến (100 điểm, 17 giây…) ở `AWAKEN` trong `shared/config.js`.
 
 Thông số chung (máu, mana, tốc độ hồi, tốc độ chạy, đấu trường...) ở [shared/config.js](shared/config.js).
 
