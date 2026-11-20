@@ -171,7 +171,7 @@ export class Room {
     this.score = { A: 0, B: 0 };
     this.winner = null;
     this.phaseEnd = t + TEAM.timeLimit;
-    this.entities = [];
+    this.clearEntities();
     for (const p of this.players.values()) {
       const [sx, sz] = this.spawnPoint(p.team);
       Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
@@ -188,9 +188,15 @@ export class Room {
     this.phase = 'end';
     this.winner = winner;          // 'A' | 'B' | 'draw'
     this.phaseEnd = now() + TEAM.endDelay;
-    this.entities = [];
+    this.clearEntities();
     this.broadcast({ t: 'sys', msg: winner === 'draw' ? '🤝 Hai đội hoà!' : `🏆 ${TEAM.names[winner]} chiến thắng ${this.score.A} - ${this.score.B}!` });
     this.sendTeamState();
+  }
+
+  // Bỏ mọi chiêu đang tồn tại (bẫy, vật triệu hồi…) và báo client xoá hiệu ứng; đánh dấu dead để 'steer' ngừng chuyển tiếp
+  clearEntities() {
+    for (const e of this.entities) { e.dead = true; this.broadcast({ t: 'pend', eid: e.id, k: 0 }); }
+    this.entities = [];
   }
 
   backToLobby() {

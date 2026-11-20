@@ -520,7 +520,7 @@ export class ShooterRoom {
     p.nades[m.k]--;
     p.lastThrow = t;
     p.protectUntil = 0;
-    const n = { gid: this.nextGid++, k: m.k, by: p.id, sim: newNade(o, v), fuse: g.fuse, acc: 0 };
+    const n = { gid: this.nextGid++, k: m.k, by: p.id, team: p.team, sim: newNade(o, v), fuse: g.fuse, acc: 0 };
     this.nades.push(n);
     this.broadcast({ t: 'sgren', gid: n.gid, k: n.k, by: p.id, o, v });
     this.me(p);
@@ -546,7 +546,7 @@ export class ShooterRoom {
     if (n.k === 'he') {
       for (const q of [...this.players.values()]) {
         if (!q.alive) continue;
-        if (this.mode === 'bomb' && src && q.team === src.team && q !== src) continue;
+        if (this.mode === 'bomb' && q.team === n.team && q !== src) continue;   // n.team: người ném đã rời phòng vẫn không nổ trúng đồng đội
         const chest = [q.x, q.y + 1.0, q.z];
         const d = Math.hypot(chest[0] - center[0], chest[1] - center[1], chest[2] - center[2]);
         if (d > g.radius || !lineOfSight(center, chest, this.map)) continue;
@@ -686,6 +686,8 @@ export class ShooterRoom {
     this.center(`VÒNG ${this.round}`, 'round', 2.5);
     this.broadcast(this.roundState());
     this.roster();
+    // một phe đã bỏ đi hết trong lúc chờ sang vòng (roundEnd/matchEnd không kiểm tra) → về khởi động
+    this.checkWin();
   }
 
   checkWin() {
@@ -763,12 +765,13 @@ export class ShooterRoom {
     const [bx, by, bz] = this.bomb.pos;
     this.bomb.state = 'exploded';
     this.broadcast({ t: 'sbomb', ev: 'exploded', pos: this.bomb.pos });
+    // kết thúc vòng trước: nếu để sau, CT cuối cùng chết vì bom làm checkWin kết thúc vòng kiểu "tiêu diệt" (sai tiền thưởng)
+    this.endRound('T', 'bomb');
     for (const p of this.players.values()) {
       if (!p.alive) continue;
       const d = Math.hypot(p.x - bx, p.y - by, p.z - bz);
       if (d < S.bombRadius) this.damage(null, p, S.bombDamage * Math.pow(1 - d / S.bombRadius, 1.4), false, null);
     }
-    this.endRound('T', 'bomb');
   }
 
   // ================= Vòng lặp =================
