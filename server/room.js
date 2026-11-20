@@ -24,11 +24,13 @@ function distPointSeg(px, py, pz, ax, ay, az, bx, by, bz) {
 }
 
 let nextRoomId = 1;
+// Chung cho cả phòng bắn súng: 2 bộ đếm riêng sẽ trùng id → phòng cũ bị ghi đè trong hub, vòng lặp chạy mãi
+export const newRoomId = () => String(nextRoomId++);
 let nextEntityId = 1;
 
 export class Room {
   constructor(name, hub, mapId, team = false) {
-    this.id = String(nextRoomId++);
+    this.id = newRoomId();
     this.name = name;
     this.arena = getArena(mapId);
     // Đấu đội: phòng chờ (lobby) → trận (play) → kết quả (end) → lại phòng chờ

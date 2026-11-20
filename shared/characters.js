@@ -322,6 +322,7 @@ export const CHARACTERS = [
 ];
 
 export const CHAR_BY_ID = Object.fromEntries(CHARACTERS.map(c => [c.id, c]));
+Object.setPrototypeOf(CHAR_BY_ID, null);   // id từ gói tin như "constructor" không được tra ra hàm của Object
 
 export function getChar(id) {
   return CHAR_BY_ID[id] || CHARACTERS[0];

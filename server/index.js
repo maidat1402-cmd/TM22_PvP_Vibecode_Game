@@ -40,7 +40,10 @@ const MOUNTS = [
 ];
 
 function serveStatic(req, res) {
-  let url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let url;
+  // đường dẫn mã hoá sai (vd. "/%") làm decodeURIComponent ném lỗi → văng cả server
+  try { url = decodeURIComponent(new URL(req.url, 'http://x').pathname); }
+  catch { res.writeHead(400); return res.end('Bad request'); }
   if (url === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ ...publicInfo, rooms: hub.roomList(), online: hub.clients.size }));
@@ -82,7 +85,7 @@ class Hub {
     this.clients.set(c.id, c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
     send({ t: 'welcome', id: c.id });
-    ws.on('message', raw => {
+    const onMsg = raw => {
       let m;
       try { m = JSON.parse(raw); } catch { return; }
       if (!m || typeof m.t !== 'string') return;
@@ -107,6 +110,7 @@ class Hub {
         case 'join': {
           const r = this.rooms.get(String(m.id));
           if (!r) return send({ t: 'err', msg: 'Phòng không tồn tại nữa.' });
+          if (c.room === r) return;   // đang một mình trong phòng: rời trước sẽ huỷ phòng rồi vào lại phòng đã chết
           this.leaveRoom(c);
           if (m.char) c.char = getChar(m.char).id;
           r.add(c);
@@ -118,6 +122,10 @@ class Hub {
         default:
           if (c.room) c.room.onMessage(c.id, m);
       }
+    };
+    // gói tin dị dạng làm code xử lý ném lỗi thì chỉ bỏ gói đó, không để văng cả server (mọi người bị out)
+    ws.on('message', raw => {
+      try { onMsg(raw); } catch (e) { if (!c.errLogged) { c.errLogged = true; console.error('[msg]', e); } }  // chỉ ghi 1 lần/kết nối, tránh spam log
     });
     ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
     ws.on('error', () => {});
@@ -146,6 +154,7 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
   concurrencyLimit: 16,
 }, maxPayload: 16 * 1024 });
 wss.on('connection', ws => hub.onConnection(ws));
+wss.on('error', () => {});   // lỗi cổng đã do server.on('error') báo; không có listener thì process chết trước khi in thông báo
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
 // Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
 function sendPing(ws) {
@@ -156,7 +165,7 @@ setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
-    sendPing(ws);
+    if (!ws.pingAt) sendPing(ws);   // ping trước chưa có pong: gửi lại sẽ đo RTT từ mốc sai (quá nhỏ)
   }
 }, 5000);
 

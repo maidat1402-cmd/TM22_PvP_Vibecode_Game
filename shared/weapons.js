@@ -39,6 +39,8 @@ export const GRENADES = {
   smoke: { id: 'smoke', name: 'Lựu Đạn Khói', icon: '☁', price: 300, max: 1, fuse: 1.8, radius: 4.6, time: 15, color: 0x8d99ae },
 };
 export const NADE_LIST = Object.keys(GRENADES);
+// Bỏ prototype: tên lấy từ gói tin như "constructor", "__proto__" phải tra ra undefined, không ra hàm của Object
+for (const o of [WEAPONS, EQUIPMENT, GRENADES]) Object.setPrototypeOf(o, null);
 export const THROW_SPEED = 17;
 
 // Tra thông tin món hàng bất kỳ trong menu mua

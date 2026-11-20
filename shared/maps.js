@@ -146,6 +146,7 @@ export const MAPS = {
 };
 
 export const MAP_LIST = Object.keys(MAPS);
+Object.setPrototypeOf(MAPS, null);   // id map từ gói tin như "constructor" không được tra ra hàm của Object
 export function getMap(id) { return MAPS[id] || MAPS.lantern; }
 
 // Tính sẵn min/max cho từng khối

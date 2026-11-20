@@ -55,6 +55,7 @@ export const ARENAS = {
 };
 
 export const ARENA_LIST = Object.values(ARENAS);
+Object.setPrototypeOf(ARENAS, null);   // id map từ gói tin như "constructor" không được tra ra hàm của Object
 
 export function getArena(id) {
   return ARENAS[id] || ARENA;

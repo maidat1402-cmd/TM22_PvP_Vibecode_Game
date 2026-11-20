@@ -2,6 +2,7 @@
 // Server quyết định: máu, giáp, tiền, đạn, thắng/thua vòng, bom. Client tự di chuyển và
 // tự dò trúng đích (cho mượt), server kiểm tra lại (tầm, tường chắn, tốc độ bắn, đạn).
 import { startLoop } from './loop.js';
+import { newRoomId } from './room.js';
 import { NET, Ticker } from '../shared/config.js';
 import { getMap, rayMap, inRect, newNade, stepNade, lineOfSight, NADE_STEP } from '../shared/maps.js';
 import { WEAPONS, WEAPON_LIST, weaponIndex, EQUIPMENT, GRENADES, THROW_SPEED, SHOOTER as S } from '../shared/weapons.js';
@@ -10,7 +11,6 @@ const now = () => performance.now() / 1000;
 const r2 = v => Math.round(v * 100) / 100;
 const r3 = v => Math.round(v * 1000) / 1000;
 const NO_NADES = () => ({ he: 0, flash: 0, smoke: 0 });
-let nextId = 1000;
 
 // Bù trễ khi kiểm tra trúng đạn. Người bắn nhìn thấy mục tiêu ở vị trí cũ:
 // (server → người bắn) + nội suy 70 ms + chờ snapshot + 1 khung hình + (người bắn → server).
@@ -23,7 +23,7 @@ const MAX_SPEED = 15;       // m/s, nhanh hơn mức này giữa 2 mẫu thì co
 
 export class ShooterRoom {
   constructor(name, hub, mode, mapId) {
-    this.id = String(nextId++);
+    this.id = newRoomId();
     this.name = name;
     this.hub = hub;
     this.mode = mode === 'dm' ? 'dm' : 'bomb';
@@ -243,7 +243,8 @@ export class ShooterRoom {
       case 'buy': this.handleBuy(p, String(m.item)); break;
       case 'use': this.handleUse(p, !!m.on, t); break;
       case 'loadout': {
-        const w1 = WEAPONS[m.w1], w2 = WEAPONS[m.w2];
+        // chỉ nhận chuỗi: WEAPONS[["sniper"]] cũng tra ra súng nhưng lưu vào loadout là mảng → không bắn được
+        const w1 = typeof m.w1 === 'string' && WEAPONS[m.w1], w2 = typeof m.w2 === 'string' && WEAPONS[m.w2];
         if (w1 && w1.slot === 1) p.loadout[1] = m.w1;
         if (w2 && w2.slot === 2) p.loadout[2] = m.w2;
         this.me(p);
@@ -507,7 +508,7 @@ export class ShooterRoom {
 
   // ================= Lựu đạn =================
   handleThrow(p, m, t) {
-    const g = GRENADES[m.k];
+    const g = typeof m.k === 'string' && GRENADES[m.k];
     if (!g || !p.alive || (p.nades[m.k] | 0) <= 0) return;
     if (this.phase === 'freeze' || this.phase === 'matchEnd' || t - p.lastThrow < 0.6) return;
     if (!Array.isArray(m.o) || !Array.isArray(m.v)) return;
