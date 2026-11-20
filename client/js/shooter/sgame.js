@@ -67,8 +67,7 @@ class SAvatar {
 
   dispose() {
     if (!this.model) return;
-    this.model.root.removeFromParent();
-    this.model.rig.shadow.removeFromParent();
+    this.model.dispose();
   }
 
   pushSnap(x, y, z, yaw, pitch) {
@@ -240,8 +239,11 @@ export class ShooterGame {
     this.blindUntil = 0;
     $('sFlash').style.opacity = 0;
     this.me = null;
+    // trạng thái của phòng cũ không được mang sang phòng mới
+    this.spec = null; this.chatting = false; this.touchCrouch = false; this.usingNow = false; this.rescopeAt = 0;
+    $('sChatInput').hidden = true;
     this.bombObj.visible = false;
-    if (this.vm) { this.vm.removeFromParent(); this.vm = null; }
+    if (this.vm) { disposeObject(this.vm); this.vm = null; }
   }
 
   // ======================= Mạng =======================
@@ -258,7 +260,7 @@ export class ShooterGame {
         if (a !== this.me || !a.alive) a.alive = p.alive;
         if (a.team !== p.team) {
           a.setTeam(p.team, p.look);
-          if (a === this.me) { a.model.root.visible = false; this.P.team = p.team; this.setViewModel(); }
+          if (a === this.me) { a.model.root.visible = false; a.model.rig.shadow.visible = false; this.P.team = p.team; this.setViewModel(); }
         }
       }
       for (const id of [...this.avatars.keys()]) if (!seen.has(id)) this.removeAvatar(id);
@@ -341,6 +343,7 @@ export class ShooterGame {
   removeAvatar(id) {
     const a = this.avatars.get(id);
     if (a) { a.dispose(); this.avatars.delete(id); this.hud.removePlate('s' + id); }
+    if (this.spec === a) this.spec = null;   // đang xem người vừa rời: chọn người khác
   }
 
   onMe(m) {
@@ -361,7 +364,8 @@ export class ShooterGame {
       else loc.mag = Math.min(loc.mag, a.mag);
     }
     if ((P.cur !== 4 && !P.weapons[P.cur]) || this.takeCur) { P.cur = m.cur; this.takeCur = false; }
-    if (P.weapons[P.cur] !== oldW) this.setViewModel();
+    // server đổi súng đang cầm (vứt, nhặt, mua): server đã huỷ nạp đạn, client cũng phải huỷ, không thì khoá bắn tới 3 s
+    if (P.weapons[P.cur] !== oldW) { P.reloadUntil = 0; this.rescopeAt = 0; this.setViewModel(); }
     if (!m.alive && P.alive) P.alive = false;
     this.refreshBuyMenu();
   }
@@ -378,6 +382,7 @@ export class ShooterGame {
       P.pos.set(...m.p); P.vel.set(0, 0, 0);
       P.yaw = m.yaw; P.pitch = 0; P.alive = true; P.hp = 100;
       P.scoped = false; P.reloadUntil = 0; P.punch = 0;
+      this.rescopeAt = 0;   // bắn sniper rồi chết: không hồi sinh trong trạng thái đang scope
       P.drawUntil = now() + 0.4;
       this.takeCur = true;   // 'sme' ngay sau sẽ cho biết súng đang cầm
       this.spec = null;
@@ -519,7 +524,9 @@ export class ShooterGame {
       if (e.code === 'Tab') $('sScore').hidden = true;
       if (e.code === 'KeyE') this.use(false);
     });
-    addEventListener('blur', () => { this.keys.clear(); if (this.P) this.P.trigger = false; });
+    addEventListener('blur', () => { this.keys.clear(); if (this.P) this.P.trigger = false; $('sScore').hidden = true; });
+    // điện thoại: đóng bàn phím ảo (nút back / chạm ra ngoài) không có phím Enter/Esc → phải tự thoát chat, không thì kẹt không đi được
+    $('sChatInput').addEventListener('blur', () => { if (this.chatting && this.touch?.enabled) this.closeChat(); });
   }
 
   look(dx, dy) {
@@ -590,6 +597,7 @@ export class ShooterGame {
     P.cur = slot;
     P.reloadUntil = 0;
     P.scoped = false;
+    this.rescopeAt = 0;
     P.drawUntil = now() + (slot === 3 ? 0.3 : 0.5);
     this.net.send({ t: 'switch', slot });
     this.setViewModel();
@@ -787,6 +795,7 @@ export class ShooterGame {
     P.reloadUntil = t + w.reload;
     P.reloadW = wid;
     P.scoped = false;
+    this.rescopeAt = 0;   // không tự bật scope lại giữa lúc nạp
     this.net.send({ t: 'reload' });
     sfx('reload');
   }

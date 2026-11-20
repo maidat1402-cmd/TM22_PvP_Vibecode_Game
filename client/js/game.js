@@ -264,6 +264,10 @@ export class Game {
     this.teamMode = false;
     this.hideTeamUi();
     this.clear();
+    // rời phòng giữa lúc lái tuyệt kỹ: tắt vòng ngắm và chế độ lái (updateSteer không chạy khi đã rời)
+    this.steering = null;
+    if (this.steerMark) this.steerMark.visible = false;
+    document.body.classList.remove('steering');
     this.hud.show(false);
     this.hud.death(false);
     $('scoreboard').hidden = true;
@@ -333,8 +337,17 @@ export class Game {
     n.on('cast', m => this.onCast(m));
     n.on('castno', m => {
       const e = this.predicted.get(m.cs);
-      if (e) { e.done = true; e.endAll?.(); this.predicted.delete(m.cs); }
-      if (this.L) this.L.cds[m.sk] = 0;
+      if (e) {
+        e.done = true; e.endAll?.(); this.predicted.delete(m.cs);
+        if (e.steer && this.steering?.st === e.steer) this.steering = null;
+      }
+      if (this.L) {
+        this.L.cds[m.sk] = 0;
+        // server từ chối: huỷ cả cú lướt/nhảy đã chạy trước ở máy mình (không thì lướt tới mà không gây sát thương)
+        const s = this.me?.char.skills[m.sk];
+        if (s?.type === 'dash') this.L.skillDash = null;
+        if (s?.type === 'leap') this.L.skillLeap = null;
+      }
       if (this.me) this.me.mp = m.mp;
     });
     n.on('pend', m => this.effects.get(m.eid)?.endSub?.(m.k, m.at, m.fire));
