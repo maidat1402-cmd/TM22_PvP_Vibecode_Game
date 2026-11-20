@@ -381,7 +381,17 @@ function afterJoin() {
   $('switchTeamBtn').hidden = !(current === shooter && shooter.mode === 'bomb');
 }
 net.on('err', m => game.hud.toast(m.msg, 2500));
-net.on('close', () => { $('disconnected').hidden = false; });
+net.on('close', () => {
+  $('disconnected').hidden = false;
+  // "Kết nối lại" vào lại đúng phòng đang chơi, không về menu
+  const id = inGame && (current === shooter ? shooter.roomId : game.roomId);
+  if (id) $('disconnected').querySelector('button').onclick = () => {
+    const u = new URL(location.href);
+    u.searchParams.delete('quick');
+    u.searchParams.set('room', id);
+    location.href = u;
+  };
+});
 
 $('createBtn').onclick = () => {
   initAudio(); sfx('ui'); sendHello(); goFullscreen();
