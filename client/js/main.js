@@ -500,4 +500,4 @@ renderCharList();
 loadServerInfo();
 setInterval(() => { if (!inGame) loadServerInfo(); }, 10000);
 net.connect().catch(() => { $('connState').textContent = '● Không kết nối được server'; });
-addEventListener('pointerdown', () => initAudio(), { once: true });
+addEventListener('pointerdown', () => initAudio());   // mỗi lần chạm: bật lại âm thanh nếu iOS đã tạm dừng
