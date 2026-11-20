@@ -38,7 +38,6 @@ game.touch = shooter.touch = touch;
 function applyTouch() {
   const on = settings.touch === 'on' || (settings.touch === 'auto' && IS_TOUCH);
   touch.setEnabled(on && inGame);
-  touch.sens = settings.sens;
   if (on && inGame) (current === shooter ? shooter : game).setupTouch();
 }
 function goFullscreen() {

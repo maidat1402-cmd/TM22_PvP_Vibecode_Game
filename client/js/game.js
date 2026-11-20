@@ -1135,7 +1135,7 @@ export class Game {
       if (this.touch?.enabled) {
         const lk = this.touch.takeLook();
         this.cam.yaw -= lk.dx * 0.006 * this.settings.sens;
-        this.cam.pitch = Math.max(-0.35, Math.min(1.25, this.cam.pitch + lk.dy * 0.005 * this.settings.sens));
+        this.cam.pitch = Math.max(-0.35, Math.min(1.25, this.cam.pitch + lk.dy * 0.005 * this.settings.sens * (this.settings.invertY ? -1 : 1)));
         this.updateTouchHud(t);
       }
       this.updateLocal(dt);
