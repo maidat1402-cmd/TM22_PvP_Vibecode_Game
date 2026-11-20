@@ -87,7 +87,8 @@ class Hub {
     send({ t: 'welcome', id: c.id });
     const onMsg = raw => {
       let m;
-      try { m = JSON.parse(raw); } catch { return; }
+      // bỏ khoá toString/valueOf: {"toString":1} làm String()/|0/tra bảng ném lỗi ở mọi chỗ xử lý gói tin
+      try { m = JSON.parse(raw, (k, v) => (k === 'toString' || k === 'valueOf' ? undefined : v)); } catch { return; }
       if (!m || typeof m.t !== 'string') return;
       switch (m.t) {
         case 'ping': return send({ t: 'pong', c: m.c });
