@@ -206,6 +206,7 @@ class Particles {
     this.drag[i] = opts.drag ?? 1.5;
     this.grav[i] = opts.grav ?? 0;
     this.size[i] = size; this.alpha[i] = 1;
+    this.geo.attributes.color.needsUpdate = true;   // màu chỉ đổi khi phát hạt
   }
 
   // nổ tung ra mọi hướng
@@ -225,8 +226,10 @@ class Particles {
 
   update(dt) {
     const { pos, vel, life, maxLife, size, alpha, s0, s1, drag, grav } = this;
+    let changed = false;
     for (let i = 0; i < this.max; i++) {
-      if (life[i] <= 0) { if (alpha[i] !== 0) alpha[i] = 0; continue; }
+      if (life[i] <= 0) { if (alpha[i] !== 0) { alpha[i] = 0; changed = true; } continue; }
+      changed = true;
       life[i] -= dt;
       const i3 = i * 3;
       const dr = Math.max(0, 1 - drag[i] * dt);
@@ -236,8 +239,10 @@ class Particles {
       size[i] = s1[i] + (s0[i] - s1[i]) * f;
       alpha[i] = life[i] <= 0 ? 0 : Math.min(1, f * 2.2);
     }
+    // không còn hạt nào sống thì khỏi tải lại ~190 KB lên GPU mỗi khung hình
+    if (!changed) return;
     const g = this.geo.attributes;
-    g.position.needsUpdate = g.size.needsUpdate = g.alpha.needsUpdate = g.color.needsUpdate = true;
+    g.position.needsUpdate = g.size.needsUpdate = g.alpha.needsUpdate = true;
   }
 }
 const TMP_COLOR = new THREE.Color();
@@ -388,6 +393,7 @@ export class FX {
     const g = new THREE.Group();
     const mats = [energyMat(0xffffff), flowMat(0xffffff), flowMat(0xffffff, 0xffffff, { additive: true }), arcMat(0xffffff),
       new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending }),
+      new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
       new THREE.MeshToonMaterial({ color: 0xbdf0ff, emissive: 0x3aa0d0, transparent: true }),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, side: THREE.DoubleSide })];
     for (const m of mats) g.add(new THREE.Mesh(GEO.sphereLo, m));

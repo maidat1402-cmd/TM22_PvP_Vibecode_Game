@@ -1123,7 +1123,8 @@ export class ShooterGame {
         cam.position.lerp(want, Math.min(1, dt * 6));
         cam.lookAt(s.pos.x, s.pos.y + 1.2, s.pos.z);
         $('sSpec').hidden = false;
-        $('sSpec').innerHTML = `👁 Đang xem: <b>${esc(s.name)}</b> <small>(${this.touch?.enabled ? 'chạm nút Bắn' : 'click'} để đổi)</small>`;
+        const html = `👁 Đang xem: <b>${esc(s.name)}</b> <small>(${this.touch?.enabled ? 'chạm nút Bắn' : 'click'} để đổi)</small>`;
+        if (html !== this._specHtml) { this._specHtml = html; $('sSpec').innerHTML = html; }   // tránh dựng lại DOM mỗi khung hình
       } else {
         const a = now() * 0.1;
         cam.position.set(Math.sin(a) * 30, 22, Math.cos(a) * 30);
@@ -1177,8 +1178,9 @@ export class ShooterGame {
     $('sMag').textContent = nade ? (P.nades[P.nadeSel] | 0) : w.melee ? '—' : (a?.mag ?? 0);
     $('sRes').textContent = nade || w.melee ? '' : (a?.res ?? 0);
     const nadeTxt = NADE_LIST.filter(k => P.nades[k] > 0).map(k => `${GRENADES[k].icon}${P.nades[k] > 1 ? '×' + P.nades[k] : ''}`).join(' ');
-    $('sSlots').innerHTML = [1, 2, 3].map(s => P.weapons[s] ? `<span class="${s === P.cur ? 'cur' : ''}">${s} ${esc(WEAPONS[P.weapons[s]].name)}</span>` : '').join('') +
+    const html = [1, 2, 3].map(s => P.weapons[s] ? `<span class="${s === P.cur ? 'cur' : ''}">${s} ${esc(WEAPONS[P.weapons[s]].name)}</span>` : '').join('') +
       (nadeTxt ? `<span class="${P.cur === 4 ? 'cur' : ''}">4 ${nadeTxt}</span>` : '');
+    if (html !== this._slotsHtml) { this._slotsHtml = html; $('sSlots').innerHTML = html; }   // hàm chạy mỗi khung hình: chỉ ghi DOM khi đổi
   }
 
   updateHud(dt) {
