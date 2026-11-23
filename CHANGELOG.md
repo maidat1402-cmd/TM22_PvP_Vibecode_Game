@@ -2,7 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.11.1 (2026-11-23)
+## 0.11.2 (2026-11-23)
+
+- Hub cấp UUID cho mọi phòng, giúp link mời luôn trỏ tới đúng phòng đang chơi.
+
+## 0.11.1 (2026-11-23) · `6e406c7`
 
 - Máy chủ kiểm tra URL và tọa độ phát bắn trước khi đọc tệp, trừ đạn hoặc gửi hiệu ứng.
 

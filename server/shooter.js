@@ -10,11 +10,10 @@ const now = () => performance.now() / 1000;
 const r2 = v => Math.round(v * 100) / 100;
 const r3 = v => Math.round(v * 1000) / 1000;
 const NO_NADES = () => ({ he: 0, flash: 0, smoke: 0 });
-let nextId = 1000;
 
 export class ShooterRoom {
-  constructor(name, hub, mode, mapId) {
-    this.id = String(nextId++);
+  constructor(id, name, hub, mode, mapId) {
+    this.id = id;
     this.name = name;
     this.hub = hub;
     this.mode = mode === 'dm' ? 'dm' : 'bomb';

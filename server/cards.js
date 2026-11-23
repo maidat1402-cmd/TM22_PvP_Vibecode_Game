@@ -4,15 +4,14 @@ import { startLoop } from './loop.js';
 import { CHARACTERS, getChar } from '../shared/characters.js';
 import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES } from '../shared/cards.js';
 
-let nextId = 5000;      // id phòng bài (phòng đối kháng từ 1, bắn súng từ 1000)
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
 const now = () => performance.now() / 1000;
 const pick = a => a[(Math.random() * a.length) | 0];
 
 export class CardRoom {
-  constructor(name, hub, game) {
-    this.id = String(nextId++);
+  constructor(id, name, hub, game) {
+    this.id = id;
     this.name = name;
     this.hub = hub;
     this.game = game === 'tienlen' ? 'tienlen' : 'xidach';
