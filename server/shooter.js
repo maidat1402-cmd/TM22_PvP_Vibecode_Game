@@ -2,7 +2,6 @@
 // Server quyết định: máu, giáp, tiền, đạn, thắng/thua vòng, bom. Client tự di chuyển và
 // tự dò trúng đích (cho mượt), server kiểm tra lại (tầm, tường chắn, tốc độ bắn, đạn).
 import { startLoop } from './loop.js';
-import { newRoomId } from './room.js';
 import { NET, Ticker } from '../shared/config.js';
 import { getMap, rayMap, inRect, newNade, stepNade, lineOfSight, NADE_STEP } from '../shared/maps.js';
 import { WEAPONS, WEAPON_LIST, weaponIndex, EQUIPMENT, GRENADES, THROW_SPEED, SHOOTER as S } from '../shared/weapons.js';
@@ -22,8 +21,8 @@ const HIT_TOL = 1.0;        // điểm trúng cách tâm mục tiêu tối đa (
 const MAX_SPEED = 15;       // m/s, nhanh hơn mức này giữa 2 mẫu thì coi là dịch chuyển tức thời
 
 export class ShooterRoom {
-  constructor(name, hub, mode, mapId) {
-    this.id = newRoomId();
+  constructor(id, name, hub, mode, mapId) {
+    this.id = id;
     this.name = name;
     this.hub = hub;
     this.mode = mode === 'dm' ? 'dm' : 'bomb';
@@ -283,6 +282,21 @@ export class ShooterRoom {
     const interval = 60 / w.rpm;
     if (t - p.lastFire < interval * 0.6) return;        // dung sai cho mạng chập chờn
     if (t < p.reloadUntil) return;
+    const o = m.o, pellets = m.p;
+    if (!Array.isArray(o) || o.length !== 3 || !o.every(Number.isFinite)) return;
+    // Gốc bắn phải gần người chơi. Chừa dung sai cho điểm chạm được làm tròn.
+    if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2.5 || Math.abs(o[1] - p.y - 1.3) > 2) return;
+
+    const range = w.melee ? w.reach : 250;
+    if (!Array.isArray(pellets) || pellets.length !== (w.pellets || 1)) return;
+    for (const q of pellets) {
+      if (!Array.isArray(q) || q.length !== 5) return;
+      const [x, y, z, target, zone] = q;
+      if (![x, y, z].every(Number.isFinite) || !Number.isSafeInteger(target) || target < 0) return;
+      if (!Number.isInteger(zone) || zone < 0 || zone > 3) return;
+      if (Math.hypot(x - o[0], y - o[1], z - o[2]) > range + 1) return;
+    }
+
     const a = p.ammo[wid];
     if (!w.melee) {
       if (!a || a.mag <= 0) return this.me(p);
@@ -290,13 +304,6 @@ export class ShooterRoom {
     }
     p.lastFire = t;
     p.protectUntil = 0;
-    if (!Array.isArray(m.o) || m.o.length !== 3 || !Array.isArray(m.p)) return;   // o=[] lọt qua every() → NaN vào máu
-    const o = m.o.map(Number);
-    if (!o.every(Number.isFinite)) return;
-    // gốc bắn phải gần vị trí người chơi
-    if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2.5 || Math.abs(o[1] - p.y - 1.3) > 2) return;
-
-    const pellets = m.p.slice(0, w.pellets || 1).filter(q => Array.isArray(q) && q.slice(0, 3).every(Number.isFinite));
     this.broadcast({ t: 'sshot', id: p.id, w: weaponIndex(wid), o: o.map(r2), e: pellets.map(q => [r2(q[0]), r2(q[1]), r2(q[2])]) }, p.id);
     // người bắn thấy mục tiêu ở thời điểm t - rewind (theo giờ server nhận vị trí)
     const rewind = Math.min(REWIND_MAX, (p.ws.rtt ?? DEFAULT_RTT) + NET.interp + 2 / NET.snapRate + 0.1);
@@ -304,13 +311,13 @@ export class ShooterRoom {
     for (const q of pellets) {
       const [ex, ey, ez, tid, zone] = q;
       if (!tid) continue;
-      const tgt = this.players.get(tid | 0);
+      const tgt = this.players.get(tid);
       if (!tgt || !tgt.alive || tgt === p) continue;
       if (this.mode === 'bomb' && tgt.team === p.team) continue;  // không bắn đồng đội
       if (t < tgt.protectUntil) continue;
       const dx = ex - o[0], dy = ey - o[1], dz = ez - o[2];
       const dist = Math.hypot(dx, dy, dz);
-      if (w.melee && dist > w.reach + 1) continue;
+      if (dist === 0) continue;
       // điểm trúng phải gần quỹ đạo mục tiêu trong khoảng thời gian người bắn có thể đang thấy
       if (!this.nearPast(tgt, ex, ey, ez, t - rewind)) continue;
       // không có tường chắn
@@ -338,7 +345,7 @@ export class ShooterRoom {
     let i = h.length - 1;
     while (i > 0 && h[i][0] > since) i--;      // lấy cả mẫu ngay trước `since` làm điểm đầu
     const pts = h.slice(i);
-    if (!pts.length) pts.push([0, tgt.x, tgt.y, tgt.z]);
+    pts.push([pts.length ? pts[pts.length - 1][0] : 0, tgt.x, tgt.y, tgt.z]);   // vị trí hiện tại luôn tính (server có thể đã đặt lại vị trí mà chưa có mẫu)
     for (let k = 0; k < pts.length; k++) {
       const [ta, ax, ay, az] = pts[k], [tb, bx, by, bz] = pts[Math.min(k + 1, pts.length - 1)];
       let dx = bx - ax, dz = bz - az;

@@ -34,14 +34,11 @@ const FAKE_WS = { readyState: 0, send() {} };
 const ANIM_ID = { idle: 0, run: 1, air: 3, stun: 8 };   // trùng ANIM ở client/js/chibi.js
 const FIRE_BURN = { dmg: 2, every: 0.5 };
 
-let nextRoomId = 1;
-// Chung cho cả phòng bắn súng: 2 bộ đếm riêng sẽ trùng id → phòng cũ bị ghi đè trong hub, vòng lặp chạy mãi
-export const newRoomId = () => String(nextRoomId++);
 let nextEntityId = 1;
 
 export class Room {
-  constructor(name, hub, mapId, team = false, practice = false) {
-    this.id = newRoomId();
+  constructor(id, name, hub, mapId, team = false, practice = false) {
+    this.id = id;
     this.practice = !team && practice;   // đấu tập: có bia tập + võ sĩ máy, nạp đầy thanh dị biến được
     this.name = name;
     this.arena = getArena(mapId);

@@ -67,8 +67,10 @@ class SAvatar {
   }
 
   dispose() {
-    if (!this.model) return;
-    this.model.dispose();
+    // súng và bom gắn vào sau khi dựng mô hình nên model.dispose() không giải phóng chúng
+    if (this.gun) { disposeObject(this.gun); this.gun = null; }
+    if (this.bombMesh) disposeObject(this.bombMesh);
+    this.model?.dispose();
   }
 
   pushSnap(x, y, z, yaw, pitch) {

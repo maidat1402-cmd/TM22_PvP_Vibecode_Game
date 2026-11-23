@@ -262,7 +262,7 @@ function setPreview(id) {
 function setPvForm(aw) {
   if (pvModel && demo.aw === aw && pvModel.char === pvChar) return;
   const pos = pvModel ? pvModel.root.position.clone() : null;
-  if (pvModel) pvModel.dispose();
+  pvModel?.dispose();
   const A = pvChar.awaken;
   pvModel = buildChibi(aw ? { ...pvChar.look, ...A.look, form: A.form, formColor: A.color, formCore: A.core } : pvChar.look);
   pvModel.char = pvChar;
@@ -766,17 +766,16 @@ function afterJoin() {
   $('switchTeamBtn').hidden = !(current === shooter && shooter.mode === 'bomb');
 }
 net.on('err', m => game.hud.toast(m.msg, 2500));
-net.on('close', () => {
-  $('disconnected').hidden = false;
-  // "Kết nối lại" vào lại đúng phòng đang chơi, không về menu
-  const id = inGame && current.roomId;
-  if (id) $('disconnected').querySelector('button').onclick = () => {
-    const u = new URL(location.href);
-    u.searchParams.delete('quick');
-    u.searchParams.set('room', id);
-    location.href = u;
-  };
-});
+net.on('close', () => { $('disconnected').hidden = false; });
+$('reconnectBtn').onclick = () => {
+  if (inGame && current?.roomId) {
+    const url = new URL(location.href);
+    url.searchParams.set('room', current.roomId);
+    for (const key of ['quick', 'mode', 'map']) url.searchParams.delete(key);
+    history.replaceState(history.state, '', url);
+  }
+  location.reload();
+};
 
 $('createBtn').onclick = () => requireName(() => {
   initAudio(); sfx('ui'); sendHello(); goFullscreen();
@@ -878,6 +877,11 @@ $('leaveBtn').onclick = () => {
   game.suspended = false;
   current = null;
   inGame = false;
+  const url = new URL(location.href);
+  if (url.searchParams.has('room')) {
+    url.searchParams.delete('room');
+    history.replaceState(history.state, '', url);
+  }
   updateMenuBg();
   document.body.classList.remove('ingame');
   touch.setEnabled(false);

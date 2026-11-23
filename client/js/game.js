@@ -71,7 +71,7 @@ class Avatar {
 
   // Dựng lại hình nhân vật (dạng thường / dạng dị biến)
   rebuild() {
-    if (this.model) this.model.dispose();
+    this.model?.dispose();
     const A = this.char.awaken;
     this.model = buildChibi(this.aw && A ? { ...this.char.look, ...A.look, form: A.form, formColor: A.color, formCore: A.core } : this.char.look);
     this.game.scene.add(this.model.root, this.model.rig.shadow);
@@ -86,9 +86,7 @@ class Avatar {
   // bộ chiêu đang dùng (thường / dị biến)
   get skills() { return charSkills(this.char, this.aw); }
 
-  dispose() {
-    this.model.dispose();
-  }
+  dispose() { this.model.dispose(); }
 
   pushSnap(x, y, z, yaw) {
     this.buf.push({ t: now(), x, y, z, yaw });

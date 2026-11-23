@@ -166,9 +166,12 @@ export class CardGame {
   }
   leave() { this.active = false; this.clear(); this.ui.hidden = true; this.closeChat(); }
   clear() {
-    for (const c of this.cards.values()) { c.mesh.removeFromParent(); c.mesh.material.dispose(); }
+    for (const c of this.cards.values()) {
+      c.mesh.removeFromParent();
+      c.mesh.material.dispose();
+    }
     this.cards.clear();
-    for (const a of this.avatars.values()) a.model.dispose();   // gỡ cả geometry khỏi GPU, không chỉ khỏi scene
+    for (const a of this.avatars.values()) a.model.dispose();
     this.avatars.clear();
     this.st = null; this.sel.clear(); this.history = []; this.lastGames = -1;
     $('cPlates').innerHTML = ''; $('cHand').innerHTML = ''; $('cActs').innerHTML = ''; $('cChat').innerHTML = '';
