@@ -811,6 +811,7 @@ export class FX {
       new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending }),
       new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
       new THREE.MeshToonMaterial({ color: 0xbdf0ff, emissive: 0x3aa0d0, transparent: true }),
+      new THREE.MeshToonMaterial({ color: 0x8d6e53, emissive: 0x1f140b }),   // đá đục (cột đá, cọc sét, tường đá): program riêng, không gradientMap
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, side: THREE.DoubleSide })];
     for (const m of mats) g.add(new THREE.Mesh(GEO.sphereLo, m));
     g.add(sprite(0xffffff, 1));

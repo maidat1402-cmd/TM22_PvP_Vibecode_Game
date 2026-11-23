@@ -623,7 +623,6 @@ export class Game {
     if (e) { this.effects.set(m.eid, e); if (s.type === 'buff') e.buffOf = av.id; }
     if (av.forced && e?.steer) av.forced.st = e.steer;   // rồng lốc lái cả độ cao
     if (s.type === 'quake' && !this.isAlly(av)) this.hud.toast(`⚠ ${av.name} sắp động đất cả sân — nhảy lên để né!`, 1500);
-    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
   }
 
