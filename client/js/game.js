@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { NET, Ticker, GAME, MOVE, ARENA, TEAM, AWAKEN, arenaGround, arenaCollide, dynCollide } from '/shared/config.js';
+import { NET, Ticker, GAME, MOVE, ARENA, TEAM, AWAKEN, dashCooldown, arenaGround, arenaCollide, dynCollide } from '/shared/config.js';
 import { getArena } from '/shared/arenas.js';
 import { getChar, charSkills, skillLifetime, holdSkill } from '/shared/characters.js';
 import { STEER_SEND_HZ } from '/shared/steer.js';
@@ -346,19 +346,32 @@ export class Game {
   }
 
   clear() {
+    this.clearCombatEffects();
     for (const av of this.avatars.values()) { av.dispose(); this.hud.removePlate(av.id); }
     this.avatars.clear();
+    this.me = null;
+  }
+
+  clearCombatEffects() {
+    this.cancelHold();
     for (const e of this.fx.list) e.dispose();
     this.fx.list.length = 0;
+    this.fx.dynObs.length = 0;
     this.effects.clear();
     this.predicted.clear();
+    this.kmarks.clear();
     this.props.clear();
     this.charges = [];
     this.zones.clear();
     this.fx.zoneList.length = 0;
     this.fx.fences([], 0);
+    this.darkUntil = 0;
     this.setDark(false);
-    this.me = null;
+    this.steering = null;
+    if (this.steerMark) this.steerMark.visible = false;
+    document.body.classList.remove('steering');
+    for (const av of this.avatars.values()) { av.forced = null; av.holdFx = null; }
+    if (this.L) { this.L.skillDash = null; this.L.skillLeap = null; this.L.grab = null; }
   }
 
   addAvatar(p) {
@@ -417,8 +430,17 @@ export class Game {
     n.on('cast', m => this.onCast(m));
     n.on('castno', m => {
       const e = this.predicted.get(m.cs);
-      if (e) { e.done = true; e.endAll?.(); this.predicted.delete(m.cs); }
-      if (this.L) this.L.cds[m.sk + (m.aw ? 10 : 0)] = 0;
+      if (e) {
+        e.done = true; e.endAll?.(); this.predicted.delete(m.cs);
+        if (e.steer && this.steering?.st === e.steer) this.steering = null;
+      }
+      if (this.L) {
+        this.L.cds[m.sk + (m.aw ? 10 : 0)] = 0;
+        // server từ chối: huỷ cả cú lướt/nhảy đã chạy trước ở máy mình (không thì lướt tới mà không gây sát thương)
+        const s = this.me && charSkills(this.me.char, !!m.aw)[m.sk];
+        if (s?.type === 'dash') this.L.skillDash = null;
+        if (s?.type === 'leap') this.L.skillLeap = null;
+      }
       if (this.me) this.me.mp = m.mp;
     });
     n.on('pend', m => this.effects.get(m.eid)?.endSub?.(m.k, m.at, m.fire));
@@ -468,6 +490,7 @@ export class Game {
     });
     n.on('healno', () => sfx('error'));
     n.on('tstate', m => { if (this.active && this.teamMode) this.onTeamState(m); });
+    n.on('tclear', () => { if (this.active && this.teamMode) this.clearCombatEffects(); });
     // dịch chuyển tức thời (Thuấn Ảnh, Lôi Long Xuyên)
     n.on('tp', m => {
       const av = this.avatars.get(m.id);
@@ -607,6 +630,8 @@ export class Game {
       sfx('throw', this.distToCam(m.p));
       return;
     }
+    // xoá eid sau khi chiêu chắc chắn đã hết (cả chiêu của mình, nếu không map tăng mãi theo mỗi lần ra chiêu)
+    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     if (av.isMe) {
       // chiêu của mình: đã hiện trước rồi, chỉ cần gắn eid để nhận sự kiện kết thúc
       const e = this.predicted.get(m.cs);
@@ -627,7 +652,6 @@ export class Game {
     if (av.forced && e?.steer) av.forced.st = e.steer;   // rồng lốc lái cả độ cao
     this.ultCue(av, s, p, h, m.tg, e);
     if (s.type === 'quake' && !this.isAlly(av)) this.hud.toast(`⚠ ${av.name} sắp động đất cả sân — nhảy lên để né!`, 1500);
-    setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
   }
 
@@ -1444,7 +1468,7 @@ export class Game {
     if (dir.lengthSq() < 0.01) dir.set(-Math.sin(this.cam.yaw), 0, -Math.cos(this.cam.yaw));
     L.dashDir.copy(dir).normalize();
     L.dashT = MOVE.dashTime;
-    L.dashCd = t + ((this.awakened() && this.me.char.awaken.passive.dashCd) || MOVE.dashCd);
+    L.dashCd = t + dashCooldown(this.awakened() ? this.me.char.awaken : null);
     L.sprint = true;
     if (!L.onGround) L.vel.y = Math.max(L.vel.y, 2);
     this.net.send({ t: 'dodge' });
@@ -1685,7 +1709,7 @@ export class Game {
       if (this.touch?.enabled) {
         const lk = this.touch.takeLook();
         this.cam.yaw -= lk.dx * 0.006 * this.settings.sens;
-        this.cam.pitch = Math.max(-0.35, Math.min(1.25, this.cam.pitch + lk.dy * 0.005 * this.settings.sens));
+        this.cam.pitch = Math.max(-0.35, Math.min(1.25, this.cam.pitch + lk.dy * 0.005 * this.settings.sens * (this.settings.invertY ? -1 : 1)));
         this.updateTouchHud(t);
       }
       this.updateLocal(dt);

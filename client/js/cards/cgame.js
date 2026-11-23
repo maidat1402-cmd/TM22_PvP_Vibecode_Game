@@ -458,7 +458,6 @@ export class CardGame {
       } else if (s.phase === 'dealer') info.push('Máy đang đánh thay nhà cái…');
       if (d.result) {
         info.push(d.result.delta > 0 ? `🎉 Nhà cái ăn ${d.result.delta} xu` : d.result.delta < 0 ? `Nhà cái chung ${-d.result.delta} xu` : 'Hoà cả bàn');
-        if (d.result.penalty) info.push(`Đền cả bàn ${-d.result.penalty} xu`);
       }
     } else if (me) info.push(`💰 ${me.chips} xu${this.game === 'xidach' && s.phase !== 'result' ? ` · cược ${me.bet}` : ''}`);
     if (lobby || s.youDealer) { /* đã xử lý ở trên */ }

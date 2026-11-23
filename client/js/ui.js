@@ -161,7 +161,7 @@ export class HUD {
       const dist = camera.position.distanceTo(av.pos);
       const sc = Math.max(0.55, Math.min(1, 14 / dist));
       p.d.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px) translate(-50%,-100%) scale(${sc})`;
-      p.bar.style.width = Math.max(0, av.hp / (av.char.hp || GAME.maxHp)) * 100 + '%';
+      p.bar.style.width = Math.max(0, av.hp / (av.char?.hp || GAME.maxHp)) * 100 + '%';
       p.d.classList.toggle('target', !!av.targeted);
       p.d.classList.toggle('buffed', !!(av.buff && av.buff.kind === 'stoneSkin'));
       // thanh dị biến dưới thanh máu: ai sắp biến hình thì đối thủ đều thấy

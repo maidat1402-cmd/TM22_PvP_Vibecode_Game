@@ -1,7 +1,7 @@
 // Phòng đánh bài quanh bàn tròn: Xì dách hoặc Tiến lên. Server quyết định toàn bộ (xáo bài, chia, lượt, tính tiền);
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
-import { CHARACTERS, getChar } from '../shared/characters.js';
+import { CHARACTERS, playableChar } from '../shared/characters.js';
 import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
@@ -49,7 +49,7 @@ export class CardRoom {
 
   // ================= Người chơi =================
   add(client) {
-    const p = { id: client.id, client, session: client.session, name: client.name, char: getChar(client.char).id, bot: false, seat: -1,
+    const p = { id: client.id, client, session: client.session, name: client.name, char: playableChar(client.char).id, bot: false, seat: -1,
       chips: this.startChips, hand: [], bet: this.defaultBet(this.startChips), ready: false, lready: false };
     this.players.set(p.id, p);
     client.room = this;
@@ -76,13 +76,13 @@ export class CardRoom {
     if (p.seat < 0 && !p.isDealer && p.id !== this.hostId) return this.remove(p.id);
     p.client = null;
     p.rejoinUntil = now() + CARD_REJOIN_SECONDS;
-    if (this.turnPlayer() === p) this.deadline = Math.max(this.deadline, p.rejoinUntil);
+    if (this.turnPlayer() === p) this.setTurnDeadline(this.game === 'xidach' ? 20 : TL.turnTime);
     this.sys(p.name + ' mất kết nối, bàn giữ chỗ ' + CARD_REJOIN_SECONDS + ' giây');
     this.sendState();
   }
 
   resume(client, session) {
-    const p = [...this.players.values()].find(q => !q.bot && q.session === session);
+    const p = [...this.players.values()].find(q => !q.bot && (q.session === session || q.pendingSession === session));
     if (!p || (p.rejoinUntil && p.rejoinUntil <= now())) return false;
     // Tải lại trang có thể mở kết nối mới trước khi kết nối cũ báo đóng.
     if (p.client) {
@@ -91,7 +91,8 @@ export class CardRoom {
     }
     const wasOffline = Boolean(p.rejoinUntil);
     Object.assign(client, { id: p.id, name: p.name, char: p.char, room: this });
-    Object.assign(p, { client, session: client.session, rejoinUntil: 0 });
+    // Giữ mã mà tab đã chứng minh có thể dùng đến khi tab xác nhận lưu được mã mới.
+    Object.assign(p, { client, session, pendingSession: client.session, rejoinUntil: 0 });
     if (wasOffline && this.turnPlayer() === p) this.setTurnDeadline(this.game === 'tienlen' ? TL.turnTime : 20);
     this.sendJoined(p, true);
     this.sys(p.name + ' đã kết nối lại');
@@ -229,7 +230,14 @@ export class CardRoom {
     return null;
   }
   setTurnDeadline(seconds) {
-    this.deadline = Math.max(now() + seconds, this.turnPlayer()?.rejoinUntil || 0);
+    const t = now();
+    const rejoinUntil = this.turnPlayer()?.rejoinUntil || 0;
+    if (this.game === 'xidach' && rejoinUntil) {
+      const takeoverAt = rejoinUntil - CARD_REJOIN_SECONDS + XD.offlineTakeover;
+      this.deadline = Math.max(t + 0.9, takeoverAt);
+    } else {
+      this.deadline = Math.max(t + seconds, rejoinUntil);
+    }
   }
 
   defaultBet(chips, preferred = XD.bets[1]) {
@@ -270,8 +278,14 @@ export class CardRoom {
     const p = this.players.get(id);
     if (!p) return;
     switch (m.t) {
+      case 'cresumeack':
+        if (p.pendingSession && p.pendingSession === p.client?.session) {
+          p.session = p.pendingSession;
+          p.pendingSession = null;
+        }
+        return;
       case 'chat': { const msg = String(m.msg || '').slice(0, 140).trim(); if (msg) this.broadcast({ t: 'chat', id: p.id, name: p.name, msg }); return; }
-      case 'char': p.char = getChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
+      case 'char': p.char = playableChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
       case 'cstart': {   // chủ phòng bắt đầu
         if (this.phase !== 'lobby' || p.id !== this.hostId) return;
         const why = this.startBlock();
@@ -333,7 +347,13 @@ export class CardRoom {
       if (this.phase === 'result' && this.stopAfter) return this.toLobby();
       if (this.phase === 'bet' || this.phase === 'result') return this.startRound(true);
       if (this.phase === 'play') return this.game === 'xidach' ? this.xdTimeout() : this.tlTimeout();
-      if (this.phase === 'dealer') { if (this.dealer.pid && !this.dealerAuto) { this.dealerAuto = true; this.sys('⏱ Nhà cái hết giờ — máy đánh thay'); } return this.xdDealerStep(); }
+      if (this.phase === 'dealer') {
+        if (this.dealer.pid && !this.dealerAuto && !this.turnPlayer()?.rejoinUntil) {
+          this.dealerAuto = true;
+          this.sys('⏱ Nhà cái hết giờ — máy đánh thay');
+        }
+        return this.xdDealerStep();
+      }
     }
     // bot tới lượt
     const cur = this.phase === 'play' ? this.bySeat(this.turn) : null;
@@ -467,9 +487,8 @@ export class CardRoom {
   }
 
   xdCompareSeat(p, dealerScore) {
-    const penalty = dealerScore >= XD.penaltyScore ? p.bet : 0;
     const { r, mult } = xdCompare(p.hand, this.dealer.hand);
-    return { dealerScore, delta: penalty || r * p.bet * mult, penalty };
+    return { dealerScore, delta: r * p.bet * mult };
   }
 
   xdOpenSeat(p, seat) {
@@ -500,7 +519,7 @@ export class CardRoom {
     // Giữ bài úp và giữ lượt sau khi quắc để người chơi có thể rút thêm hoặc dằn.
     this.msg = `${p.name} rút bài`;
     if (s === 21 || p.hand.length >= XD.maxCards) { p.done = true; return this.nextTurn(); }
-    this.deadline = now() + 20;
+    this.setTurnDeadline(20);
     this.sendState();
   }
 
@@ -541,7 +560,6 @@ export class CardRoom {
   xdSettle() {
     const d = this.dealer.hand;
     const dealerScore = xdScore(d);
-    const dealerPenalty = dealerScore >= XD.penaltyScore;
     const players = this.xdPlayers;
     const penalties = new Map(players.map(p => [p, 0]));
     for (const p of players) {
@@ -554,28 +572,26 @@ export class CardRoom {
         penalties.set(p, penalties.get(p) - recipient.bet);
       }
     }
-    let bank = 0, dealerPaid = 0;
+    let bank = 0;
     for (const p of players) {
       const comparison = this.xdOpened.get(p.id) ?? this.xdCompareSeat(p, dealerScore);
-      // Kết quả đã mở giữ nguyên, cộng khoản đền của nhà cái một lần nếu quắc từ 28.
-      const dealerCompensation = dealerPenalty ? p.bet : 0;
-      const vsDealer = comparison.delta - comparison.penalty + dealerCompensation;
-      dealerPaid += dealerCompensation;
+      // Ghế đã mở giữ nguyên kết quả. Khoản đền chỉ tính giữa các ghế cược.
+      const vsDealer = comparison.delta;
       const compensation = penalties.get(p);
       const delta = vsDealer + compensation;
       p.chips += delta;
       bank -= vsDealer;
-      p.result = { r: Math.sign(delta), delta, kind: xdKind(p.hand), penalty: compensation + (dealerPenalty ? p.bet : 0) };
+      p.result = { r: Math.sign(delta), delta, kind: xdKind(p.hand), penalty: compensation };
     }
     // Nhà cái là người thật: ăn hoặc chung xu với cả bàn.
     const dp = this.dealer.pid ? this.players.get(this.dealer.pid) : null;
     if (dp) {
       dp.chips += bank;
-      dp.result = { r: Math.sign(bank), delta: bank, kind: xdKind(d), penalty: -dealerPaid };
+      dp.result = { r: Math.sign(bank), delta: bank, kind: xdKind(d) };
       this.refillChips(dp, 0, 'Nhà cái hết tiền');
     }
     const dk = xdKind(d);
-    this.msg = `Nhà cái: ${dk === 'normal' ? xdScore(d) + ' điểm' : XD_KIND[dk] + (dk === 'quac' ? ` (${xdScore(d)})` : '')}${dealerPenalty ? ' — đền cả bàn' : ''}`;
+    this.msg = `Nhà cái: ${dk === 'normal' ? xdScore(d) + ' điểm' : XD_KIND[dk] + (dk === 'quac' ? ` (${xdScore(d)})` : '')}`;
     this.phase = 'result';
     this.turn = -1;
     this.deadline = now() + 6;

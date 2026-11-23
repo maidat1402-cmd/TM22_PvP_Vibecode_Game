@@ -11,6 +11,15 @@ const r2 = v => Math.round(v * 100) / 100;
 const r3 = v => Math.round(v * 1000) / 1000;
 const NO_NADES = () => ({ he: 0, flash: 0, smoke: 0 });
 
+// Bù trễ khi kiểm tra trúng đạn. Người bắn nhìn thấy mục tiêu ở vị trí cũ:
+// (server → người bắn) + nội suy 70 ms + chờ snapshot + 1 khung hình + (người bắn → server).
+// Server giữ lịch sử vị trí ~1 s và chấp nhận điểm trúng nằm gần quỹ đạo mục tiêu trong khoảng đó.
+const HIST_KEEP = 1.0;      // giây lịch sử vị trí giữ lại
+const REWIND_MAX = 0.7;     // lùi tối đa (giây), dù ping cao tới đâu
+const DEFAULT_RTT = 0.2;    // khi chưa đo được ping
+const HIT_TOL = 1.0;        // điểm trúng cách tâm mục tiêu tối đa (m, theo phương ngang): hitbox ~0.5 m + dung sai
+const MAX_SPEED = 15;       // m/s, nhanh hơn mức này giữa 2 mẫu thì coi là dịch chuyển tức thời
+
 export class ShooterRoom {
   constructor(id, name, hub, mode, mapId) {
     this.id = id;
@@ -154,6 +163,8 @@ export class ShooterRoom {
   spawn(p, resetLoadout) {
     const [x, z] = this.spawnPoint(p);
     p.x = x; p.y = 0; p.z = z;
+    p.hist = [];               // vị trí trước khi hồi sinh không còn tính
+    this.pushHist(p, now());
     p.yaw = this.mode === 'dm' ? Math.random() * 6.28 : (p.team === 'T' ? Math.PI : 0);
     p.hp = S.maxHp;
     p.alive = true;
@@ -192,7 +203,8 @@ export class ShooterRoom {
         // đóng băng đầu vòng: không cho di chuyển xa
         if (this.phase === 'freeze' && Math.hypot(x - p.x, z - p.z) > 0.5) return;
         p.x = x; p.y = Math.max(0, y); p.z = z;
-        p.yaw = +m.r || 0; p.pitch = +m.pi || 0; p.flags = m.f | 0; p.w = m.w | 0;
+        this.pushHist(p, t);
+        p.yaw = Number.isFinite(m.r) ? m.r : 0; p.pitch = Number.isFinite(m.pi) ? m.pi : 0; p.flags = m.f | 0; p.w = m.w | 0;
         // nhặt bom rơi
         if (this.bomb.state === 'dropped' && p.team === 'T' && this.mode === 'bomb') {
           const [bx, , bz] = this.bomb.pos;
@@ -230,7 +242,8 @@ export class ShooterRoom {
       case 'buy': this.handleBuy(p, String(m.item)); break;
       case 'use': this.handleUse(p, !!m.on, t); break;
       case 'loadout': {
-        const w1 = WEAPONS[m.w1], w2 = WEAPONS[m.w2];
+        // chỉ nhận chuỗi: WEAPONS[["sniper"]] cũng tra ra súng nhưng lưu vào loadout là mảng → không bắn được
+        const w1 = typeof m.w1 === 'string' && WEAPONS[m.w1], w2 = typeof m.w2 === 'string' && WEAPONS[m.w2];
         if (w1 && w1.slot === 1) p.loadout[1] = m.w1;
         if (w2 && w2.slot === 2) p.loadout[2] = m.w2;
         this.me(p);
@@ -292,6 +305,8 @@ export class ShooterRoom {
     p.lastFire = t;
     p.protectUntil = 0;
     this.broadcast({ t: 'sshot', id: p.id, w: weaponIndex(wid), o: o.map(r2), e: pellets.map(q => [r2(q[0]), r2(q[1]), r2(q[2])]) }, p.id);
+    // người bắn thấy mục tiêu ở thời điểm t - rewind (theo giờ server nhận vị trí)
+    const rewind = Math.min(REWIND_MAX, (p.ws.rtt ?? DEFAULT_RTT) + NET.interp + 2 / NET.snapRate + 0.1);
     const dmgBy = new Map();
     for (const q of pellets) {
       const [ex, ey, ez, tid, zone] = q;
@@ -303,8 +318,8 @@ export class ShooterRoom {
       const dx = ex - o[0], dy = ey - o[1], dz = ez - o[2];
       const dist = Math.hypot(dx, dy, dz);
       if (dist === 0) continue;
-      // điểm trúng phải gần vị trí mục tiêu server biết (dung sai do trễ mạng)
-      if (Math.hypot(ex - tgt.x, ez - tgt.z) > 2.6 || ey < tgt.y - 1 || ey > tgt.y + 3) continue;
+      // điểm trúng phải gần quỹ đạo mục tiêu trong khoảng thời gian người bắn có thể đang thấy
+      if (!this.nearPast(tgt, ex, ey, ez, t - rewind)) continue;
       // không có tường chắn
       const dir = [dx / dist, dy / dist, dz / dist];
       const wall = rayMap(o, dir, dist, this.map.boxes);
@@ -314,6 +329,34 @@ export class ShooterRoom {
       dmgBy.set(tgt, { dmg: prev.dmg + dmg, head: prev.head || zone === 1, zone: prev.zone || zone });
     }
     for (const [tgt, h] of dmgBy) this.damage(p, tgt, h.dmg, h.head, wid);
+  }
+
+  // Lưu vị trí theo giờ server nhận (bỏ mẫu cũ hơn HIST_KEEP)
+  pushHist(p, t) {
+    const h = p.hist || (p.hist = []);
+    h.push([t, p.x, p.y, p.z]);
+    while (h.length > 2 && h[1][0] < t - HIST_KEEP) h.shift();
+  }
+
+  // Điểm (x, y, z) có nằm sát quỹ đạo của mục tiêu từ thời điểm `since` tới giờ không.
+  // Xét từng đoạn thẳng giữa 2 mẫu liên tiếp (client nội suy tuyến tính giữa các snapshot).
+  nearPast(tgt, x, y, z, since) {
+    const h = tgt.hist || [];
+    let i = h.length - 1;
+    while (i > 0 && h[i][0] > since) i--;      // lấy cả mẫu ngay trước `since` làm điểm đầu
+    const pts = h.slice(i);
+    pts.push([pts.length ? pts[pts.length - 1][0] : 0, tgt.x, tgt.y, tgt.z]);   // vị trí hiện tại luôn tính (server có thể đã đặt lại vị trí mà chưa có mẫu)
+    for (let k = 0; k < pts.length; k++) {
+      const [ta, ax, ay, az] = pts[k], [tb, bx, by, bz] = pts[Math.min(k + 1, pts.length - 1)];
+      let dx = bx - ax, dz = bz - az;
+      // nhảy cóc xa hơn mức chạy được (dịch chuyển, gói tin lạ): không nội suy qua đoạn đó
+      if (Math.hypot(dx, dz) > MAX_SPEED * (tb - ta) + 1) dx = dz = 0;
+      const L2 = dx * dx + dz * dz;
+      const s = L2 > 1e-9 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+      const cx = ax + dx * s, cz = az + dz * s, cy = ay + (by - ay) * s;
+      if (Math.hypot(x - cx, z - cz) <= HIT_TOL && y >= cy - 0.6 && y <= cy + 2.4) return true;
+    }
+    return false;
   }
 
   damage(src, tgt, dmg, head, wid) {
@@ -472,10 +515,10 @@ export class ShooterRoom {
 
   // ================= Lựu đạn =================
   handleThrow(p, m, t) {
-    const g = GRENADES[m.k];
+    const g = typeof m.k === 'string' && GRENADES[m.k];
     if (!g || !p.alive || (p.nades[m.k] | 0) <= 0) return;
     if (this.phase === 'freeze' || this.phase === 'matchEnd' || t - p.lastThrow < 0.6) return;
-    if (!Array.isArray(m.o) || !Array.isArray(m.v)) return;
+    if (!Array.isArray(m.o) || m.o.length !== 3 || !Array.isArray(m.v) || m.v.length !== 3) return;
     const o = m.o.map(Number).map(r3), v = m.v.map(Number).map(r3);
     if (![...o, ...v].every(Number.isFinite)) return;
     if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2 || Math.abs(o[1] - p.y - 1.3) > 1.5) return;
@@ -484,7 +527,7 @@ export class ShooterRoom {
     p.nades[m.k]--;
     p.lastThrow = t;
     p.protectUntil = 0;
-    const n = { gid: this.nextGid++, k: m.k, by: p.id, sim: newNade(o, v), fuse: g.fuse, acc: 0 };
+    const n = { gid: this.nextGid++, k: m.k, by: p.id, team: p.team, sim: newNade(o, v), fuse: g.fuse, acc: 0 };
     this.nades.push(n);
     this.broadcast({ t: 'sgren', gid: n.gid, k: n.k, by: p.id, o, v });
     this.me(p);
@@ -510,7 +553,7 @@ export class ShooterRoom {
     if (n.k === 'he') {
       for (const q of [...this.players.values()]) {
         if (!q.alive) continue;
-        if (this.mode === 'bomb' && src && q.team === src.team && q !== src) continue;
+        if (this.mode === 'bomb' && q.team === n.team && q !== src) continue;   // n.team: người ném đã rời phòng vẫn không nổ trúng đồng đội
         const chest = [q.x, q.y + 1.0, q.z];
         const d = Math.hypot(chest[0] - center[0], chest[1] - center[1], chest[2] - center[2]);
         if (d > g.radius || !lineOfSight(center, chest, this.map)) continue;
@@ -650,6 +693,8 @@ export class ShooterRoom {
     this.center(`VÒNG ${this.round}`, 'round', 2.5);
     this.broadcast(this.roundState());
     this.roster();
+    // một phe đã bỏ đi hết trong lúc chờ sang vòng (roundEnd/matchEnd không kiểm tra) → về khởi động
+    this.checkWin();
   }
 
   checkWin() {
@@ -727,12 +772,13 @@ export class ShooterRoom {
     const [bx, by, bz] = this.bomb.pos;
     this.bomb.state = 'exploded';
     this.broadcast({ t: 'sbomb', ev: 'exploded', pos: this.bomb.pos });
+    // kết thúc vòng trước: nếu để sau, CT cuối cùng chết vì bom làm checkWin kết thúc vòng kiểu "tiêu diệt" (sai tiền thưởng)
+    this.endRound('T', 'bomb');
     for (const p of this.players.values()) {
       if (!p.alive) continue;
       const d = Math.hypot(p.x - bx, p.y - by, p.z - bz);
       if (d < S.bombRadius) this.damage(null, p, S.bombDamage * Math.pow(1 - d / S.bombRadius, 1.4), false, null);
     }
-    this.endRound('T', 'bomb');
   }
 
   // ================= Vòng lặp =================

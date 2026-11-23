@@ -85,7 +85,85 @@ test('Tiến lên giữ bài, xu và lượt khi rớt mạng rồi vào lại',
   assert.deepEqual(state.seats[player.seat].cards, [0, 8]);
   assert.equal(state.seats[player.seat].chips, 760);
   assert.equal(state.seats[player.seat].offline, false);
+  room.onMessage(player.id, { t: 'cresumeack' });
   assert.equal(room.resume(connection(4).client, client.session), false);
+});
+
+test('Rớt mạng lần nữa trước xác nhận vẫn lấy lại đúng ghế bằng mã đã lưu', () => {
+  const { room, join, connection } = makeTable('tienlen');
+  const { player, client } = join(1);
+  player.chips = 760;
+  room.disconnect(client);
+  const retry = connection(2).client;
+  assert.equal(room.resume(retry, client.session), true);
+  room.disconnect(retry); // Chưa nhận được cj nên tab vẫn lưu mã cũ.
+  const returned = connection(3);
+  assert.equal(room.resume(returned.client, client.session), true);
+  assert.equal(returned.log.at(-1).seats[player.seat].chips, 760);
+
+  room.disconnect(returned.client); // Tab đã lưu mã mới, nhưng xác nhận chưa đến server.
+  const saved = connection(4).client;
+  assert.equal(room.resume(saved, returned.client.session), true);
+  room.onMessage(player.id, { t: 'cresumeack' });
+  assert.equal(room.resume(connection(5).client, client.session), false);
+});
+
+test('Xì dách giữ ghế 60 giây và máy rút rồi dằn từ giây thứ 20', t => {
+  let clock = 10_000;
+  t.mock.method(performance, 'now', () => clock);
+  const { room, join, connection } = makeTable('xidach');
+  const { player, client } = join(1);
+  const next = join(2).player;
+  player.hand = [0, 4];
+  next.hand = [8, 12];
+  room.deck = [28];
+  room.phase = 'play';
+  room.turn = player.seat;
+  room.disconnect(client);
+  assert.equal(player.rejoinUntil, 70);
+  assert.equal(room.deadline, 30);
+
+  clock = 29_999;
+  room.tick();
+  assert.equal(player.hand.length, 2);
+  clock = 30_000;
+  room.tick();
+  assert.deepEqual(player.hand, [0, 4, 28]);
+  assert.equal(player.done, undefined);
+  clock = 31_000;
+  room.tick();
+  assert.equal(room.turn, next.seat);
+  assert.equal(room.bySeat(player.seat), player);
+  assert.equal(player.done, true);
+  assert.equal(room.resume(connection(3).client, client.session), true);
+  assert.equal(room.turn, next.seat);
+});
+
+test('Nhà cái Xì dách lấy lại quyền sau khi máy rút giúp lúc mất mạng', t => {
+  let clock = 10_000;
+  t.mock.method(performance, 'now', () => clock);
+  const { room, join, connection } = makeTable('xidach');
+  const { player: dealer, client } = join(1);
+  const guest = join(2).player;
+  room.setHostDealer(true);
+  room.dealer.hand = [0, 4];
+  guest.hand = [12, 13];
+  room.xdPlayers = [guest];
+  room.deck = [28];
+  room.phase = 'dealer';
+  room.disconnect(client);
+  clock = 30_000;
+  room.tick();
+  assert.deepEqual(room.dealer.hand, [0, 4, 28]);
+  assert.equal(room.dealer.pid, dealer.id);
+
+  clock = 30_300;
+  assert.equal(room.resume(connection(3).client, client.session), true);
+  clock = 31_100;
+  room.tick();
+  assert.equal(room.phase, 'dealer');
+  room.onMessage(dealer.id, { t: 'cstand' });
+  assert.equal(room.phase, 'result');
 });
 
 test('Hết hạn ở Tiến lên thì máy giữ bài và xu của người rời', () => {
@@ -173,14 +251,14 @@ test('Quắc vẫn giữ lượt, giữ kín bài và chỉ tính tiền đền 
   assert.deepEqual(room.view(two).seats[one.seat].cards, one.hand);
 });
 
-test('Nhà cái quắc đúng 28 điểm chung một lần cược cho từng ghế', () => {
+test('Nhà cái quắc 28 điểm so bài bình thường với cả xì dách và bài quắc', () => {
   const { room, join } = makeTable('xidach');
   const dealer = join(1).player;
   const player = join(2).player;
   const second = join(3).player;
   room.setHostDealer(true);
   Object.assign(player, { hand: [44, 31], bet: 100 });
-  Object.assign(second, { hand: [0, 4], bet: 200 });
+  Object.assign(second, { hand: [28, 29, 0], bet: 200 });
   room.xdPlayers = [player, second];
   room.dealer.hand = [28, 29];
   room.deck = [20];
@@ -190,9 +268,11 @@ test('Nhà cái quắc đúng 28 điểm chung một lần cược cho từng gh
   room.onMessage(dealer.id, { t: 'cstand' });
   assert.equal(room.phase, 'result');
   assert.equal(xdScore(room.dealer.hand), 28);
-  assert.equal(dealer.result.delta, -300);
-  assert.equal(player.result.delta, 100);
-  assert.equal(second.result.delta, 200);
+  assert.equal(dealer.result.delta, -200);
+  assert.equal(player.result.delta, 200);
+  assert.equal(second.result.delta, 0);
+  assert.equal(player.result.penalty, 0);
+  assert.equal(second.result.penalty, 0);
 });
 
 test('Chủ bàn Xì dách đặt vốn và mức cược cho cả người mới, kiểm tra mức hợp lệ', () => {
@@ -267,7 +347,7 @@ test('Nhà cái mở từng người và giữ nguyên kết quả sau khi rút 
   room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
   const seen = room.view(second).seats[first.seat];
   assert.deepEqual(seen.cards, first.hand);
-  assert.deepEqual(seen.opened, { dealerScore: 16, delta: 100, penalty: 0 });
+  assert.deepEqual(seen.opened, { dealerScore: 16, delta: 100 });
   assert.deepEqual(room.view(dealer).seats[second.seat].cards, []);
   room.onMessage(dealer.id, { t: 'chit' });
   room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
@@ -279,7 +359,7 @@ test('Nhà cái mở từng người và giữ nguyên kết quả sau khi rút 
   assert.equal(dealer.result.delta, 100);
 });
 
-test('Nhà cái rút lên 28 sau khi mở vẫn đền đủ bàn và giữ kết quả đã chốt', () => {
+test('Nhà cái rút lên 28 sau khi mở giữ kết quả đã chốt và không phát sinh khoản đền', () => {
   const { room, join } = makeTable('xidach');
   const dealer = join(1).player;
   const first = join(2).player;
@@ -294,9 +374,8 @@ test('Nhà cái rút lên 28 sau khi mở vẫn đền đủ bàn và giữ kế
   room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
   room.onMessage(dealer.id, { t: 'chit' });
   room.onMessage(dealer.id, { t: 'copen', seat: second.seat });
-  assert.equal(first.result.delta, 0);
-  assert.equal(first.result.penalty, 100);
-  assert.equal(second.result.delta, 200);
-  assert.equal(dealer.result.delta, -200);
-  assert.equal(dealer.result.penalty, -300);
+  assert.equal(first.result.delta, -100);
+  assert.equal(first.result.penalty, 0);
+  assert.equal(second.result.delta, 400);
+  assert.equal(dealer.result.delta, -300);
 });

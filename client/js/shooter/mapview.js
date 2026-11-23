@@ -309,6 +309,14 @@ export function buildMapView(scene, map) {
         snowPts.geometry.attributes.position.needsUpdate = true;
       }
     },
-    dispose() { root.removeFromParent(); },
+    dispose() {
+      // giải phóng geometry/texture/material của map (toon trong cache dùng chung, không có map, thì giữ)
+      root.removeFromParent();
+      root.traverse(o => {
+        o.geometry?.dispose();
+        const m = o.material;
+        if (m && (m.map || !m.isMeshToonMaterial)) { m.map?.dispose(); m.dispose(); }
+      });
+    },
   };
 }

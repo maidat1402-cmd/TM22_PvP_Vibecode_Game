@@ -49,7 +49,6 @@ game.touch = shooter.touch = touch;
 function applyTouch() {
   const on = settings.touch === 'on' || (settings.touch === 'auto' && IS_TOUCH);
   touch.setEnabled(on && inGame && current !== cards);   // đánh bài: chỉ dùng nút HTML, không cần joystick
-  touch.sens = settings.sens;
   if (on && inGame && current !== cards) (current === shooter ? shooter : game).setupTouch();
 }
 function goFullscreen() {
@@ -710,9 +709,13 @@ try {
 
 function rememberCardSession(room, mode) {
   try {
-    if (room && cardSession) sessionStorage.setItem(CARD_SESSION_KEY, JSON.stringify({ room, mode, session: cardSession }));
-    else sessionStorage.removeItem(CARD_SESSION_KEY);
+    if (room && cardSession) {
+      sessionStorage.setItem(CARD_SESSION_KEY, JSON.stringify({ room, mode, session: cardSession }));
+      return true;
+    }
+    sessionStorage.removeItem(CARD_SESSION_KEY);
   } catch { /* trình duyệt có thể chặn lưu trữ */ }
+  return false;
 }
 
 // Số phiên bản ở menu và bảng tạm dừng
@@ -787,7 +790,7 @@ net.on('cj', m => {
   game.suspended = true;     // dùng chung canvas với cảnh bàn bài
   $('menu').hidden = true;
   cards.enter(m);
-  rememberCardSession(m.room.id, m.room.game);
+  if (rememberCardSession(m.room.id, m.room.game) && m.resumed) net.send({ t: 'cresumeack' });
   if (m.resumed) game.hud.toast('Đã lấy lại chỗ ở bàn bài', 2000);
   afterJoin();
 });
@@ -1063,4 +1066,4 @@ renderCharList();
 loadServerInfo();
 setInterval(() => { if (!inGame) loadServerInfo(); }, 10000);
 net.connect().catch(() => { $('connState').textContent = '● Không kết nối được server'; });
-addEventListener('pointerdown', () => initAudio(), { once: true });
+addEventListener('pointerdown', () => initAudio());   // mỗi lần chạm: bật lại âm thanh nếu iOS đã tạm dừng

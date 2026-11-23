@@ -667,6 +667,7 @@ export const SUMMONS = {
 };
 
 export const CHAR_BY_ID = Object.fromEntries([...CHARACTERS, ...Object.values(SUMMONS)].map(c => [c.id, c]));
+Object.setPrototypeOf(CHAR_BY_ID, null);   // id từ gói tin như "constructor" không được tra ra hàm của Object
 
 // Chiêu giữ phím tụ lực (hold): bản phóng to theo mức tụ k (0..1). Kết quả được lưu lại theo từng nấc 0.1
 const HOLD_CACHE = new Map();
@@ -689,6 +690,12 @@ export function holdSkill(s, k) {
 
 export function getChar(id) {
   return CHAR_BY_ID[id] || CHARACTERS[0];
+}
+
+// Nhân vật người chơi được chọn: id vật triệu hồi (treant) từ gói tin không được nhận
+export function playableChar(id) {
+  const c = getChar(id);
+  return c.summon ? CHARACTERS[0] : c;
 }
 
 // Máu tối đa của nhân vật

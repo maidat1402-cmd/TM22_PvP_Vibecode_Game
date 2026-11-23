@@ -3,7 +3,7 @@ let ctx = null, master = null, noiseBuf = null;
 let volume = 0.5;
 
 export function initAudio() {
-  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  if (ctx) { if (ctx.state !== 'running') ctx.resume(); return; }   // iOS: cuộc gọi/chuyển app để ctx ở 'interrupted'
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   master = ctx.createGain();
   master.gain.value = volume;

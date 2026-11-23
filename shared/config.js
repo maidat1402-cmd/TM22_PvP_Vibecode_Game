@@ -76,6 +76,11 @@ export const MOVE = {
   flyMaxHeight: 14,
 };
 
+// Cùng một hồi chiêu né cho dự đoán phía client và xác nhận phía server.
+export function dashCooldown(awaken) {
+  return awaken?.passive?.dashCd ?? MOVE.dashCd;
+}
+
 // Đấu trường mặc định (Đền Anh Đào). Các map khác: shared/arenas.js
 export const ARENA = {
   id: 'shrine', name: 'Đền Anh Đào', icon: '🌸', theme: 'shrine',

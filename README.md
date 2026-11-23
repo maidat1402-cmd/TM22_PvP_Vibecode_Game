@@ -62,7 +62,7 @@ Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); 
 
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
-Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Nếu tới lượt bạn khi đang mất mạng, bàn chờ tới hết thời gian giữ chỗ. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Ở Xì dách, sau 20 giây mất kết nối, máy rút hoặc dằn thay khi tới lượt bạn, kể cả khi bạn làm nhà cái. Kết nối lại trong 60 giây để nhận lại quyền chơi với bài và xu hiện tại. Tiến lên chờ hết thời gian giữ chỗ nếu tới lượt người mất kết nối. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
 
 ## Cách chơi
 
@@ -152,7 +152,7 @@ Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn
 2. Mỗi người và nhà cái được 2 lá. Tính điểm: 2–10 theo số, J Q K = 10 điểm, A tính 1, 10 hoặc 11 (tự chọn cách có lợi nhất).
 3. Lần lượt từng người **Rút bài** (tối đa 5 lá) hoặc **Dằn** (dừng). Phải có ít nhất **16 điểm** mới được dằn. Quá 21 điểm là **quắc**. Người ngồi cược vẫn giữ lượt và có thể rút thêm hoặc dằn. Người khác chỉ thấy số lá tới khi so bài.
 4. Khi có ít nhất 15 điểm hoặc đã đủ 5 lá, nhà cái có thể chọn một ghế và bấm **Mở bài**. Kết quả ghế đó chốt theo bài nhà cái lúc mở. Nhà cái có thể rút tiếp rồi mở các ghế còn lại theo thứ tự tùy chọn, hoặc bấm **Mở hết** để chốt cùng lúc. Điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
-5. **Đền bài:** từ **28 điểm** trở lên, người quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nếu nhà cái quắc từ 28 điểm, nhà cái chung một lần mức cược cho mọi ghế cược. Ghế đã mở giữ kết quả so bài trước đó và nhận thêm khoản đền. Ghế chưa mở nhận một lần mức cược.
+5. **Đền bài:** từ **28 điểm** trở lên, người ngồi cược bị quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nhà cái quắc từ 28 điểm vẫn tính thắng, thua hoặc hòa theo luật so bài thông thường và không phải đền thêm. Ghế đã mở giữ nguyên kết quả so bài trước đó.
 6. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
 
 **🂡 Tiến lên** (miền Nam, 4 người, mỗi người 13 lá):
@@ -206,7 +206,7 @@ Chọn map khi tạo phòng (phe Công luôn xuất phát ở phía nam, phe Th�
 
 **Súng rơi**: người chết làm rơi súng tốt nhất (súng chính, nếu không có thì súng lục). Đi qua là tự nhặt nếu ô súng đó đang trống; nhấn `F` để đổi lấy súng đang cầm. Mua súng mới thì súng cũ cùng ô rơi xuống, nên có thể mua giúp đồng đội rồi vứt (`G`) cho họ. Súng trên đất được giữ qua các vòng, xoá khi đổi phe; ở Sinh tử súng tự biến mất sau 25 giây.
 
-**Cơ chế bắn**: headshot sát thương gấp ~4 lần; giáp + mũ giảm sát thương (súng mạnh xuyên giáp tốt hơn); sát thương giảm dần theo khoảng cách; đạn tản rộng khi chạy hoặc nhảy, chính xác khi đứng yên hoặc ngồi; bắn liên tục thì súng giật lên.
+**Cơ chế bắn**: headshot sát thương gấp ~4 lần; giáp + mũ giảm sát thương (súng mạnh xuyên giáp tốt hơn); sát thương giảm dần theo khoảng cách; đứng yên, ngồi hoặc đi bộ (`Shift`) thì bắn chuẩn, chạy càng nhanh đạn càng tản (chạy hết tốc mới tản nhiều; tiểu liên và shotgun ít bị ảnh hưởng), nhảy thì tản rộng; vòng tâm xanh giãn ra đúng bằng độ tản thật, kể cả khi ngắm scope mà vẫn di chuyển; bắn liên tục thì súng giật lên.
 
 Súng: P9 Lục Tiêu, Đại Bàng .50, Ong Vò Vẽ (tiểu liên), Sấm Sét 12 (shotgun), Hổ Vằn AR, Rồng Xanh K4, Diều Hâu SR (bắn tỉa). Thông số trong [shared/weapons.js](shared/weapons.js), map trong [shared/maps.js](shared/maps.js) (map là danh sách khối hộp nên dễ chỉnh hoặc thêm map mới).
 

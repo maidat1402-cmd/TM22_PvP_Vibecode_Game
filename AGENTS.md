@@ -40,7 +40,7 @@ File này dành cho mọi AI agent (Claude Code, Codex, Cursor, Copilot…) và 
 
 ## 2. Ràng buộc quan trọng
 
-- **Nhân vật, tên và hình ảnh phải tự sáng tác.** Không được dùng hay mô phỏng nhân vật, tên, trang phục, chiêu thức đặc trưng, logo, nhạc hoặc map của anime, manga hay game có bản quyền, kể cả khi đổi tên. Được lấy cảm hứng chung theo kiểu "ninja gió", "kiếm sĩ lửa"; không được làm bản sao của một nhân vật cụ thể. Bốn nhân vật hiện tại (Kaze, Raiga, Homura, Yuki) đều là nhân vật gốc.
+- **Nhân vật, tên và hình ảnh phải tự sáng tác.** Không được dùng hay mô phỏng nhân vật, tên, trang phục, chiêu thức đặc trưng, logo, nhạc hoặc map của anime, manga hay game có bản quyền, kể cả khi đổi tên. Được lấy cảm hứng chung theo kiểu "ninja gió", "kiếm sĩ lửa"; không được làm bản sao của một nhân vật cụ thể. Tám nhân vật hiện tại (Kaze, Raiga, Homura, Yuki, Shiden, Midori, Gantetsu, Kage) đều là nhân vật gốc.
 - **Không dùng file asset.** Không có file model, texture hay âm thanh nào: hình khối, texture canvas, shader và âm thanh WebAudio đều sinh bằng code. Giữ nguyên hướng này để game nhẹ và không vướng bản quyền.
 - **Phải chạy mượt trên máy yếu và điện thoại.** Tính năng mới cần chạy được ở chất lượng `low` và có cách điều khiển bằng cảm ứng.
 - **Chữ hiển thị cho người chơi và chú thích trong code viết bằng tiếng Việt.** Tên biến và hàm viết bằng tiếng Anh.
@@ -49,8 +49,8 @@ File này dành cho mọi AI agent (Claude Code, Codex, Cursor, Copilot…) và 
 
 ```
 server/            Node.js (ESM). 1 cổng duy nhất: HTTP tĩnh + WebSocket ở /ws
-  index.js         Hub: sảnh chờ, tạo/vào phòng, phục vụ file tĩnh, /api/info, cờ --port --host --upnp --tunnel
-  room.js          Phòng đối kháng (cả đấu đội: phòng chờ → trận → kết quả): mô phỏng chiêu, sát thương, hồi máu/mana
+  index.js         Hub: sảnh chờ, tạo/vào phòng, phục vụ file tĩnh, /api/info, nhịp tim + đo RTT, cờ --port --host --upnp --tunnel
+  room.js          Phòng đối kháng (cả đấu đội, đấu tập): mô phỏng chiêu, sát thương, hồi máu/mana
   shooter.js       Phòng bắn súng: vòng đấu, kinh tế, bom, súng rơi, lựu đạn
   cards.js         Phòng đánh bài (Xì dách / Tiến lên): chia bài, lượt, tính tiền, bot ngồi ghế trống
   loop.js          Vòng lặp tick theo lịch cố định (xem mục 5)
@@ -61,17 +61,18 @@ shared/            Code chạy chung cho server và trình duyệt
   characters.js    Nhân vật và chiêu thức, dạng dữ liệu (thêm nhân vật ở đây)
   arenas.js        Map chế độ đối kháng: trụ, hộp, điểm hồi sinh, theme
   steer.js         Lái tuyệt kỹ theo tâm ngắm
-  weapons.js       Súng, trang bị, lựu đạn, bảng mua đồ, phe, hằng số chế độ bắn súng
+  weapons.js       Súng, trang bị, lựu đạn, bảng mua đồ, phe, hằng số chế độ bắn súng, độ tản shotSpread()
   maps.js          Map bắn súng, va chạm, raycast, mô phỏng lựu đạn
   cards.js         Luật bài: bộ bài, điểm Xì dách, bộ / chặn / gợi ý Tiến lên
 client/            Trình duyệt, không có bước build
   index.html, style.css
-  js/main.js       Menu, chọn chế độ/map, chuyển giữa 2 game
+  js/main.js       Menu, chọn chế độ/map, chuyển giữa đối kháng / bắn súng / đánh bài
   js/game.js       Chế độ đối kháng (góc nhìn thứ 3)
   js/effects.js    Particle GPU, shader và hiệu ứng từng loại chiêu
-  js/chibi.js, world.js, ui.js, audio.js, net.js, touch.js
+  js/chibi.js, world.js, ui.js, audio.js, net.js, touch.js, keys.js (gán phím)
   js/shooter/      Chế độ bắn súng: sgame.js, mapview.js, guns.js
   js/cards/        Chế độ đánh bài: cgame.js (bàn tròn 3D, lá bài vẽ canvas, giao diện HTML)
+tests/             Script kiểm tra: `npm test` (card-rules, rooms, shooter, team), shooter-hit.mjs, stress.mjs, cards.mjs, awaken.mjs (xem mục 4)
 tools/             cloudflared.exe (không commit), README.txt
 ```
 
@@ -87,16 +88,17 @@ npm start                       # http://localhost:3000
 node server/index.js --port 3123   # chạy cổng khác để test, không đụng server đang chơi
 ```
 
-- **Có thể máy không cài sẵn Node.** Chạy `node -v` để kiểm tra trước. Nếu không có, tải bản Node portable (≥ 18) vào thư mục tạm, đừng cài vào hệ thống khi chưa hỏi chủ dự án.
-- **Hiện chưa có bộ test tự động.** Tối thiểu cần làm:
+- **Có thể máy không cài sẵn Node.** Chạy `node -v` để kiểm tra trước. Nếu không có, tải bản Node portable (≥ 22, vì script trong `tests/` dùng `WebSocket` có sẵn) vào thư mục tạm, đừng cài vào hệ thống khi chưa hỏi chủ dự án.
+- **`npm test`** (`node --test` với `tests/card-rules.mjs`, `tests/rooms.mjs`, `tests/shooter.mjs`, `tests/team.mjs`) tự mở server cục bộ, kiểm tra HTTP, tạo và vào phòng ở 7 chế độ, luật đánh bài và phát bắn. Các script còn lại bên dưới cần server chạy sẵn. Ngoài ra tối thiểu cần làm:
   1. `node --check <file>` cho mọi file JS đã sửa (kể cả file client).
   2. Chạy server và mở 2 tab trình duyệt vào cùng phòng, xem cả 2 người chơi có thấy nhau, đánh hay bắn trúng nhau không.
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
-- Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
+- Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`. Hiện có `tests/shooter-hit.mjs`: giả lập trễ mạng, kiểm tra server nhận phát bắn hợp lệ (sniper xa, người bắn đang chạy) và từ chối phát gian lận (`node tests/shooter-hit.mjs 3123 150 60` khi server chạy ở cổng 3123).
+- `tests/stress.mjs`: bot ở cả 7 chế độ (gồm đấu tập và 2 chế độ đánh bài) vào/ra liên tục, ngắt đột ngột, bot không trả ping, gói rác/thiếu trường/số khổng lồ; đạt khi server không chết, bot ở suốt trận không bị ngắt và không còn phòng sót (`node tests/stress.mjs 3123 60`). Log server cũng phải sạch: dòng `[msg] ...` là một handler đã ném lỗi, cần sửa. Sửa xử lý gói tin ở server hoặc thêm gói/chế độ mới thì chạy lại (thêm gói mới vào `TYPES`/`FIELDS` của script).
 - `tests/cards.mjs`: kiểm tra chế độ đánh bài (Xì dách và Tiến lên với bot, che bài, tính tiền, sang ván). Chạy server ở cổng 3123 rồi `node tests/cards.mjs`.
 - `tests/awaken.mjs`: kiểm tra dị biến (thanh tích, biến hình, nội tại, các kiểu chiêu dị biến, ngắm dọc, cơ chế dị biến v2 của cả 8 nhân vật) và chế độ đấu tập. Mất khoảng 5 phút. Chạy server ở cổng 3123 rồi `node tests/awaken.mjs`; sửa dị biến hay `damage()` thì chạy lại.
 - **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm|xidach|tienlen&map=<id map>&name=<tên>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn. Người chơi bắt buộc có tên, không có `name` (và chưa lưu tên) thì hiện hộp hỏi tên trước khi vào phòng.
-- **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
+- **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng, `window.__cards` là chế độ đánh bài.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
 
 ## 5. Kiến trúc mạng: đọc kỹ trước khi sửa
@@ -105,7 +107,16 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 
 - Mỗi gói tin là một đối tượng JSON có trường `t` (loại gói).
 - Tên loại gói ở chế độ bắn súng có tiền tố `s`, ví dụ `sj`, `ss`, `sshot`, `shit`, `sdie`.
-- Thêm loại gói mới thì phải sửa cả server lẫn client, và kiểm tra dữ liệu đầu vào ở server: `Number.isFinite`, giới hạn độ dài, giới hạn giá trị.
+- Thêm loại gói mới thì phải sửa cả server lẫn client, và kiểm tra dữ liệu đầu vào ở server: `Number.isFinite`, giới hạn độ dài, giới hạn giá trị. Mảng toạ độ phải kiểm tra đủ độ dài (`o.length === 3`), không chỉ `Array.isArray` (`[]` lọt qua thành `NaN`).
+- **Gói tin ở server (`server/index.js`):** lỗi ném ra trong `ws.on('message')` làm chết cả process, mọi người bị out. Vì vậy:
+  - Mỗi gói chạy trong `try/catch` (`onMsg`). Lỗi chỉ bỏ gói đó và ghi log `[msg]` một lần mỗi kết nối. Đây là lưới an toàn, không phải chỗ để dựa vào: handler vẫn phải tự kiểm tra dữ liệu.
+  - `JSON.parse` có reviver bỏ khoá `toString`/`valueOf`: gói như `{"char":{"toString":1}}` làm `String()`, `| 0` và tra bảng ném lỗi.
+  - Bảng tra bằng id do client gửi (`CHAR_BY_ID`, `ARENAS`, `MAPS`, `WEAPONS`, `EQUIPMENT`, `GRENADES`) phải là null-prototype (`Object.setPrototypeOf(x, null)`), nếu không `"constructor"`/`"__proto__"` tra ra hàm của `Object`. Bảng mới cũng làm vậy; chỗ cần chuỗi thì kiểm `typeof m.k === 'string'` trước khi tra.
+  - Nhân vật người chơi chọn luôn qua `playableChar()`: `CHAR_BY_ID` chứa cả `SUMMONS`, `getChar('treant')` trả về Mộc Thần.
+  - Bit cờ `128` (đã chết) do server gắn vào snapshot, không lấy từ client: gói `s` lấy `m.f & 127`, nếu không người chơi tự hiện "đã chết" với người khác mà vẫn đánh được.
+  - Hành động có hồi chiêu phải giữ mốc ở server (ví dụ `dodge` dùng `p.dodgeAt`), nếu không spam gói là bất tử.
+- **Nhịp tim** (`server/index.js`): server ping mỗi 5 s; kết nối không trả pong trước lượt sau thì bị `terminate()` và rời phòng. Ping/pong cũng dùng để đo RTT (`ws.rtt`, trung bình trượt). Chỉ gửi ping mới khi đã nhận pong của ping trước (`ws.pingAt`), không thì RTT đo từ mốc sai.
+- **Id phòng** do hub cấp (`randomUUID()` ở gói `create` trong `server/index.js`) rồi truyền vào constructor của mọi loại phòng (`Room`, `ShooterRoom`, `CardRoom`). Đừng thêm bộ đếm riêng trong từng loại phòng: hai bộ đếm sẽ trùng id sau vài nghìn phòng.
 - **Nhịp mạng** chỉnh tập trung ở `NET` trong `shared/config.js`. Hiện tại: tick 30 Hz, snapshot 30 Hz, client gửi vị trí 30 Hz, nội suy trễ 70 ms.
 - **Nén gói tin:** server bật `permessage-deflate`, gói nhỏ hơn 128 byte gửi thẳng không nén. Nén giảm khoảng 70% băng thông nhưng tốn gần gấp đôi CPU.
 
@@ -115,7 +126,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 |---|---|
 | Di chuyển của chính mình | Client tự quyết để mượt. Server chỉ chặn các trường hợp vô lý |
 | Máu, mana, hồi chiêu, sát thương (đối kháng) | Server. Client hiện hiệu ứng trước (dự đoán) rồi ghép với ID chiêu của server (`cs` → `eid`) |
-| Trúng đạn (bắn súng) | Client tự tính trúng/trượt rồi gửi lên. Server kiểm tra lại khoảng cách tới mục tiêu, tường chắn (`rayMap`), tốc độ bắn và số đạn |
+| Trúng đạn (bắn súng) | Client tự tính trúng/trượt rồi gửi lên. Server kiểm tra lại điểm trúng có nằm sát quỹ đạo mục tiêu trong khoảng người bắn đang thấy không (bù trễ theo RTT đo bằng ping/pong WebSocket, `nearPast()`), tường chắn (`rayMap`), tốc độ bắn và số đạn |
 | Vòng đấu, tiền, bom, súng rơi, lựu đạn | Server |
 
 ### Bẫy đã gặp
@@ -124,6 +135,10 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Lựu đạn mô phỏng tất định:** bước cố định `NADE_STEP` (1/60 giây), dữ liệu đầu vào làm tròn 3 chữ số. Code phải giống hệt nhau ở server và client để quỹ đạo khớp. Sửa `stepNade` là ảnh hưởng cả hai bên.
 - **Tuyệt kỹ lái theo tâm:** mỗi chiêu có cấu hình `skill.steer`. `shared/steer.js` chạy ở cả hai bên: server dùng để tính sát thương, client dùng cho hiệu ứng. Client gửi gói `steer` khoảng 15 lần/giây, server chuyển tiếp cho người khác. Thêm tuyệt kỹ mới thì chọn một trong các chế độ `follow`, `homing`, `turn` hoặc viết thêm chế độ trong `steer.js`.
 - **Thứ tự gói khi vào phòng bắn súng:** server phải gửi `sj` trước `sspawn`. Đảo thứ tự thì client bỏ qua lần xuất hiện đầu tiên.
+- **Bù trễ khi kiểm tra trúng đạn** (`server/shooter.js`): mỗi gói `s` lưu vị trí vào `p.hist` theo giờ server nhận (`pushHist()`, giữ `HIST_KEEP` = 1 s; hồi sinh thì xoá). `nearPast()` nhận điểm trúng nếu cách quỹ đạo mục tiêu ≤ `HIT_TOL` (1 m, theo phương ngang) trong khoảng lùi `rewind` = RTT + `NET.interp` + 2 snapshot + 0,1 s, tối đa `REWIND_MAX` (0,7 s). Đoạn di chuyển nhanh hơn `MAX_SPEED` (dịch chuyển tức thời) không được nội suy. Đổi `NET`, hitbox hay luật bắn thì chạy lại `tests/shooter-hit.mjs` ở RTT 150 và 300 ms.
+- **Ngắm và độ tản (bắn súng):** độ tản tính ở một chỗ duy nhất là `shotSpread()` trong `shared/weapons.js`. Camera, tia bắn và tia ngắm cùng lấy góc dọc từ `aimPitch()` (gồm cả độ giật) trong `sgame.js`; tính riêng ở một nơi thì tâm scope lệch khỏi hướng đạn. Tia đạn (tracer) tính đầu nòng từ vị trí mắt và góc của chính phát bắn đó, không lấy camera của khung hình trước.
+- **Avatar bắn súng không có `char`** (chỉ người chơi đối kháng có). Code dùng chung cho 2 chế độ, ví dụ biển tên ở `ui.js`, phải viết `av.char?.hp || GAME.maxHp`; đọc thẳng `av.char.hp` sẽ ném lỗi trong vòng lặp vẽ và đứng hình.
+- **"Kết nối lại"** (`#reconnectBtn` ở `client/js/main.js`): nếu đang trong trận, ghi `?room=<id phòng đang chơi>` vào URL (bỏ `quick`, `mode`, `map`) bằng `history.replaceState` rồi tải lại trang để vào lại đúng phòng; phòng đã bị xoá thì client nhận `err` và ở lại menu. Nút rời phòng xoá `room` khỏi URL.
 - **Dị biến** (`AWAKEN` ở `shared/config.js`, `awaken` của từng nhân vật ở `shared/characters.js`): server giữ thanh `p.awk` (cộng trong `damage()` khi chưa dị biến, trừ khi chiêu có `noGauge`) và `p.awUntil`. Client gửi `awk` để biến hình; server gửi `awk` (`on`, `dur`, `tf` / `tired`) cho cả phòng, `awkno` khi chưa đủ thanh. Snapshot thêm phần tử thứ 10 là thanh dị biến, `flags & 64` là đang dị biến. Chiêu dị biến gửi `cast` kèm `aw: 1`, hồi chiêu lưu ở chỉ số `sk + 10` (cả server `p.cds` lẫn client `L.cds`). Chọn bộ chiêu luôn qua `charSkills(char, aw)`, không đọc thẳng `char.skills`. Nội tại dị biến (`awaken.passive`) xử lý trong `damage()` và `tick()` (bỏng). Thêm dạng biến hình mới thì viết thêm một `case` trong `buildForm` ở `client/js/chibi.js` và một `case` hạt trang trí trong `formParticles` ở `client/js/game.js`.
 - **Ngắm dọc:** `aimDir()` ở client nhắm thẳng vào ngực mục tiêu đang khoá (kể cả đang bay); server cho phép thành phần dọc của hướng ra chiêu tới ±0.95. Đạn có `seek` tự bẻ hướng 3D.
 - **Tường gió** là chướng ngại vật tạm thời có `pass` (id chủ tường) / `passTeam` và `noBody`: `hitsObstacle(..., owner, team)` cho đạn của chủ tường bay xuyên, `dynCollide` bỏ qua `noBody`.
@@ -134,9 +149,10 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Vùng trên sàn** (`room.zones`, `game.zones` / `fx.zoneList`): `fire` (Homura: đứng vào bị bỏng), `ice` (Yuki: client tự xử lý trơn trượt, server không kiểm tra), `slow` (Thời Băng Giới: `mul` nhân tốc độ chạy ở client và tốc độ đạn của đối phương ở cả server `zoneSlow()` lẫn client `fx.zoneSlow()`). Server gửi gói `zone` một lần khi tạo, client tự xoá khi hết `dur`; người vào giữa chừng nhận trong `joined.zones`.
 - **Đấu tập** (`mode: 'practice'`, `room.practice`): phòng đối kháng có sẵn 2 bia + 1 võ sĩ máy (`spawnPracticeBots()`); gói `pfill` nạp đầy thanh dị biến (chỉ chạy trong phòng đấu tập). `?quick&mode=practice` vào nhanh.
 - **Dị biến v2 đợt 2–3**: Homura (`fireZone`, `passive.fireTrail`, `boomerang`, `ignite`, `passive.revive` xử lý đầu `kill()`, gói `revive`), Kage (`decoy`, blink `swap`, multiblink `dark` → gói `dark`), Yuki (`iceAt`, `iceTrail`, `icewall` là công trình có `shatter`, `timezone`, `passive.iceSpeed`), Raiga (`hold`: client gửi `hold` lúc bắt đầu giữ phím, `cast` kèm `hold` giây; server giới hạn theo lúc nhận gói `hold`, gửi `cast` kèm `hk` 0..1; bản chiêu phóng to lấy qua `holdSkill(s, k)`; `grab`: server điều khiển vị trí nạn nhân trong `stepGrab()`, bỏ qua gói `s` của nạn nhân, gói `grab`), Midori (`turret` là công trình bắn bằng `fireShot()`, gửi `cast` kèm `sub: 'tur'`; `pet` là người chơi giả, khung nhân vật lấy từ `SUMMONS` trong `shared/characters.js`). Gói mới: `zone`, `hold`, `grab`, `revive`, `dark`, `pfill`; `pulse` thêm `flame` / `shadowPop` / `iceBurst` / `slam`; `pleave` có thể kèm `why`.
-- **Phiên bàn bài:** Hub gửi mã riêng trong `welcome.session`. Client lưu theo tab và gửi `cresume {id, session}` trước khi vào lại phòng. Bàn giữ ghế và vai trò 60 giây (`CARD_REJOIN_SECONDS`) khi socket đóng, đổi mã sau khi nhận lại ghế và áp dụng xử lý rời bàn khi hết hạn. Chủ động `leave` thì rời ngay. Không đưa mã phiên vào danh sách phòng hoặc link mời.
-- **Đánh bài** (`server/cards.js`, `shared/cards.js`, `client/js/cards/cgame.js`): chế độ `xidach` / `tienlen`. Hub cấp UUID cho phòng của mọi chế độ khi tạo. Server quyết định toàn bộ và gửi trạng thái riêng cho từng người (gói `cs`: chỉ thấy bài của mình, bài người khác chỉ có số lá `n` cho tới khi lật). Chủ phòng đặt vốn và mức cược bằng `cconfig {chips, bets}` ở phòng chờ. Server trả `cconfigok` khi lưu và gửi cấu hình trong `cs.rules`. Xì dách hỗ trợ tám ghế cược và một nhà cái. Client gửi `cbet`, `cready`, `chit`, `cstand` (xì dách), `cplay {cards}`, `cpass` (tiến lên), `cbot {d: ±1}` (thêm / bớt máy, lưu ở `room.botWant`, áp dụng ngay khi `canChangeBots()`, không thì từ ván sau), `char`, `chat`. Phòng mới ở giai đoạn `lobby` (không tự chia): `cready` ở phòng chờ bật / tắt `p.lready`, chủ phòng (`room.hostId`) gửi `cstart` (server kiểm tra `startBlock()`), `cdealer` (xì dách: chủ phòng làm nhà cái, `dealer.pid` = id chủ phòng, ghế `-1`, `p.isDealer`; `chit` / `cstand` của nhà cái đi vào `xdDealerHit/Stand`, `copen {seat}` mở một ghế và ghi kết quả theo bài nhà cái lúc mở, tổng xu của nhà cái là số đối ứng với khoản so bài và tiền nhà cái đền), `cstop` (bật `stopAfter`, hết ván gọi `toLobby()`); server trả `cj` khi vào bàn, `cno` khi nước đi bị từ chối. Lá bài là số 0..51 (`hạng*4 + chất`, hạng theo Tiến lên: 3 … A, 2). Client tự diễn hoạt cảnh (chia, đánh, lật) bằng cách so trạng thái mới với lá bài đang có, nên không cần gói sự kiện riêng. Bot ngồi ghế trống (`rebalance()` đầu mỗi ván, số máy theo `botTarget()`); tới trắng xét ngay khi chia (`tlInstantWin`), thối heo cộng vào tiền trả khi hết ván (`tlHeoFine`); người rời giữa ván Tiến lên thì bot chơi thay. Luật nằm ở `shared/cards.js` để client hiện điểm, kiểm tra bộ chọn và gợi ý giống hệt server; sửa luật thì chạy lại `tests/cards.mjs`.
-- **Đấu đội** dùng chung `server/room.js` với cờ `this.team`. Gói tin có tiền tố `t`: client gửi `tteam`, `tready`, `tstart`; server gửi `tstate` (giai đoạn, chủ phòng, tỉ số, thời gian còn lại, lý do chưa bắt đầu được, danh sách `[id, đội, sẵn sàng, hạ, gục]`). Mọi chỗ chọn mục tiêu (`targets()` ở server, `aimDir`/`steerAim` ở client) phải bỏ qua đồng đội. Ngoài giai đoạn `play`, `damage()` không trừ máu.
+- **Phiên bàn bài:** Hub gửi mã riêng trong `welcome.session`. Client lưu theo tab và gửi `cresume {id, session}` trước khi vào lại phòng. Bàn giữ ghế và vai trò 60 giây (`CARD_REJOIN_SECONDS`) khi socket đóng, chỉ bỏ mã cũ khi tab lưu mã mới và gửi `cresumeack`. Xì dách dùng `XD.offlineTakeover` (20 giây) để máy rút/dằn thay ghế cược hoặc nhà cái đang mất mạng, giữ quyền chơi cho người cũ nếu kết nối lại. Hết hạn giữ chỗ thì áp dụng xử lý rời bàn. Chủ động `leave` thì rời ngay. Không đưa mã phiên vào danh sách phòng hoặc link mời.
+- **Đánh bài** (`server/cards.js`, `shared/cards.js`, `client/js/cards/cgame.js`): chế độ `xidach` / `tienlen`. Hub cấp UUID cho phòng của mọi chế độ khi tạo. Server quyết định toàn bộ và gửi trạng thái riêng cho từng người (gói `cs`: chỉ thấy bài của mình, bài người khác chỉ có số lá `n` cho tới khi lật). Chủ phòng đặt vốn và mức cược bằng `cconfig {chips, bets}` ở phòng chờ. Server trả `cconfigok` khi lưu và gửi cấu hình trong `cs.rules`. Xì dách hỗ trợ tám ghế cược và một nhà cái. Client gửi `cbet`, `cready`, `chit`, `cstand` (xì dách), `cplay {cards}`, `cpass` (tiến lên), `cbot {d: ±1}` (thêm / bớt máy, lưu ở `room.botWant`, áp dụng ngay khi `canChangeBots()`, không thì từ ván sau), `char`, `chat`. Phòng mới ở giai đoạn `lobby` (không tự chia): `cready` ở phòng chờ bật / tắt `p.lready`, chủ phòng (`room.hostId`) gửi `cstart` (server kiểm tra `startBlock()`), `cdealer` (xì dách: chủ phòng làm nhà cái, `dealer.pid` = id chủ phòng, ghế `-1`, `p.isDealer`; `chit` / `cstand` của nhà cái đi vào `xdDealerHit/Stand`, `copen {seat}` mở một ghế và ghi kết quả theo bài nhà cái lúc mở, tổng xu của nhà cái là số đối ứng với khoản so bài. Khoản đền từ 28 điểm chỉ áp dụng giữa các ghế cược), `cstop` (bật `stopAfter`, hết ván gọi `toLobby()`); server trả `cj` khi vào bàn, `cno` khi nước đi bị từ chối. Lá bài là số 0..51 (`hạng*4 + chất`, hạng theo Tiến lên: 3 … A, 2). Client tự diễn hoạt cảnh (chia, đánh, lật) bằng cách so trạng thái mới với lá bài đang có, nên không cần gói sự kiện riêng. Bot ngồi ghế trống (`rebalance()` đầu mỗi ván, số máy theo `botTarget()`); tới trắng xét ngay khi chia (`tlInstantWin`), thối heo cộng vào tiền trả khi hết ván (`tlHeoFine`); người rời giữa ván Tiến lên thì bot chơi thay. Luật nằm ở `shared/cards.js` để client hiện điểm, kiểm tra bộ chọn và gợi ý giống hệt server; sửa luật thì chạy lại `tests/cards.mjs`.
+- **Đấu đội** dùng chung `server/room.js` với cờ `this.team`. Gói tin có tiền tố `t`: client gửi `tteam`, `tready`, `tstart`; server gửi `tstate` (giai đoạn, chủ phòng, tỉ số, thời gian còn lại, lý do chưa bắt đầu được, danh sách `[id, đội, sẵn sàng, hạ, gục]`). Mọi chỗ chọn mục tiêu (`targets()` ở server, `aimDir`/`steerAim` ở client) phải bỏ qua đồng đội. Ngoài giai đoạn `play`, `damage()` không trừ máu. Bắt đầu/kết thúc trận gọi `clearMatchEffects()` để dọn chiêu, công trình và vùng sàn, rồi gửi `tclear` cho client dọn hiệu ứng và va chạm. `pend` chỉ kết thúc từng viên đạn hoặc bẫy. `teamCounts()` chỉ đếm người thật, không đếm người chơi giả.
+- **Đặt bom:** phe rời hết giữa lúc chờ sang vòng thì `newRound()` gọi `checkWin()` để quay về khởi động; bom nổ gọi `endRound()` trước khi trừ máu (để thưởng đúng phe). Lựu đạn lưu `team` của người ném nên người ném rời phòng rồi thì lựu đạn vẫn không nổ trúng đồng đội của họ.
 
 ## 6. Đồ hoạ và hiệu ứng
 
@@ -155,13 +171,21 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Kiểm tra chiêu mới bằng cách chụp khung hình đậm nhất ở cả chất lượng cao lẫn thấp: phần màn hình trắng hoàn toàn nên dưới khoảng 10%.
 - **Mô tả chiêu** (nút ! ở màn chọn nhân vật) sinh tự động trong `describeSkill()` ở `client/js/main.js` từ các trường của chiêu; tên gọi hình ảnh lấy theo `fx.kind` (`FX_NOUN`, `FX_DASH`...). Thêm trường hay kiểu chiêu mới thì thêm câu mô tả tương ứng; chiêu có `desc` thì câu đó đứng đầu.
 - **Màn chọn nhân vật** có bia tập (`SUMMONS.dummy`) nhận đòn theo lịch ước lượng `previewHits()` trong `client/js/main.js`. Thêm kiểu chiêu mới thì thêm luôn một nhánh ở `previewHits()` và `pvTargetDist()`.
-- **Shader cần làm nóng trước** (warmup) để lần ra chiêu đầu tiên không bị giật khung hình. Thêm material hay shader mới thì đưa vào phần warmup.
+- **Shader cần làm nóng trước** (warmup trong `fx.warmup()`) để lần ra chiêu đầu tiên không bị giật khung hình. Thêm material hay shader mới thì đưa vào phần warmup. three.js biên dịch program riêng cho mỗi tổ hợp tham số: `side: DoubleSide`, `transparent`, `MeshToonMaterial` có hay không có `gradientMap` là các program khác nhau, phải có mặt từng loại trong warmup.
+- **Giải phóng bộ nhớ GPU:** `removeFromParent()` chỉ gỡ khỏi cảnh, geometry vẫn nằm trên GPU. Cảnh chơi lâu sẽ tràn bộ nhớ trên điện thoại.
+  - Model chibi gỡ bằng `model.dispose()` (`ChibiAnimator` trong `chibi.js`): dispose geometry và material ghi lại lúc dựng mô hình, bỏ qua material dùng chung (`sharedMaterials`: toon cache từ `toon()`, `outlineMat`). Vật gắn vào mô hình sau khi dựng (súng, bom ở `SAvatar`) không nằm trong danh sách đó, phải tự gỡ bằng `disposeObject()`. Đổi dạng dị biến hay đổi nhân vật (cả mô hình xem trước ở menu, nhân vật ở bàn bài) cũng phải gọi.
+  - Hiệu ứng (`Effect.dispose()`) dispose mọi geometry không nằm trong bảng `GEO` và mọi material trong `e.mats` (đăng ký bằng `this.mat()` hoặc `e.mats.push()`). Geometry dùng chung mới phải thêm vào `GEO`, nếu không sẽ bị dispose khi một hiệu ứng kết thúc. Sprite dùng chung một geometry của three, không dispose.
+  - Súng, tia đạn, lựu đạn, súng rơi ở chế độ bắn súng gỡ bằng `disposeObject()`; map bắn súng có `dispose()` riêng trong `mapview.js`.
+- **Tab bị ẩn:** `requestAnimationFrame` dừng nhưng gói tin vẫn tới. Hiệu ứng tạo ra lúc đó không được cập nhật hay xoá, quay lại tab thì dồn hàng nghìn cái và khựng. `fx.add()` bỏ hiệu ứng khi `document.hidden`, trừ hiệu ứng có `persist` (công trình `fx.prop()`, vùng sàn `fx.zone()`, `stoneWalls()`, chiêu `summon`/`wall`): những thứ tồn tại lâu và có va chạm thì bỏ là mất suốt đời của chúng. Hiệu ứng mới có chướng ngại vật hoặc tác dụng lâu thì đặt `e.persist = true`. Tia đạn ở `sgame.js` không vẽ khi tab ẩn.
+- **Việc chạy mỗi khung hình:** chỉ ghi `innerHTML`/style khi nội dung đổi (xem `_slotsHtml` trong `sgame.js`); particle chỉ đánh dấu `needsUpdate` khi có hạt thay đổi.
 - **Chế độ bắn súng:** map gộp geometry để giảm số lần vẽ (draw call). Súng cầm tay được vẽ ở một lượt render riêng.
 
 ## 7. Điều khiển trên điện thoại
 
 - `client/js/touch.js` cung cấp joystick ảo ở nửa trái màn hình, vuốt nửa phải để xoay camera, và các nút do từng chế độ khai báo qua `setButtons()`.
 - Nút có `look: true` thì vừa giữ nút vừa kéo được để xoay camera. Nút ★ (tuyệt kỹ) và nút bắn dùng cách này.
+- `touch.js` trả về độ kéo thô (`lk.dx`, `lk.dy`). Mỗi chế độ tự nhân `settings.sens` đúng một lần và áp `settings.invertY` cho cả chuột lẫn cảm ứng. Nhân thêm lần nữa trong `touch.js` thì độ nhạy bị bình phương.
+- **Âm thanh trên iPhone:** cuộc gọi hay chuyển app để `AudioContext` ở trạng thái `interrupted`. Mỗi lần chạm (`pointerdown`) đều gọi `initAudio()`, hàm này `resume()` khi trạng thái khác `running`. Đừng đổi thành listener `once`.
 - **Chặn zoom của trình duyệt:**
   - Đã chặn chạm đúp, chụm 2 ngón và cử chỉ zoom riêng của iPhone.
   - CSS dùng `touch-action: manipulation` cho cả trang. Riêng canvas và lớp `#touch` dùng `touch-action: none`.

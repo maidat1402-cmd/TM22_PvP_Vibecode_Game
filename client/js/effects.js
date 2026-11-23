@@ -207,6 +207,7 @@ class Particles {
     this.drag[i] = opts.drag ?? 1.5;
     this.grav[i] = opts.grav ?? 0;
     this.size[i] = size; this.alpha[i] = 1;
+    this.geo.attributes.color.needsUpdate = true;   // màu chỉ đổi khi phát hạt
   }
 
   // nổ tung ra mọi hướng
@@ -226,8 +227,10 @@ class Particles {
 
   update(dt) {
     const { pos, vel, life, maxLife, size, alpha, s0, s1, drag, grav } = this;
+    let changed = false;
     for (let i = 0; i < this.max; i++) {
-      if (life[i] <= 0) { if (alpha[i] !== 0) alpha[i] = 0; continue; }
+      if (life[i] <= 0) { if (alpha[i] !== 0) { alpha[i] = 0; changed = true; } continue; }
+      changed = true;
       life[i] -= dt;
       const i3 = i * 3;
       const dr = Math.max(0, 1 - drag[i] * dt);
@@ -237,8 +240,10 @@ class Particles {
       size[i] = s1[i] + (s0[i] - s1[i]) * f;
       alpha[i] = life[i] <= 0 ? 0 : Math.min(1, f * 2.2);
     }
+    // không còn hạt nào sống thì khỏi tải lại ~190 KB lên GPU mỗi khung hình
+    if (!changed) return;
     const g = this.geo.attributes;
-    g.position.needsUpdate = g.size.needsUpdate = g.alpha.needsUpdate = g.color.needsUpdate = true;
+    g.position.needsUpdate = g.size.needsUpdate = g.alpha.needsUpdate = true;
   }
 }
 const TMP_COLOR = new THREE.Color();
@@ -256,7 +261,12 @@ class Effect {
   }
   update() { return false; }
   dispose() {
-    for (const o of this.objs) o.removeFromParent();
+    // geometry tạo riêng cho từng lần ra chiêu (arcGeo, cây triệu hồi, tường đá…) phải dispose, nếu không bộ nhớ GPU tăng mãi.
+    // Bỏ qua geometry dùng chung trong GEO và của sprite (three dùng chung 1 geometry cho mọi sprite).
+    for (const o of this.objs) {
+      o.traverse(c => { if (c.geometry && !c.isSprite && !SHARED_GEO.has(c.geometry)) c.geometry.dispose(); });
+      o.removeFromParent();
+    }
     for (const m of this.mats) m.dispose();
     this.objs.length = 0;
   }
@@ -320,6 +330,7 @@ const GEO = {
     return g;
   })(),
 };
+const SHARED_GEO = new Set(Object.values(GEO));
 
 // ======================= Quản lý FX =======================
 export class FX {
@@ -374,7 +385,13 @@ export class FX {
     return this.add(e);
   }
 
-  add(e) { this.list.push(e); return e; }
+  add(e) {
+    // Tab bị ẩn: rAF dừng nên hiệu ứng không được cập nhật/xoá, mà gói tin vẫn tới → dồn hàng nghìn hiệu ứng,
+    // quay lại tab thì phát cùng lúc (khựng vài giây, trắng màn hình). Bỏ luôn, đối tượng trả về vẫn dùng được.
+    // Trừ thứ tồn tại lâu có va chạm/tác dụng (công trình, vùng sàn, tường, cây): bỏ thì mất suốt đời của nó.
+    if (!e.persist && typeof document !== 'undefined' && document.hidden) { e.dispose(); e.done = true; return e; }
+    this.list.push(e); return e;
+  }
 
   // ---------- Công trình: cọc sét (rod), cột đá (pillar) ----------
   // pr: { k, p: [x, y, z], r, h }. Hiệu ứng trả về có hit() (nháy khi bị đánh) và end(why)
@@ -505,6 +522,7 @@ export class FX {
     };
     const dispose = e.dispose.bind(e);
     e.dispose = () => { if (obs) { this.removeObstacle(obs); obs = null; } dispose(); };
+    e.persist = true;
     return this.add(e);
   }
 
@@ -532,6 +550,7 @@ export class FX {
     disc.position.set(zn.x, zn.y + (fire ? 0.05 : 0.04), zn.z);
     disc.scale.setScalar(zn.r);
     disc.renderOrder = 3;
+    e.persist = true;
     return this.add(e);
   }
 
@@ -782,6 +801,7 @@ export class FX {
     const dispose = e.dispose.bind(e);
     e.dispose = () => { for (const o of obs) this.removeObstacle(o); obs.length = 0; for (const m of pillars) m.geometry.dispose(); dispose(); };
     this.dust(center, 20);
+    e.persist = true;
     return this.add(e);
   }
 
@@ -790,7 +810,9 @@ export class FX {
     const g = new THREE.Group();
     const mats = [energyMat(0xffffff), flowMat(0xffffff), flowMat(0xffffff, 0xffffff, { additive: true }), arcMat(0xffffff),
       new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending }),
+      new THREE.MeshBasicMaterial({ map: magicCircleTex(), transparent: true, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
       new THREE.MeshToonMaterial({ color: 0xbdf0ff, emissive: 0x3aa0d0, transparent: true }),
+      new THREE.MeshToonMaterial({ color: 0x8d6e53, emissive: 0x1f140b }),   // đá đục (cột đá, cọc sét, tường đá): program riêng, không gradientMap
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, side: THREE.DoubleSide })];
     for (const m of mats) g.add(new THREE.Mesh(GEO.sphereLo, m));
     g.add(sprite(0xffffff, 1));
@@ -1072,7 +1094,9 @@ export class FX {
     if (!build) return null;
     // chiêu cuối điều hướng theo tâm: trạng thái chung, game.js cập nhật st.aim
     ctx.steer = s.steer ? initSteer(s, [ctx.p.x, ctx.p.y, ctx.p.z], [ctx.d.x, ctx.d.y, ctx.d.z], [ctx.h.x, ctx.h.z]) : null;
-    const e = this.add(build(this, ctx));
+    const b = build(this, ctx);
+    if (b && (s.type === 'summon' || s.type === 'wall' || s.walls)) b.persist = true;   // dựng chướng ngại vật
+    const e = this.add(b);
     if (e) e.steer = ctx.steer;
     return e;
   }

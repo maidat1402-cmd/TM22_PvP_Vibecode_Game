@@ -79,6 +79,9 @@ try {
       returned.send({ t: 'cresume', id: first.room.id, session: welcomes[0].session });
       assert.equal((await returned.wait('cj', packet => packet.resumed)).you, first.you);
       await returned.wait('cs', state => state.youDealer && state.host === first.you);
+      returned.send({ t: 'cresumeack' });
+      returned.send({ t: 'ping', c: 'resume-confirmed' });
+      await returned.wait('pong', m => m.c === 'resume-confirmed');
       const replay = connect();
       await replay.wait('welcome');
       replay.send({ t: 'cresume', id: first.room.id, session: welcomes[0].session });
