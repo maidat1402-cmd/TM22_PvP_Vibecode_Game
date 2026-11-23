@@ -1,4 +1,4 @@
-// Kiểm tra độ bền server: nhiều bot ở cả 4 chế độ (đối kháng, đấu đội, sinh tử, đặt bom),
+// Kiểm tra độ bền server: nhiều bot ở cả 5 chế độ (đối kháng, đấu tập, đấu đội, sinh tử, đặt bom),
 // vào/ra phòng liên tục, ngắt kết nối đột ngột, bot "ma" không trả lời ping, gói rác / thiếu trường / số khổng lồ.
 //
 // Cách chạy:
@@ -21,20 +21,20 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const fails = [];
 const fail = msg => { fails.push(msg); console.log('  ✗ ' + msg); };
 
-const MODES = [['brawl', 'shrine'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple']];
+const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple']];
 const BUY_ITEMS = BUY_MENU.flatMap(c => c.items);
-const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', 'tready', 'tstart',
+const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', 'tready', 'tstart', 'awk', 'hold', 'pfill',
   'fire', 'throw', 'drop', 'pickup', 'reload', 'switch', 'buy', 'use', 'loadout', 'team',
   'hello', 'list', 'create', 'join', 'leave', 'ping', '__proto__', 'constructor', 'toString', ''];
 const FIELDS = ['p', 'd', 'a', 'r', 'f', 'sk', 'cs', 'seed', 'tg', 'team', 'on', 'msg', 'char', 'k', 'o', 'v',
-  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c'];
+  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk'];
 const BIG = 'x'.repeat(3000);
 const JUNK = [undefined, null, true, false, 0, -1, 1, 3, 99, -99999, 1e308, -1e308, 2 ** 53, 0.5, '', 'NaN', 'Infinity',
   '__proto__', 'constructor', 'toString', 'hasOwnProperty', BIG, [], [null], [1], [1, 2], ['a', 'b', 'c'],
   [1e308, 1e308, 1e308], [-1e308, 0, 1e308], [0, 0, 0], [[1, 2, 3, 1, 1]], [[0, 0, 0, '1', 1], [1e308, 0, 0, 2, 9]],
   Array(300).fill([1, 1, 1, 1, 1]), Array(300).fill(0), {}, { a: 1 }, { toString: 1 }, { valueOf: 1, toString: 1 }, { length: 5 }, { 0: 1, 1: 2, 2: 3, length: 3 },
   'T', 'CT', 'A', 'B', 'he', 'flash', 'smoke', 'rifle', 'sniper', 'knife', 'armor', 'kit', 'kaze',
-  ...CHARACTERS.map(c => c.id), ...WEAPON_LIST, ...NADE_LIST];
+  'treant', ...CHARACTERS.map(c => c.id), ...WEAPON_LIST, ...NADE_LIST];
 
 function junkPacket() {
   const m = { t: pick(TYPES) };
@@ -100,7 +100,10 @@ function anchorTick(c, others) {
   const r = Math.random();
   if (!shooter) {
     if (r < 0.08) c.send({ t: 'cast', sk: Math.floor(rnd(0, 6)), cs: Math.floor(rnd(1, 1e6)), seed: Math.floor(rnd(1, 1e9)),
-      p: c.pos.map(v => +v.toFixed(2)), d: [rnd(-1, 1), 0, rnd(-1, 1)], tg: [nx + rnd(-8, 8), 0, nz + rnd(-8, 8)] });
+      p: c.pos.map(v => +v.toFixed(2)), d: [rnd(-1, 1), rnd(-0.5, 0.5), rnd(-1, 1)], tg: [nx + rnd(-8, 8), 0, nz + rnd(-8, 8)],
+      a: [nx + rnd(-8, 8), 0, nz + rnd(-8, 8)], aw: c.aw ? 1 : 0, hold: rnd(0, 2), rp: Math.floor(rnd(0, 50)) });
+    else if (r < 0.085) c.send({ t: 'hold', sk: Math.floor(rnd(0, 6)) });
+    else if (r < 0.09) { if (c.mode === 'practice') c.send({ t: 'pfill' }); c.send({ t: 'awk' }); c.aw = !c.aw; }
     else if (r < 0.1) c.send({ t: 'steer', a: [rnd(-1, 1), 0, rnd(-1, 1)] });
     else if (r < 0.105) c.send({ t: 'heal' });
     else if (r < 0.11) c.send({ t: 'dodge' });
