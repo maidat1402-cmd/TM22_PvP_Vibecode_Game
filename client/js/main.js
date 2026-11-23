@@ -49,7 +49,6 @@ game.touch = shooter.touch = touch;
 function applyTouch() {
   const on = settings.touch === 'on' || (settings.touch === 'auto' && IS_TOUCH);
   touch.setEnabled(on && inGame && current !== cards);   // đánh bài: chỉ dùng nút HTML, không cần joystick
-  touch.sens = settings.sens;
   if (on && inGame && current !== cards) (current === shooter ? shooter : game).setupTouch();
 }
 function goFullscreen() {
@@ -1030,4 +1029,4 @@ renderCharList();
 loadServerInfo();
 setInterval(() => { if (!inGame) loadServerInfo(); }, 10000);
 net.connect().catch(() => { $('connState').textContent = '● Không kết nối được server'; });
-addEventListener('pointerdown', () => initAudio(), { once: true });
+addEventListener('pointerdown', () => initAudio());   // mỗi lần chạm: bật lại âm thanh nếu iOS đã tạm dừng

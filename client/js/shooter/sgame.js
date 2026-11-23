@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 import { NET, Ticker } from '/shared/config.js';
 import { getMap, PLAYER, moveAndCollide, rayMap, rayPlayer, inRect, newNade, stepNade, NADE_STEP } from '/shared/maps.js';
-import { WEAPONS, WEAPON_LIST, BUY_MENU, GRENADES, NADE_LIST, THROW_SPEED, itemInfo, TEAMS, SHOOTER as S, moveSpeedFor } from '/shared/weapons.js';
-import { buildChibi, ANIM } from '../chibi.js';
+import { WEAPONS, WEAPON_LIST, BUY_MENU, GRENADES, NADE_LIST, THROW_SPEED, itemInfo, TEAMS, SHOOTER as S, moveSpeedFor, shotSpread } from '/shared/weapons.js';
+import { buildChibi, ANIM, disposeObject } from '../chibi.js';
 import { FX } from '../effects.js';
 import { buildMapView } from './mapview.js';
 import { buildGun, buildViewModel, buildBomb, buildNade } from './guns.js';
@@ -58,7 +58,7 @@ class SAvatar {
     const id = WEAPON_LIST[idx] || 'knife';
     if (id === this.gunId) return;
     this.gunId = id;
-    if (this.gun) this.gun.removeFromParent();
+    if (this.gun) disposeObject(this.gun);
     this.gun = buildGun(id);
     this.gun.scale.setScalar(1.6);
     this.gun.rotation.x = -Math.PI / 2;
@@ -66,7 +66,12 @@ class SAvatar {
     this.model.rig.handR.add(this.gun);
   }
 
-  dispose() { this.model?.dispose(); }
+  dispose() {
+    // súng và bom gắn vào sau khi dựng mô hình nên model.dispose() không giải phóng chúng
+    if (this.gun) { disposeObject(this.gun); this.gun = null; }
+    if (this.bombMesh) disposeObject(this.bombMesh);
+    this.model?.dispose();
+  }
 
   pushSnap(x, y, z, yaw, pitch) {
     this.buf.push({ t: now(), x, y, z, yaw, pitch });
@@ -245,18 +250,21 @@ export class ShooterGame {
     this.avatars.clear();
     for (const d of this.decals) d.removeFromParent();
     this.decals.length = 0;
-    for (const t of this.tracers) t.mesh.removeFromParent();
+    for (const t of this.tracers) disposeObject(t.mesh);
     this.tracers.length = 0;
-    for (const n of this.nadeObjs.values()) n.mesh.removeFromParent();
+    for (const n of this.nadeObjs.values()) disposeObject(n.mesh);
     this.nadeObjs.clear();
-    for (const d of this.drops.values()) d.mesh.removeFromParent();
+    for (const d of this.drops.values()) disposeObject(d.mesh);
     this.drops.clear();
     this.clearSmokes();
     this.blindUntil = 0;
     $('sFlash').style.opacity = 0;
     this.me = null;
+    // trạng thái của phòng cũ không được mang sang phòng mới
+    this.spec = null; this.chatting = false; this.touchCrouch = false; this.usingNow = false; this.rescopeAt = 0;
+    $('sChatInput').hidden = true;
     this.bombObj.visible = false;
-    if (this.vm) { this.vm.removeFromParent(); this.vm = null; }
+    if (this.vm) { disposeObject(this.vm); this.vm = null; }
   }
 
   // ======================= Mạng =======================
@@ -273,7 +281,7 @@ export class ShooterGame {
         if (a !== this.me || !a.alive) a.alive = p.alive;
         if (a.team !== p.team) {
           a.setTeam(p.team, p.look);
-          if (a === this.me) { a.model.root.visible = false; this.P.team = p.team; this.setViewModel(); }
+          if (a === this.me) { a.model.root.visible = false; a.model.rig.shadow.visible = false; this.P.team = p.team; this.setViewModel(); }
         }
       }
       for (const id of [...this.avatars.keys()]) if (!seen.has(id)) this.removeAvatar(id);
@@ -316,7 +324,7 @@ export class ShooterGame {
       for (const d of this.decals) d.removeFromParent();
       this.decals.length = 0;
       this.clearSmokes();
-      for (const n of this.nadeObjs.values()) n.mesh.removeFromParent();
+      for (const n of this.nadeObjs.values()) disposeObject(n.mesh);
       this.nadeObjs.clear();
       sfx('respawn');
     });
@@ -337,7 +345,7 @@ export class ShooterGame {
     // ---- súng rơi ----
     on('sdrop', m => {
       if (m.add) this.addDrop(m.add);
-      if (m.rem) { const d = this.drops.get(m.rem); if (d) { d.mesh.removeFromParent(); this.drops.delete(m.rem); } }
+      if (m.rem) { const d = this.drops.get(m.rem); if (d) { disposeObject(d.mesh); this.drops.delete(m.rem); } }
     });
     on('sround_end', m => {
       const T = TEAMS[m.winner];
@@ -356,6 +364,7 @@ export class ShooterGame {
   removeAvatar(id) {
     const a = this.avatars.get(id);
     if (a) { a.dispose(); this.avatars.delete(id); this.hud.removePlate('s' + id); }
+    if (this.spec === a) this.spec = null;   // đang xem người vừa rời: chọn người khác
   }
 
   onMe(m) {
@@ -376,7 +385,8 @@ export class ShooterGame {
       else loc.mag = Math.min(loc.mag, a.mag);
     }
     if ((P.cur !== 4 && !P.weapons[P.cur]) || this.takeCur) { P.cur = m.cur; this.takeCur = false; }
-    if (P.weapons[P.cur] !== oldW) this.setViewModel();
+    // server đổi súng đang cầm (vứt, nhặt, mua): server đã huỷ nạp đạn, client cũng phải huỷ, không thì khoá bắn tới 3 s
+    if (P.weapons[P.cur] !== oldW) { P.reloadUntil = 0; this.rescopeAt = 0; this.setViewModel(); }
     if (!m.alive && P.alive) P.alive = false;
     this.refreshBuyMenu();
   }
@@ -393,6 +403,7 @@ export class ShooterGame {
       P.pos.set(...m.p); P.vel.set(0, 0, 0);
       P.yaw = m.yaw; P.pitch = 0; P.alive = true; P.hp = 100;
       P.scoped = false; P.reloadUntil = 0; P.punch = 0;
+      this.rescopeAt = 0;   // bắn sniper rồi chết: không hồi sinh trong trạng thái đang scope
       P.drawUntil = now() + 0.4;
       this.takeCur = true;   // 'sme' ngay sau sẽ cho biết súng đang cầm
       this.spec = null;
@@ -539,7 +550,9 @@ export class ShooterGame {
       if (e.code === 'Tab') $('sScore').hidden = true;
       if (code === 'KeyE') this.use(false);
     });
-    addEventListener('blur', () => { this.keys.clear(); if (this.P) this.P.trigger = false; });
+    addEventListener('blur', () => { this.keys.clear(); if (this.P) this.P.trigger = false; $('sScore').hidden = true; });
+    // điện thoại: đóng bàn phím ảo (nút back / chạm ra ngoài) không có phím Enter/Esc → phải tự thoát chat, không thì kẹt không đi được
+    $('sChatInput').addEventListener('blur', () => { if (this.chatting && this.touch?.enabled) this.closeChat(); });
   }
 
   look(dx, dy) {
@@ -574,7 +587,7 @@ export class ShooterGame {
 
   // ======================= Vũ khí =======================
   setViewModel() {
-    if (this.vm) this.vm.removeFromParent();
+    if (this.vm) disposeObject(this.vm);
     const id = this.curW();
     const team = this.mode === 'dm' ? 'T' : this.P?.team || 'T';
     if (this.P?.cur === 4 && this.P.nadeSel) {
@@ -610,6 +623,7 @@ export class ShooterGame {
     P.cur = slot;
     P.reloadUntil = 0;
     P.scoped = false;
+    this.rescopeAt = 0;
     P.drawUntil = now() + (slot === 3 ? 0.3 : 0.5);
     this.net.send({ t: 'switch', slot });
     this.setViewModel();
@@ -662,7 +676,7 @@ export class ShooterGame {
 
   detonate(m) {
     const n = this.nadeObjs.get(m.gid);
-    if (n) { n.mesh.removeFromParent(); this.nadeObjs.delete(m.gid); }
+    if (n) { disposeObject(n.mesh); this.nadeObjs.delete(m.gid); }
     const p = v3(...m.pos);
     const dist = this.dist(p);
     if (m.k === 'he') {
@@ -807,20 +821,14 @@ export class ShooterGame {
     P.reloadUntil = t + w.reload;
     P.reloadW = wid;
     P.scoped = false;
+    this.rescopeAt = 0;   // không tự bật scope lại giữa lúc nạp
     this.net.send({ t: 'reload' });
     sfx('reload');
   }
 
   spreadNow(w) {
     const P = this.P;
-    const speed = Math.hypot(P.vel.x, P.vel.z);
-    const frac = clamp((speed / moveSpeedFor(w.id) - 0.3) / 0.7, 0, 1);
-    let s = w.scope ? (P.scoped ? 0.0005 : w.unscoped) : w.spread;
-    s += w.moveSpread * frac;
-    if (!P.grounded) s += 0.09;
-    if (P.crouch && P.grounded) s *= 0.7;
-    s += P.punch * 0.35;
-    return s;
+    return shotSpread(w, { speed: Math.hypot(P.vel.x, P.vel.z), grounded: P.grounded, crouch: P.crouch, scoped: P.scoped, punch: P.punch });
   }
 
   tryFire() {
@@ -846,10 +854,12 @@ export class ShooterGame {
     const spread = this.spreadNow(w);
     const pellets = w.pellets || 1;
     const out = [];
-    const muzzleW = this.muzzleWorld();
+    // hướng bắn = hướng nhìn + độ giật + tản ngẫu nhiên
+    const pitch = this.aimPitch(), yaw = P.yaw + P.punchYaw;
+    // đầu nòng tính từ vị trí mắt và hướng bắn của CHÍNH khung hình này (camera còn ở khung trước,
+    // lấy theo camera thì khi chạy ngang tia đạn xuất phát lệch hẳn sang một bên)
+    const muzzleW = this.muzzleAt(eye, pitch, yaw);
     for (let i = 0; i < pellets; i++) {
-      // hướng bắn = hướng nhìn + độ giật + tản ngẫu nhiên
-      const pitch = P.pitch + P.punch, yaw = P.yaw + P.punchYaw;
       const r = Math.sqrt(Math.random()) * spread, th = Math.random() * Math.PI * 2;
       const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch + Math.sin(th) * r, yaw + Math.cos(th) * r, 0, 'YXZ'));
       const d = [dir.x, dir.y, dir.z];
@@ -894,19 +904,22 @@ export class ShooterGame {
     if (!on) this.useProg = null;
   }
 
+  // góc ngẩng thật của nòng súng (hướng nhìn + độ giật), dùng chung cho camera, tia bắn và tia ngắm
+  aimPitch() { return clamp(this.P.pitch + this.P.punch, -1.55, 1.55); }
+
   eyePos() {
     const P = this.P;
     return v3(P.pos.x, P.pos.y + PLAYER.eye - (PLAYER.eye - PLAYER.crouchEye) * P.crouchK, P.pos.z);
   }
 
-  muzzleWorld() {
-    // ước lượng đầu nòng trong thế giới (cho tia đạn đẹp)
-    const cam = this.camera;
-    const p = v3(0.14, -0.13, -0.6).applyQuaternion(cam.quaternion).add(cam.position);
-    return p;
+  // ước lượng đầu nòng trong thế giới (cho tia đạn đẹp), theo mắt + góc ngắm truyền vào
+  muzzleAt(eye, pitch, yaw) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    return v3(0.14, -0.13, -0.6).applyQuaternion(q).add(eye);
   }
 
   tracer(a, b, color) {
+    if (document.hidden) return;   // tab ẩn: rAF dừng, tia đạn không được xoá → dồn hàng chục nghìn, quay lại thì khựng
     const geo = new THREE.BufferGeometry().setFromPoints([a.clone(), b.clone()]);
     const mesh = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.scene.add(mesh);
@@ -1092,8 +1105,9 @@ export class ShooterGame {
       if (P.stepAcc > 2.3) { P.stepAcc = 0; sfx('step', 6); }
     }
 
-    // giật hồi về
-    if (t - P.lastShot > 60 / w.rpm + 0.05) {
+    // giật hồi về: chỉ tạm dừng khi đang xả loạt (súng bắn nhanh). Trước đây chờ hết
+    // 60/rpm nên sniper (1,46 s/phát) giữ nguyên độ giật tới phát sau → đạn bay lệch tâm scope.
+    if (t - P.lastShot > Math.min(60 / w.rpm, 0.15) + 0.05) {
       P.punch = Math.max(0, P.punch - dt * 0.35);
       P.punchYaw *= Math.max(0, 1 - dt * 6);
     }
@@ -1119,7 +1133,8 @@ export class ShooterGame {
     const P = this.P, cam = this.camera;
     if (P.alive) {
       cam.position.copy(this.eyePos());
-      cam.rotation.set(P.pitch + P.punch * 0.5, P.yaw + P.punchYaw * 0.5, 0);
+      // camera nhìn đúng hướng đạn bay (cả độ giật) để tâm ngắm / scope chỉ đúng chỗ đạn trúng
+      cam.rotation.set(this.aimPitch(), P.yaw + P.punchYaw, 0);
       const fov = P.scoped ? WEAPONS[this.curW()].scope : 75;
       if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     } else {
@@ -1134,7 +1149,8 @@ export class ShooterGame {
         cam.position.lerp(want, Math.min(1, dt * 6));
         cam.lookAt(s.pos.x, s.pos.y + 1.2, s.pos.z);
         $('sSpec').hidden = false;
-        $('sSpec').innerHTML = `👁 Đang xem: <b>${esc(s.name)}</b> <small>(${this.touch?.enabled ? 'chạm nút Bắn' : 'click'} để đổi)</small>`;
+        const html = `👁 Đang xem: <b>${esc(s.name)}</b> <small>(${this.touch?.enabled ? 'chạm nút Bắn' : 'click'} để đổi)</small>`;
+        if (html !== this._specHtml) { this._specHtml = html; $('sSpec').innerHTML = html; }   // tránh dựng lại DOM mỗi khung hình
       } else {
         const a = now() * 0.1;
         cam.position.set(Math.sin(a) * 30, 22, Math.cos(a) * 30);
@@ -1188,8 +1204,9 @@ export class ShooterGame {
     $('sMag').textContent = nade ? (P.nades[P.nadeSel] | 0) : w.melee ? '—' : (a?.mag ?? 0);
     $('sRes').textContent = nade || w.melee ? '' : (a?.res ?? 0);
     const nadeTxt = NADE_LIST.filter(k => P.nades[k] > 0).map(k => `${GRENADES[k].icon}${P.nades[k] > 1 ? '×' + P.nades[k] : ''}`).join(' ');
-    $('sSlots').innerHTML = [1, 2, 3].map(s => P.weapons[s] ? `<span class="${s === P.cur ? 'cur' : ''}">${s} ${esc(WEAPONS[P.weapons[s]].name)}</span>` : '').join('') +
+    const html = [1, 2, 3].map(s => P.weapons[s] ? `<span class="${s === P.cur ? 'cur' : ''}">${s} ${esc(WEAPONS[P.weapons[s]].name)}</span>` : '').join('') +
       (nadeTxt ? `<span class="${P.cur === 4 ? 'cur' : ''}">4 ${nadeTxt}</span>` : '');
+    if (html !== this._slotsHtml) { this._slotsHtml = html; $('sSlots').innerHTML = html; }   // hàm chạy mỗi khung hình: chỉ ghi DOM khi đổi
   }
 
   updateHud(dt) {
@@ -1234,9 +1251,12 @@ export class ShooterGame {
     }
     // dấu tâm động (giãn theo độ tản đạn)
     const w = WEAPONS[this.curW()];
-    const gap = 4 + this.spreadNow(w) * 900 * (75 / this.camera.fov) * (innerHeight / 900);
-    $('sCross').style.setProperty('--gap', Math.min(60, gap) + 'px');
-    $('sCross').hidden = !P.alive || P.scoped || (w.scope && !P.scoped && false);
+    // khe hở = đúng bán kính nón tản trên màn hình (theo FOV hiện tại)
+    const spr = this.spreadNow(w);
+    const gap = 3 + Math.tan(spr) / Math.tan(this.camera.fov * Math.PI / 360) * innerHeight / 2;
+    $('sCross').style.setProperty('--gap', Math.min(90, gap) + 'px');
+    // trong scope chỉ hiện tâm xanh khi đang bị tản (chạy/nhảy) để biết phải đứng lại
+    $('sCross').hidden = !P.alive || (P.scoped && spr < 0.004);
     $('sScope').hidden = !(P.alive && P.scoped);
     // gợi ý + tiến trình cài/gỡ bom + nhặt súng
     const near = P.alive ? this.nearestDrop() : null;
@@ -1317,7 +1337,7 @@ export class ShooterGame {
     this.updateLocal(dt);
     // tia ngắm trúng ai (để hiện tên địch khi nhắm vào)
     const eye = this.eyePos();
-    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.P.pitch, this.P.yaw, 0, 'YXZ'));
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.aimPitch(), this.P.yaw + this.P.punchYaw, 0, 'YXZ'));
     const o = [eye.x, eye.y, eye.z], d = [dir.x, dir.y, dir.z];
     const wall = rayMap(o, d, 120, this.map.boxes).t;
     for (const a of this.avatars.values()) {

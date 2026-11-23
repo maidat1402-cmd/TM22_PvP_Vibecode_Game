@@ -1,7 +1,7 @@
 // Phòng đánh bài quanh bàn tròn: Xì dách hoặc Tiến lên. Server quyết định toàn bộ (xáo bài, chia, lượt, tính tiền);
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
-import { CHARACTERS, getChar } from '../shared/characters.js';
+import { CHARACTERS, getChar, playableChar } from '../shared/characters.js';
 import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
@@ -188,7 +188,7 @@ export class CardRoom {
     if (!p) return;
     switch (m.t) {
       case 'chat': { const msg = String(m.msg || '').slice(0, 140).trim(); if (msg) this.broadcast({ t: 'chat', id: p.id, name: p.name, msg }); return; }
-      case 'char': p.char = getChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
+      case 'char': p.char = playableChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
       case 'cstart': {   // chủ phòng bắt đầu
         if (this.phase !== 'lobby' || p.id !== this.hostId) return;
         const why = this.startBlock();

@@ -20,7 +20,6 @@ export class TouchControls {
     this.joyId = null;
     this.lookIds = new Map();   // pointerId -> {x, y}
     this.buttons = new Map();   // id -> def
-    this.sens = 1;
 
     const el = this.el;
     el.addEventListener('pointerdown', e => this.onDown(e));
@@ -123,8 +122,8 @@ export class TouchControls {
     }
     const l = this.lookIds.get(e.pointerId);
     if (l) {
-      this.lookAcc.dx += (e.clientX - l.x) * this.sens;
-      this.lookAcc.dy += (e.clientY - l.y) * this.sens;
+      this.lookAcc.dx += e.clientX - l.x;   // độ nhạy do từng chế độ nhân (nhân thêm ở đây là bình phương độ nhạy)
+      this.lookAcc.dy += e.clientY - l.y;
       l.x = e.clientX; l.y = e.clientY;
     }
   }

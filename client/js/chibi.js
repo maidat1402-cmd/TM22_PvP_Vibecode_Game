@@ -28,6 +28,17 @@ export function toon(color, opts = {}) {
 const outlineMat = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.BackSide });
 sharedMaterials.add(outlineMat);
 
+// Gỡ khỏi scene và giải phóng geometry + material riêng (toon trong cache, viền, nháy trắng là dùng chung nên giữ).
+// Chỉ removeFromParent thì bộ đệm GPU của geometry vẫn bị giữ → bộ nhớ tăng theo mỗi lần vào phòng/đổi súng/ném lựu đạn.
+export function disposeObject(obj) {
+  obj.removeFromParent();
+  obj.traverse(o => {
+    o.geometry?.dispose();
+    const m = o.material;
+    if (m && !m.isMeshToonMaterial && m !== outlineMat && m !== FLASH_MAT) m.dispose();
+  });
+}
+
 function mesh(geo, mat, outline = 0.035) {
   const m = new THREE.Mesh(geo, mat);
   if (outline) {

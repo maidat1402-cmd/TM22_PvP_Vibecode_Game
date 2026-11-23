@@ -1,12 +1,12 @@
 {
   "name": "chibi-clash",
-  "version": "0.11.5",
+  "version": "0.11.7",
   "description": "Game đối kháng 3D chibi góc nhìn thứ 3, multiplayer qua phòng (room)",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test tests/card-rules.mjs tests/rooms.mjs tests/shooter.mjs",
+    "test": "node --test tests/card-rules.mjs tests/rooms.mjs tests/shooter.mjs tests/team.mjs",
     "local": "node server/index.js --host 127.0.0.1",
     "upnp": "node server/index.js --upnp",
     "tunnel": "node server/index.js --tunnel"

@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
 import { CardRoom } from './cards.js';
-import { getChar } from '../shared/characters.js';
+import { playableChar } from '../shared/characters.js';
 import { VERSION } from '../shared/version.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,15 +92,16 @@ class Hub {
     this.clients.set(c.id, c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
     send({ t: 'welcome', id: c.id, v: VERSION });
-    ws.on('message', raw => {
+    const onMsg = raw => {
       let m;
-      try { m = JSON.parse(raw); } catch { return; }
+      // bỏ khoá toString/valueOf: {"toString":1} làm String()/|0/tra bảng ném lỗi ở mọi chỗ xử lý gói tin
+      try { m = JSON.parse(raw, (k, v) => (k === 'toString' || k === 'valueOf' ? undefined : v)); } catch { return; }
       if (!m || typeof m.t !== 'string') return;
       switch (m.t) {
         case 'ping': return send({ t: 'pong', c: m.c });
         case 'hello':
           c.name = String(m.name || 'Player').replace(/[<>]/g, '').slice(0, 16).trim() || 'Player';
-          c.char = getChar(m.char).id;
+          c.char = playableChar(m.char).id;
           return send({ t: 'rooms', list: this.roomList() });
         case 'list': return send({ t: 'rooms', list: this.roomList() });
         case 'create': {
@@ -114,15 +115,16 @@ class Hub {
             : mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(id, name, this, String(m.map || ''), mode === 'team', mode === 'practice')
             : new ShooterRoom(id, name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
-          if (m.char) c.char = getChar(m.char).id;
+          if (m.char) c.char = playableChar(m.char).id;
           r.add(c);
           return;
         }
         case 'join': {
           const r = this.rooms.get(String(m.id));
           if (!r) return send({ t: 'err', msg: 'Phòng không tồn tại nữa.' });
+          if (c.room === r) return;   // đang một mình trong phòng: rời trước sẽ huỷ phòng rồi vào lại phòng đã chết
           this.leaveRoom(c);
-          if (m.char) c.char = getChar(m.char).id;
+          if (m.char) c.char = playableChar(m.char).id;
           r.add(c);
           return;
         }
@@ -132,12 +134,25 @@ class Hub {
         default:
           if (c.room) c.room.onMessage(c.id, m);
       }
+    };
+    // gói tin dị dạng làm code xử lý ném lỗi thì chỉ bỏ gói đó, không để văng cả server (mọi người bị out)
+    ws.on('message', raw => {
+      try { onMsg(raw); } catch (e) { if (!c.errLogged) { c.errLogged = true; console.error('[msg]', e); } }  // chỉ ghi 1 lần/kết nối, tránh spam log
     });
     ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
     ws.on('error', () => {});
     // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
+    // Đồng thời đo RTT (giây) từ ping/pong của WebSocket: phòng bắn súng dùng để bù trễ khi kiểm tra trúng đạn.
+    // Trình duyệt tự trả pong, client không giả được giá trị nhỏ hơn thực tế.
     ws.isAlive = true;
-    ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('pong', () => {
+      ws.isAlive = true;
+      if (!ws.pingAt) return;
+      const s = (performance.now() - ws.pingAt) / 1000;
+      ws.pingAt = 0;
+      ws.rtt = ws.rtt == null ? s : ws.rtt * 0.6 + s * 0.4;
+    });
+    sendPing(ws);
   }
 }
 
@@ -151,13 +166,18 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
   concurrencyLimit: 16,
 }, maxPayload: 16 * 1024 });
 wss.on('connection', ws => hub.onConnection(ws));
+wss.on('error', () => {});   // lỗi cổng đã do server.on('error') báo; không có listener thì process chết trước khi in thông báo
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
 // Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
+function sendPing(ws) {
+  ws.pingAt = performance.now();
+  try { ws.ping(); } catch { /* bỏ qua */ }
+}
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
-    try { ws.ping(); } catch { /* bỏ qua */ }
+    if (!ws.pingAt) sendPing(ws);   // ping trước chưa có pong: gửi lại sẽ đo RTT từ mốc sai (quá nhỏ)
   }
 }, 5000);
 
