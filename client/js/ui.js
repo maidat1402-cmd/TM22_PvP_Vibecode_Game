@@ -1,13 +1,13 @@
 // Giao diện HUD bằng DOM (nhẹ, sắc nét, dễ chỉnh CSS).
 import * as THREE from 'three';
 import { GAME, AWAKEN } from '/shared/config.js';
+import { actionKey, comboKey } from './keys.js';
 
 const $ = id => document.getElementById(id);
 const hex = c => '#' + c.toString(16).padStart(6, '0');
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 export { $, hex, esc };
 
-const COMBO_KEYS = { J: 'J', K: 'K', L: 'L' };
 
 export class HUD {
   constructor() {
@@ -43,7 +43,7 @@ export class HUD {
       const d = document.createElement('div');
       d.className = 'slot' + (s.combo.length === 3 ? ' ult' : '') + (aw ? ' aw' : '');
       d.style.setProperty('--c', hex(s.fx.color));
-      d.innerHTML = `<div class="keys">${[...s.combo].map(k => `<kbd>${COMBO_KEYS[k]}</kbd>`).join('')}</div>
+      d.innerHTML = `<div class="keys">${[...s.combo].map(k => `<kbd>${esc(comboKey(k))}</kbd>`).join('')}</div>
         <div class="sname">${esc(s.name)}</div><div class="cost">${s.mana ? s.mana + ' MP' : 'Free'}</div>
         <div class="cd"></div><div class="cdt"></div>`;
       this.skillbar.appendChild(d);
@@ -51,15 +51,15 @@ export class HUD {
     });
     // các phím chung
     const extra = [
-      { k: 'H', n: 'Hồi Máu', c: 0x7dff9b, cost: GAME.heal.mana + ' MP', id: 'heal' },
-      { k: 'U', n: 'Vận Khí (giữ)', c: 0xffe066, cost: '+MP', id: 'charge' },
-      { k: '⇧', n: 'Lướt/Chạy', c: 0xffffff, cost: '', id: 'dash' },
+      { k: actionKey('brawl', 'heal'), n: 'Hồi Máu', c: 0x7dff9b, cost: GAME.heal.mana + ' MP', id: 'heal' },
+      { k: actionKey('brawl', 'charge'), n: 'Vận Khí (giữ)', c: 0xffe066, cost: '+MP', id: 'charge' },
+      { k: actionKey('brawl', 'dash'), n: 'Lướt/Chạy', c: 0xffffff, cost: '', id: 'dash' },
     ];
     for (const x of extra) {
       const d = document.createElement('div');
       d.className = 'slot util';
       d.style.setProperty('--c', hex(x.c));
-      d.innerHTML = `<div class="keys"><kbd>${x.k}</kbd></div><div class="sname">${x.n}</div><div class="cost">${x.cost}</div><div class="cd"></div><div class="cdt"></div>`;
+      d.innerHTML = `<div class="keys"><kbd>${esc(x.k)}</kbd></div><div class="sname">${x.n}</div><div class="cost">${x.cost}</div><div class="cd"></div><div class="cdt"></div>`;
       this.skillbar.appendChild(d);
       this.slots.push({ d, cd: d.querySelector('.cd'), cdt: d.querySelector('.cdt'), util: x.id });
     }
@@ -105,7 +105,7 @@ export class HUD {
       const v = Math.floor(me.awk || 0);
       p = v / AWAKEN.max;
       cls = v >= AWAKEN.max ? 'full' : '';
-      txt = cls ? (document.body.classList.contains('touch') ? '⚡ ĐẦY! Bấm nút ⚡' : '⚡ ĐẦY! Bấm L L') : `Dị biến ${v}%`;
+      txt = cls ? (document.body.classList.contains('touch') ? '⚡ ĐẦY! Bấm nút ⚡' : `⚡ ĐẦY! Bấm ${comboKey('L')} ${comboKey('L')}`) : `Dị biến ${v}%`;
     }
     const key = cls + '|' + txt + '|' + Math.round(p * 200);
     if (key === this.awKey) return;

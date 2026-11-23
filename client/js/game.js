@@ -13,6 +13,7 @@ import { FX } from './effects.js';
 import { buildWorld } from './world.js';
 import { HUD, $, esc, hex, lockPointer } from './ui.js';
 import { sfx, skillSound } from './audio.js';
+import { translate, actionKey, comboKey } from './keys.js';
 
 const now = () => performance.now() / 1000;
 const BR = GAME.bodyRadius;
@@ -200,6 +201,14 @@ function clampArena(x, z) {
   const R = curArena.radius - 1.2, d = Math.hypot(x, z);
   return d > R ? [x / d * R, z / d * R] : [x, z];
 }
+// điểm (x, y, z) có nằm trong cột / hộp của map hoặc chướng ngại vật tạm thời không (để camera tránh)
+function camBlocked(x, y, z, dyn) {
+  const m = 0.35;
+  for (const [ox, oz, r, h] of curArena.obstacles) if (y < h + m && Math.hypot(x - ox, z - oz) < r + m) return true;
+  for (const [bx, bz, hw, hd, h] of curArena.boxes || []) if (y < h + m && Math.abs(x - bx) < hw + m && Math.abs(z - bz) < hd + m) return true;
+  for (const o of dyn) if (!o.noBody && y < o.h + m && Math.hypot(x - o.x, z - o.z) < o.r + m) return true;
+  return false;
+}
 let curDyn = [];        // chướng ngại vật tạm thời phía client (fx.dynObs): nóc cột đá đứng lên được
 function groundHeight(x, z, y) {
   let g = arenaGround(curArena, x, z, y, BR);
@@ -253,6 +262,9 @@ export class Game {
     this.suspended = false;   // true khi đang ở chế độ bắn súng (dùng chung renderer)
 
     this.kmarks = new Map();   // dấu phi đao đang hiện: id người chơi -> hiệu ứng
+    // độ đã mắt: khựng hình khi trúng đòn mạnh, góc nhìn rộng ra thoáng chốc, theo dõi pha tụ lực tuyệt kỹ
+    this.hitstopUntil = 0; this.lastStop = 0; this.fovK = 0;
+    this.charges = [];
     this.props = new Map();    // công trình (cọc sét, cột đá): id -> { k, o, x, y, z, r, h, hp, fx }
     this.zones = new Map();    // vùng trên sàn (lửa, băng, ngưng đọng): id -> { k, o, x, y, z, r, until, mul, fx }
     this.fx.zoneList = [];
@@ -314,6 +326,9 @@ export class Game {
     for (const zn of msg.zones || []) this.onZone(zn);
   }
 
+  // Nền menu: dựng map đối kháng đang chọn
+  setMenuArena(id) { if (!this.active) this.setArena(getArena(id)); }
+
   // Dựng lại cảnh khi vào phòng có map khác
   setArena(a) {
     curArena = a;
@@ -341,6 +356,7 @@ export class Game {
     this.effects.clear();
     this.predicted.clear();
     this.props.clear();
+    this.charges = [];
     this.zones.clear();
     this.fx.zoneList.length = 0;
     this.fx.fences([], 0);
@@ -415,6 +431,11 @@ export class Game {
       if (m.k != null && e?.endSub) e.endSub(m.k, m.at); else e?.endAll?.();
       this.fx.explosion(v3(...m.at), m.c, m.r);
       sfx('explosion', this.distToCam(m.at));
+      // vụ nổ lớn (tuyệt kỹ): cột năng lượng, vết cháy, khói; gần camera thì góc nhìn giật ra
+      if (m.r >= 4.5) {
+        this.fx.ultImpact(v3(...m.at), m.c, m.c, m.r);
+        if (this.distToCam(m.at) < 28) this.fovKick(3);
+      }
     });
     n.on('hit', m => this.onHit(m));
     n.on('die', m => {
@@ -484,7 +505,7 @@ export class Game {
     n.on('chain', m => {
       for (let i = 0; i < m.pts.length; i++) {
         const b = v3(...m.pts[i]);
-        if (m.sky) { this.fx.judgement(b, m.c, i === 0); continue; }
+        if (m.sky) { this.fx.judgement(b, m.c, i === 0); if (i < 3) this.fx.ultImpact(b, m.c, m.c, 2.8); continue; }
         if (!i && m.nosky) continue;
         const a = i ? v3(...m.pts[i - 1]) : v3(b.x, b.y + 9, b.z);
         this.fx.bolt(a, b, m.c, 0xfff7c2, 0.08, i === 0);
@@ -607,6 +628,7 @@ export class Game {
     const e = this.fx.castSkill({ skill: s, p, d, h, seed: m.seed, tg: m.tg, caster: av.casterApi, owner: av.id, team: av.team, seekTargets: () => this.seekTargets(av) });
     if (e) { this.effects.set(m.eid, e); if (s.type === 'buff') e.buffOf = av.id; }
     if (av.forced && e?.steer) av.forced.st = e.steer;   // rồng lốc lái cả độ cao
+    this.ultCue(av, s, p, h, m.tg, e);
     if (s.type === 'quake' && !this.isAlly(av)) this.hud.toast(`⚠ ${av.name} sắp động đất cả sân — nhảy lên để né!`, 1500);
     setTimeout(() => this.effects.delete(m.eid), Math.max(8000, (skillLifetime(s) + 1) * 1000));
     sfx(skillSound(s), this.distToCam(p));
@@ -615,6 +637,11 @@ export class Game {
   onHit(m) {
     const tgt = this.avatars.get(m.tid);
     if (!tgt) return;
+    // đòn mạnh có mình tham gia (đánh hoặc bị đánh): khựng hình + góc nhìn giật nhẹ
+    if (m.dmg >= 14 && (tgt.isMe || m.sid === this.myId)) {
+      this.hitstop(m.dmg >= 26 ? 0.1 : 0.055);
+      this.fovKick(m.dmg >= 26 ? 2.5 : 1.2);
+    }
     tgt.hp = m.hp;
     const at = v3(...m.at);
     const big = m.dmg >= 15;
@@ -648,6 +675,75 @@ export class Game {
     else if (m.frost) this.fx.parts.burst(at, 6 * m.frost, 0xe0f7ff, { speed: 2, size: 0.3, life: 0.6 });
     if (m.burn) this.fx.parts.burst(at, 8, 0xff7b00, { speed: 3, size: 0.35, life: 0.5, up: 1 });
     if (m.fx === 'burn') this.fx.parts.burst(at, 5, 0xff5400, { speed: 2, size: 0.3, life: 0.4, up: 1.5 });
+  }
+
+  // ======================= Độ đã mắt =======================
+  // khựng hình: hiệu ứng và hoạt ảnh gần như đứng lại trong chốc lát (không quá 4 lần / giây)
+  hitstop(d) {
+    const t = now();
+    if (t - this.lastStop < 0.25) return;
+    this.lastStop = t;
+    this.hitstopUntil = t + d;
+  }
+  fovKick(a) { this.fovK = Math.max(this.fovK, a); }
+
+  // Tuyệt kỹ (JKL) của mình hoặc người ở gần: theo dõi pha tụ lực, thời điểm bung chiêu và chỗ nổ
+  ultCue(av, s, p, h, tg, e) {
+    if (s.combo !== 'JKL' || !this.me) return;
+    if (!av.isMe && av.pos.distanceTo(this.me.pos) > 32) return;
+    const c = { av, s, t0: now(), p: p.clone(), h: h.clone(), e, released: false, impactAt: null, R: 4, at: null };
+    const front = off => () => v3(c.p.x + c.h.x * off, 0, c.p.z + c.h.z * off);
+    switch (s.type) {
+      case 'aoe': c.at = s.at === 'front' ? front(s.offset) : () => av.pos; c.impactAt = s.delay; c.R = s.radius; break;
+      case 'rain': c.at = () => (e?.steer ? v3(e.steer.c[0], 0, e.steer.c[2]) : front(s.offset)()); c.impactAt = s.delay + (s.fall || 0) + s.count * s.interval * 0.4; c.R = s.area; break;
+      case 'dash': if (!s.explode) { c.at = () => av.pos; c.impactAt = s.delay + s.dur; c.R = s.radius * 1.6; } break;
+      case 'quake': c.at = () => av.pos; c.impactAt = s.delay; c.R = 8; break;
+      case 'timezone': c.at = () => av.pos; c.impactAt = s.delay; c.R = 6; break;
+      case 'pet': c.at = front(s.offset); c.impactAt = s.delay; c.R = s.radius; break;
+      case 'summon': c.at = tg ? () => v3(tg[0], 0, tg[1]) : front(s.offset); c.impactAt = s.delay; c.R = s.radius; break;
+      case 'multiblink': c.at = () => av.pos; c.impactAt = s.delay + s.strikes * s.interval; c.R = 4; break;
+    }
+    this.charges.push(c);
+  }
+
+  updateCharges(t) {
+    let best = null, bk = 0;
+    for (const c of this.charges) {
+      const el = t - c.t0, s = c.s;
+      if (!c.released && el >= s.delay) { c.released = true; this.ultRelease(c); }
+      if (!c.released && !c.av.dead && !c.av.hidden) {
+        const k = Math.min(1, el / Math.max(0.25, s.delay)) * (c.av.isMe ? 1 : 0.6);
+        if (k > bk) { bk = k; best = c; }
+      }
+      if (c.at && !c.impacted && el >= c.impactAt) {
+        c.impacted = true;
+        const at = c.at();
+        this.fx.ultImpact(at, s.fx.color, s.fx.core || s.fx.color, c.R);
+        if (this.distToCam(at) < 28) this.fovKick(c.av.isMe ? 4 : 2.5);
+      }
+    }
+    if (this.charges.length) this.charges = this.charges.filter(c => t - c.t0 < c.s.delay + 5);
+    // màn hình tối dần quanh người đang tụ lực (chỉ chừa sáng quanh họ)
+    const el = $('chargeVig');
+    if (best) {
+      const v = this._vv || (this._vv = new THREE.Vector3());
+      v.set(best.av.pos.x, best.av.pos.y + 1, best.av.pos.z).project(this.camera);
+      el.style.setProperty('--cx', ((v.x + 1) * 50).toFixed(1) + '%');
+      el.style.setProperty('--cy', ((1 - v.y) * 50).toFixed(1) + '%');
+      el.style.opacity = (bk * 0.85).toFixed(2);
+    } else if (el.style.opacity !== '0') el.style.opacity = '0';
+  }
+
+  // Bung tuyệt kỹ: chớp màu của chiêu, góc nhìn giật ra, khựng hình (chiêu của mình)
+  ultRelease(c) {
+    const s = c.s, me = c.av.isMe;
+    const f = $('chargeFlash');
+    f.style.setProperty('--fc', '#' + s.fx.color.toString(16).padStart(6, '0'));
+    f.style.setProperty('--fo', me ? '0.26' : '0.14');
+    f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+    this.fovKick(me ? 7 : 4);
+    if (me) { this.lastStop = 0; this.hitstop(0.07); }
+    this.fx.shake(me ? 0.45 : 0.25, c.av.pos);
   }
 
   // id a và b cùng phe (chủ + phân thân / người cây, hoặc cùng đội)
@@ -765,6 +861,7 @@ export class Game {
 
   refreshSkills() {
     if (!this.me) return;
+    this.cancelHold();   // bộ chiêu đổi (biến hình / hết dị biến / đổi nhân vật): bỏ lượt tụ lực đang dở
     const A = this.me.char.awaken;
     this.hud.buildSkillbar(this.me.char, this.me.skills, this.cdOff(), this.me.aw ? A : null);
     this.setupTouch();
@@ -963,12 +1060,13 @@ export class Game {
       if (!this.active) return;
       this.cam.dist = Math.max(4, Math.min(16, this.cam.dist + Math.sign(e.deltaY) * 0.8));
     }, { passive: true });
+    // chuột cũng là "phím" gán được: Mouse0 (trái) / Mouse1 (giữa) / Mouse2 (phải)
     canvas.addEventListener('mousedown', e => {
       if (document.pointerLockElement !== canvas) return;
-      if (e.button === 0) this.comboKey('J');
-      if (e.button === 2) { this.keys.add('KeyK'); this.comboKey('K'); }
+      const code = translate('brawl', 'Mouse' + e.button);
+      if (code) this.pressKey(code);
     });
-    addEventListener('mouseup', e => { if (e.button === 2) this.keys.delete('KeyK'); });
+    addEventListener('mouseup', e => { const code = translate('brawl', 'Mouse' + e.button); if (code) this.keys.delete(code); });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
     addEventListener('keydown', e => {
@@ -985,24 +1083,34 @@ export class Game {
       if (e.code === 'Tab') { e.preventDefault(); this.showScore = true; return; }
       if (e.key === 'Enter') { this.openChat(); e.preventDefault(); return; }
       if (e.code === 'F1') { e.preventDefault(); $('help').hidden = !$('help').hidden; return; }
+      // dịch phím thật sang phím chuẩn theo bảng gán phím (Cài đặt → Gán phím); phím chưa gán thì bỏ qua
+      const code = translate('brawl', e.code);
+      if (!code) return;
+      e.preventDefault();
       if (e.repeat) return;
-      this.keys.add(e.code);
-      switch (e.code) {
-        case 'KeyJ': this.comboKey('J'); break;
-        case 'KeyK': this.comboKey('K'); break;
-        case 'KeyL': this.comboKey('L'); break;
-        case 'KeyH': this.tryHeal(); break;
-        case 'KeyP': if (this.practice) this.net.send({ t: 'pfill' }); break;
-        case 'KeyT': if (this.teamMode && this.ts?.phase === 'lobby') this.showLobby($('teamLobby').hidden); break;
-        case 'Space': this.jump(); e.preventDefault(); break;
-        case 'ShiftLeft': case 'ShiftRight': this.dash(); break;
-      }
+      this.pressKey(code);
     });
     addEventListener('keyup', e => {
-      this.keys.delete(e.code);
+      const code = translate('brawl', e.code);
+      if (code) this.keys.delete(code);
       if (e.code === 'Tab') this.showScore = false;
     });
     addEventListener('blur', () => this.keys.clear());
+  }
+
+  // một phím chuẩn vừa được bấm (từ bàn phím hoặc chuột, đã qua bảng gán phím)
+  pressKey(code) {
+    this.keys.add(code);
+    switch (code) {
+      case 'KeyJ': this.comboKey('J'); break;
+      case 'KeyK': this.comboKey('K'); break;
+      case 'KeyL': this.comboKey('L'); break;
+      case 'KeyH': this.tryHeal(); break;
+      case 'KeyP': if (this.practice) this.net.send({ t: 'pfill' }); break;
+      case 'KeyT': if (this.teamMode && this.ts?.phase === 'lobby') this.showLobby($('teamLobby').hidden); break;
+      case 'Space': this.jump(); break;
+      case 'ShiftLeft': this.dash(); break;
+    }
   }
 
   openChat() {
@@ -1230,7 +1338,7 @@ export class Game {
     if (why === 'lock') return false;
     if (why) {
       this.hud.denySlot(idx);
-      if (why === 'mana') this.hud.toast('Không đủ mana! Giữ U để vận khí', 1000);
+      if (why === 'mana') this.hud.toast(`Không đủ mana! Giữ ${actionKey('brawl', 'charge')} để vận khí`, 1000);
       sfx('error');
       return true;
     }
@@ -1266,6 +1374,7 @@ export class Game {
     const cs = this.cs++;
     const p = me.pos.clone();
     // nhổ cột đá ném (dị biến Gantetsu): đạn bay ra từ cột đá của mình gần nhất, hướng về điểm cần ném
+    if (!s.hold) held = null;   // phòng hờ: chiêu ở ô này không còn là chiêu tụ lực
     let fs = held != null ? holdSkill(s, held / s.hold.max) : s, rp = null;
     if (s.rip && (rp = this.ripPillar(p, s.rip.range))) {
       fs = s.ripSkill;
@@ -1288,6 +1397,7 @@ export class Game {
     const e = this.fx.castSkill({ skill: fs, p, d, h, seed, tg, caster: me.casterApi, owner: me.id, team: me.team, seekTargets: () => this.seekTargets(me) });
     if (e) { this.predicted.set(cs, e); if (s.type === 'buff') e.buffOf = me.id; }
     if (L.skillDash && e?.steer && s.type === 'dash') L.skillDash.st = e.steer;   // rồng lốc: bám độ cao đang lái
+    this.ultCue(me, fs, p, h, tg, e);
     if (e?.steer) {
       // chiêu cuối: lái theo tâm ngắm cho tới khi chiêu kết thúc
       e.steer.aim = this.steerAim();
@@ -1347,10 +1457,10 @@ export class Game {
   moveDir() {
     const k = this.keys;
     let f = 0, r = 0;
-    if (k.has('KeyW') || k.has('ArrowUp')) f += 1;
-    if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
-    if (k.has('KeyD') || k.has('ArrowRight')) r += 1;
-    if (k.has('KeyA') || k.has('ArrowLeft')) r -= 1;
+    if (k.has('KeyW')) f += 1;   // phím chuẩn (đã qua bảng gán phím)
+    if (k.has('KeyS')) f -= 1;
+    if (k.has('KeyD')) r += 1;
+    if (k.has('KeyA')) r -= 1;
     if (this.touch?.enabled) {
       const m = this.touch.move;
       if (Math.hypot(m.x, m.y) > 0.15) { f -= m.y; r += m.x; }
@@ -1401,7 +1511,7 @@ export class Game {
     L.flying = !L.onGround && k.has('Space') && !stunned && !L.skillDash && (FF ? true : L.jumps >= 2 && me.mp > 1);
 
     const input = stunned || rooted || L.charging ? v3() : this.moveDir();
-    L.sprint = L.sprint && (k.has('ShiftLeft') || k.has('ShiftRight')) && input.lengthSq() > 0;
+    L.sprint = L.sprint && k.has('ShiftLeft') && input.lengthSq() > 0;
     let speed = (L.sprint ? MOVE.sprint : MOVE.walk) * me.char.speedMul;
     // dị biến chạy nhanh hơn, hết dị biến thì kiệt sức một lúc
     if (this.awakened()) speed *= me.char.awaken.passive.speed ?? AWAKEN.speedMul;
@@ -1536,12 +1646,27 @@ export class Game {
       target.z + Math.cos(c.yaw) * cp * c.dist,
     );
     want.y = Math.max(0.4, want.y);
+    // camera không chui vào cột / hộp / chướng ngại vật: dò từ nhân vật ra, gặp vật cản thì kéo camera vào trước nó
+    const dx = want.x - target.x, dy = want.y - target.y, dz = want.z - target.z, L = Math.hypot(dx, dy, dz) || 1;
+    for (let d = 1.2; d <= L; d += 0.3) {
+      const k = d / L;
+      if (camBlocked(target.x + dx * k, target.y + dy * k, target.z + dz * k, this.fx.dynObs)) {
+        const kk = Math.max(1, d - 0.5) / L;
+        want.set(target.x + dx * kk, target.y + dy * kk, target.z + dz * kk);
+        c.pos.lerp(want, Math.min(1, dt * 30));   // vào gần nhanh để không thấy xuyên tường
+        break;
+      }
+    }
     c.pos.lerp(want, Math.min(1, dt * 14));
     this.camera.position.copy(c.pos);
     const sh = this.fx.shakeAmt * this.settings.shake;
     if (sh > 0) this.camera.position.add(v3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh));
     // nhìn hơi lệch lên để thấy phía trước
     this.camera.lookAt(target.x, target.y + 0.4, target.z);
+    // góc nhìn rộng ra thoáng chốc khi bung tuyệt kỹ / trúng đòn mạnh, rồi thu về
+    this.fovK = Math.max(0, this.fovK - dt * 14);
+    const fov = 62 + this.fovK;
+    if (Math.abs(this.camera.fov - fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 
   // ======================= Vòng lặp =======================
@@ -1567,13 +1692,15 @@ export class Game {
         this.updateTouchHud(t);
       }
       this.updateLocal(dt);
+      const fdt = t < this.hitstopUntil ? dt * 0.08 : dt;   // khựng hình
       for (const av of this.avatars.values()) {
         if (!av.isMe) av.interpolate();
-        av.render(dt);
+        av.render(fdt);
         // hào quang vận khí
         if (!av.dead && (av.isMe ? this.L.charging : av.flags & 2)) this.fx.aura(av.pos, av.char.look.aura || av.char.skills[1].fx.color, dt);
       }
       this.updateFences(dt);
+      this.updateCharges(t);
       // sương đêm: người ngoài bán kính nhìn thấy bị ẩn (cả bảng tên)
       if (this.darkUntil) {
         if (t >= this.darkUntil) { this.darkUntil = 0; this.setDark(false); }
@@ -1590,7 +1717,7 @@ export class Game {
       this.hud.updateAwaken(this.me, t);
       if (!this.me.aw && this.me.awk >= AWAKEN.max && !this.awFullTold) {
         this.awFullTold = true;
-        this.hud.toast(this.touch?.enabled ? '⚡ Thanh dị biến đã đầy! Bấm nút ⚡ để biến hình' : '⚡ Thanh dị biến đã đầy! Bấm L L để biến hình', 2500);
+        this.hud.toast(this.touch?.enabled ? '⚡ Thanh dị biến đã đầy! Bấm nút ⚡ để biến hình' : `⚡ Thanh dị biến đã đầy! Bấm ${comboKey('L')} ${comboKey('L')} để biến hình`, 2500);
         sfx('respawn');
       }
       this.hud.updatePlates(this.avatars.values(), this.camera, innerWidth, innerHeight);
@@ -1600,13 +1727,14 @@ export class Game {
       if (this.me.dead) this.hud.death(true, this.killer, GAME.respawnTime - (t - (this.deathAt || t)));
       $('stunned').hidden = !(t < L.stunUntil);
     } else {
-      // màn hình chờ: camera quay quanh đấu trường
-      const a = t * 0.08;
-      this.camera.position.set(Math.sin(a) * 32, 14, Math.cos(a) * 32);
+      // màn hình chờ (nền menu): camera bay vòng quanh map đang chọn, bán kính theo cỡ sân
+      const a = t * 0.08, R = curArena.radius * 0.9 + 2;
+      this.camera.position.set(Math.sin(a) * R, 9 + R * 0.15, Math.cos(a) * R);
       this.camera.lookAt(0, 2, 0);
+      if (this.camera.fov !== 62) { this.camera.fov = 62; this.camera.updateProjectionMatrix(); }
     }
 
-    this.fx.update(dt);
+    this.fx.update(t < this.hitstopUntil ? dt * 0.08 : dt);
     this.world.update(dt, t);
     if (this.bloom.enabled) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);

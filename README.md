@@ -56,6 +56,8 @@ Sau đó mở `http://localhost:3000`. Trên Windows có thể bấm đúp các 
 
 Tham số khác: `--port 3001` để đổi port. Ví dụ: `npm start -- --port 8080`.
 
+Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); tên được lưu lại cho lần sau.
+
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
 ## Cách chơi
@@ -76,6 +78,8 @@ Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng p
 | giữ `U` | Vận khí: hồi mana rất nhanh nhưng phải đứng yên |
 | `P` | Chỉ ở **Đấu tập**: nạp đầy thanh dị biến ngay (điện thoại: menu ☰ → ⚡ Nạp đầy thanh dị biến) |
 | `Tab` / `Enter` / `F1` / `Esc` | Bảng điểm / chat / hướng dẫn / menu |
+
+Đây là phím mặc định. **Đổi phím:** Cài đặt → **⌨ Gán phím**. Mỗi hành động có 2 phím (chính + phụ), gán được cả phím bàn phím lẫn nút chuột; có tab riêng cho chế độ Đối kháng và Bắn súng, nút khôi phục mặc định. Phím đã dùng cho hành động khác sẽ tự chuyển sang hành động mới. `Tab`, `Enter`, `Esc`, `F1` là phím hệ thống, không đổi được. Thanh chiêu, danh sách chiêu ở menu và hướng dẫn F1 hiện đúng phím đã gán. Phím được lưu trong trình duyệt.
 
 Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất và **ngắm cả theo chiều dọc**: đối thủ đang bay cao (hoặc mình đang bay bắn xuống) thì đạn, tia chưởng bay chếch thẳng tới ngực đối thủ. Không khoá được ai thì ngẩng camera lên để bắn chếch lên trời.
 
@@ -102,7 +106,7 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 
 Tạo phòng ở chế độ **🎯 Đấu tập** (chọn map như Đối kháng). Trong phòng có sẵn:
 
-- **2 bia tập** 🎯 đứng yên, bị đánh văng thì tự đi về chỗ cũ, 2.5 giây không bị đánh thì hồi đầy máu.
+- **2 bia tập** 🎯 (người rơm có hồng tâm) đứng yên, bị đánh văng thì tự đi về chỗ cũ, 2.5 giây không bị đánh thì hồi đầy máu.
 - **1 võ sĩ máy** 🤖 (nhân vật ngẫu nhiên) chạy vòng quanh bạn, thỉnh thoảng nhảy, đánh thường và bắn chiêu K (sát thương giảm một nửa). Hợp để thử ngắm dọc, thử né.
 - Bấm `P` (điện thoại: menu ☰ → **⚡ Nạp đầy thanh dị biến**) để nạp đầy thanh dị biến ngay, rồi `L` `L` để biến hình.
 
@@ -192,7 +196,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 Cả 8 nhân vật đều **tự sáng tác**: tên, ngoại hình và chiêu thức chỉ lấy cảm hứng chung từ các hình mẫu quen thuộc (ninja gió, kiếm sĩ lửa, pháp sư băng…), không mô phỏng nhân vật có bản quyền nào.
 
-Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến, bấm vào một dòng chiêu để xem riêng chiêu đó.
+Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến lên một **bia tập**, bấm vào một dòng chiêu để xem riêng chiêu đó. Bia hiện số sát thương và phản ứng đúng như đối thủ trong trận: bị đẩy lùi, bị kéo lại, bị hất tung, choáng, làm chậm. Bấm nút **!** cuối mỗi dòng chiêu để xem mô tả chiêu: chiêu làm gì, cơ chế đặc biệt, sát thương, tầm, hồi chiêu, mana, hiệu ứng khống chế (mô tả tự sinh từ dữ liệu chiêu nên luôn khớp số liệu).
 
 | Nhân vật | Máu | Phong cách | Chiêu nổi bật |
 |---|---|---|---|

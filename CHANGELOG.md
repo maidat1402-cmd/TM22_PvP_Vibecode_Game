@@ -2,7 +2,27 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.8.0 (2026-11-20)
+## 0.9.0 (2026-11-23)
+
+- Chiêu thức rõ và đã mắt hơn:
+  - Khựng hình 50–100 ms khi trúng đòn mạnh (mình đánh hoặc bị đánh), góc nhìn camera rộng ra thoáng chốc khi bung tuyệt kỹ / nổ lớn.
+  - Tuyệt kỹ nổ thành cột năng lượng cao 9 m, vết cháy và vết nứt phát sáng nằm lại trên sàn 3 giây, khói tối dâng lên, đá vụn bắn tung, 2 lớp sóng xung kích.
+  - Pha tụ lực tuyệt kỹ: màn hình tối dần, chỉ chừa sáng quanh người ra chiêu; lúc bung chiêu chớp nhanh màu của chiêu. Tuyệt kỹ thường cũng có vòng tụ lực.
+  - Lõi shader và hạt pha màu chính của chiêu thay vì trắng: chói theo màu, không trắng bệch.
+- Bắt buộc nhập tên người chơi (2–16 ký tự) trước khi vào / tạo phòng hoặc mở link mời; bỏ tên tự sinh "NinjaXXX". Link có thể gắn sẵn tên bằng `?name=`.
+- Nền menu đổi theo chế độ và map đang chọn (4 map đối kháng, 2 map bắn súng), camera bay vòng theo cỡ map; trước đây luôn là Đền Anh Đào.
+- **Gán phím** (Cài đặt → ⌨ Gán phím): đổi phím cho từng hành động ở cả 2 chế độ, mỗi hành động 2 phím (bàn phím hoặc chuột), tự gỡ phím trùng, khôi phục mặc định, lưu trong trình duyệt. Thanh chiêu, danh sách chiêu, hướng dẫn F1 và thông báo hiện đúng phím đã gán.
+- Màn chọn nhân vật: nút **!** ở mỗi dòng chiêu mở mô tả chiêu (cách hoạt động, cơ chế riêng, sát thương, tầm, hồi chiêu, mana, khống chế), sinh tự động từ dữ liệu chiêu.
+- Màn chọn nhân vật: có bia tập đứng đúng tầm, nhận đòn theo từng chiêu (số sát thương, bị đẩy / kéo / hất tung, choáng, làm chậm).
+- Bia ở chế độ Đấu tập đổi thành người rơm có hồng tâm.
+- Camera không còn chui vào cột / hộp / chướng ngại vật (trước đây che mất nửa màn hình ở map Đền Anh Đào).
+- Sửa hiệu ứng làm trắng xoá màn hình (đo bằng cách tung lần lượt 96 chiêu của 8 nhân vật, chất lượng cao và thấp):
+  - Đèn chớp: giảm cường độ, đặt cao hơn mặt sàn, không bật chồng quá 2 đèn mạnh cùng lúc (trước đây mỗi gai trong chuỗi gai bật 1 đèn).
+  - Vụ nổ: quầng sáng nhỏ và mờ hơn, quả cầu nổ càng to càng mờ.
+  - Tia lửa trúng đòn, đấm loạn (Raiga), quả cầu Tinh Cầu Hủy Diệt, hiệu ứng gục ngã, băng vỡ cuối Thời Băng Giới: bớt sáng, bớt màu trắng.
+- Sửa lỗi JS khi bộ chiêu đổi (biến hình / hết dị biến / đổi nhân vật) giữa lúc Raiga đang giữ phím tụ lực.
+
+## 0.8.0 (2026-11-20) · `396794a`
 
 - Chế độ **Đấu tập**: phòng có sẵn 2 bia tập + 1 võ sĩ máy, phím `P` (menu ☰ trên điện thoại) nạp đầy thanh dị biến.
 - Dị biến v2, đợt 2 và đợt 3:

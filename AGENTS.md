@@ -91,7 +91,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
 - Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
 - `tests/awaken.mjs`: kiểm tra dị biến (thanh tích, biến hình, nội tại, các kiểu chiêu dị biến, ngắm dọc, cơ chế dị biến v2 của cả 8 nhân vật) và chế độ đấu tập. Mất khoảng 5 phút. Chạy server ở cổng 3123 rồi `node tests/awaken.mjs`; sửa dị biến hay `damage()` thì chạy lại.
-- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm&map=<id map>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn.
+- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm&map=<id map>&name=<tên>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn. Người chơi bắt buộc có tên, không có `name` (và chưa lưu tên) thì hiện hộp hỏi tên trước khi vào phòng.
 - **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
 
@@ -140,6 +140,15 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Ưu tiên chế độ hoà màu thường. Hạn chế hoà màu cộng sáng (additive) và độ sáng của bloom.
   - Particle ở gần camera phải mờ dần.
   - Chiêu lớn hoặc nhiều chiêu cùng lúc rất dễ làm màn hình trắng xoá. Kiểm tra lại các trường hợp này.
+- **Đồ sộ mà vẫn rõ:** độ hoành tráng lấy từ quy mô và nhịp, không lấy từ ánh sáng trắng.
+  - Nổ tuyệt kỹ dùng `fx.ultImpact(pos, màu, lõi, bán kính)` (cột năng lượng, vết cháy, vết nứt, khói). Client tự gọi qua `ultCue()` ở `game.js` theo kiểu chiêu, khi có gói `boom` bán kính ≥ 4.5, và khi chiêu `leap` lớn đáp xuống.
+  - Khựng hình `game.hitstop(giây)` và giật góc nhìn `game.fovKick(độ)` chỉ làm chậm hiệu ứng / hoạt ảnh, không đụng vật lý hay mạng.
+  - Pha tụ lực tuyệt kỹ làm tối màn hình bằng lớp `#chargeVig`; lúc bung chiêu chớp màu bằng `#chargeFlash`. Hai lớp này cùng `#darkfog` phải nằm dưới HUD.
+  - `fx.flash()` đã tự giới hạn cường độ và số đèn sáng cùng lúc. Đừng tăng lại hay gọi đèn cho từng mảnh nhỏ.
+  - Lõi shader pha màu chính (không trắng thuần); sprite và quả cầu cộng sáng ở gần camera phải mờ.
+  - Kiểm tra chiêu mới bằng cách chụp khung hình đậm nhất ở cả chất lượng cao lẫn thấp: phần màn hình trắng hoàn toàn nên dưới khoảng 10%.
+- **Mô tả chiêu** (nút ! ở màn chọn nhân vật) sinh tự động trong `describeSkill()` ở `client/js/main.js` từ các trường của chiêu; tên gọi hình ảnh lấy theo `fx.kind` (`FX_NOUN`, `FX_DASH`...). Thêm trường hay kiểu chiêu mới thì thêm câu mô tả tương ứng; chiêu có `desc` thì câu đó đứng đầu.
+- **Màn chọn nhân vật** có bia tập (`SUMMONS.dummy`) nhận đòn theo lịch ước lượng `previewHits()` trong `client/js/main.js`. Thêm kiểu chiêu mới thì thêm luôn một nhánh ở `previewHits()` và `pvTargetDist()`.
 - **Shader cần làm nóng trước** (warmup) để lần ra chiêu đầu tiên không bị giật khung hình. Thêm material hay shader mới thì đưa vào phần warmup.
 - **Chế độ bắn súng:** map gộp geometry để giảm số lần vẽ (draw call). Súng cầm tay được vẽ ở một lượt render riêng.
 
@@ -152,6 +161,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - CSS dùng `touch-action: manipulation` cho cả trang. Riêng canvas và lớp `#touch` dùng `touch-action: none`.
   - Không bỏ các thiết lập này. Menu vẫn phải cuộn được.
 - Mỗi phím mới trên bàn phím phải có nút cảm ứng tương ứng, hoặc có cách khác để làm được việc đó trên điện thoại.
+- **Gán phím** (`client/js/keys.js`): logic game chỉ đọc "phím chuẩn" (`KeyJ`, `Space`, `ShiftLeft`…); phím thật người chơi bấm (kể cả chuột `Mouse0`/`Mouse2`) được dịch qua `translate(mode, code)` ở handler `keydown`/`mousedown`. Thêm phím mới thì khai báo một hành động trong `ACTIONS` (mục `brawl` hoặc `shooter`, có `code` chuẩn và `def` mặc định) rồi xử lý `code` chuẩn đó trong game; đừng đọc thẳng `e.code`. Chữ hiện cho người chơi lấy qua `actionKey()` / `comboKey()` hoặc thẻ `<kbd data-k="mode.id">` (tự điền), không ghi cứng tên phím.
 
 ## 8. Thêm nội dung
 

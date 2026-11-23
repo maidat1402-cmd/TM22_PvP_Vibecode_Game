@@ -639,6 +639,18 @@ export function charSkills(c, aw) {
 
 // Vật triệu hồi điều khiển bởi server (không chọn được ở menu): dùng chung khung nhân vật để hiện như người chơi
 export const SUMMONS = {
+  // bia tập (người rơm có hồng tâm): bia ở chế độ đấu tập và trong màn xem trước chiêu ở menu
+  dummy: {
+    id: 'dummy', name: 'Bia tập', title: 'Người rơm', hp: 165, speedMul: 1, summon: true,
+    look: {
+      skin: 0xe9c46a, hair: 0xd4a373, hairStyle: 'short', eye: 0x3d2b1f,
+      outfit: 0xb08968, outfit2: 0x8d6e53, accessory: 'belt', accColor: 0x7f5539,
+      weapon: 'none', scale: 1.05, form: 'dummy', formColor: 0xd62828, formCore: 0xffffff,
+    },
+    // bia không ra chiêu; giữ vài chiêu giả để các chỗ đọc màu chiêu (hiệu ứng gục ngã, vận khí...) không lỗi
+    skills: [0, 1, 2].map(i => ({ id: 'dm_' + i, name: 'Bia', combo: 'J', mana: 0, cd: 1, lock: 0.3, type: 'melee', range: 1, arc: 1, dmg: 0, kb: 0, delay: 0.1, pose: 'punch',
+      fx: { color: 0xd62828, kind: 'impact' } })),
+  },
   treant: {
     id: 'treant', name: 'Mộc Thần', title: 'Người cây', hp: 130, speedMul: 1, speed: 5.5, summon: true,
     look: {

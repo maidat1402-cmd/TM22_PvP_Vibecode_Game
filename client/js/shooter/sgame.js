@@ -9,6 +9,7 @@ import { buildMapView } from './mapview.js';
 import { buildGun, buildViewModel, buildBomb, buildNade } from './guns.js';
 import { $, esc, lockPointer } from '../ui.js';
 import { sfx } from '../audio.js';
+import { translate } from '../keys.js';
 
 const now = () => performance.now() / 1000;
 const v3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -177,9 +178,27 @@ export class ShooterGame {
   enemyOf(av) { return this.mode === 'dm' ? true : av.team !== this.myTeam; }
   curW() { return this.P?.weapons?.[this.P.cur] || 'knife'; }
 
+  // Nền menu: dựng map bắn súng đang chọn để camera bay vòng quanh (id = null: tắt)
+  setMenuMap(id) {
+    this.menuMap = id || null;
+    if (!id) return;
+    const map = getMap(id);
+    if (this.map !== map) { this.view?.dispose(); this.map = map; this.view = buildMapView(this.scene, map); }
+  }
+
+  renderMenu(t, dt) {
+    const B = this.map.bounds, R = Math.max(B.x, B.z) * 0.95, a = t * 0.06;
+    this.camera.position.set(Math.sin(a) * R, 16 + R * 0.1, Math.cos(a) * R);
+    this.camera.lookAt(0, 1, 0);
+    this.view.update(t, dt);
+    this.renderer.autoClear = true;
+    this.renderer.render(this.scene, this.camera);
+  }
+
   // ======================= Vào / rời =======================
   enter(m) {
     this.clear();
+    this.menuMap = null;
     this.active = true;
     this.mode = m.mode;
     // dựng map (chỉ dựng lại khi đổi map)
@@ -496,11 +515,15 @@ export class ShooterGame {
       }
       if (e.code === 'Tab') { e.preventDefault(); $('sScore').hidden = false; this.renderScore(); return; }
       if (e.key === 'Enter') { e.preventDefault(); this.openChat(); return; }
-      if (e.code === 'KeyB') { this.toggleBuy(); return; }
       if (e.code === 'Escape' && !$('sBuy').hidden) { this.toggleBuy(false); return; }
+      // dịch phím thật sang phím chuẩn theo bảng gán phím; phím chưa gán thì bỏ qua
+      const code = translate('shooter', e.code);
+      if (!code) return;
+      e.preventDefault();
+      if (code === 'KeyB') { if (!e.repeat) this.toggleBuy(); return; }
       if (e.repeat) return;
-      this.keys.add(e.code);
-      switch (e.code) {
+      this.keys.add(code);
+      switch (code) {
         case 'Digit1': this.switchTo(1); break;
         case 'Digit2': this.switchTo(2); break;
         case 'Digit3': this.switchTo(3); break;
@@ -510,14 +533,15 @@ export class ShooterGame {
         case 'KeyQ': if (this.P.prev === 4) this.selectNade(); else this.switchTo(this.P.prev); break;
         case 'KeyR': this.reload(); break;
         case 'KeyE': this.use(true); break;
-        case 'Space': this.jumpPressed = true; e.preventDefault(); break;
+        case 'Space': this.jumpPressed = true; break;
       }
     });
     addEventListener('keyup', e => {
       if (!this.active) return;
-      this.keys.delete(e.code);
+      const code = translate('shooter', e.code);
+      if (code) this.keys.delete(code);
       if (e.code === 'Tab') $('sScore').hidden = true;
-      if (e.code === 'KeyE') this.use(false);
+      if (code === 'KeyE') this.use(false);
     });
     addEventListener('blur', () => { this.keys.clear(); if (this.P) this.P.trigger = false; });
   }
@@ -1048,7 +1072,7 @@ export class ShooterGame {
     let wx = fx * f + -fz * r, wz = fz * f + fx * r;
     const wl = Math.hypot(wx, wz);
     if (wl > 0) { wx /= wl; wz /= wl; }
-    P.crouch = k.has('ControlLeft') || k.has('KeyC') || !!this.touchCrouch;
+    P.crouch = k.has('ControlLeft') || !!this.touchCrouch;   // phím chuẩn (đã qua bảng gán phím)
     P.crouchK += ((P.crouch ? 1 : 0) - P.crouchK) * Math.min(1, dt * 12);
     const walk = k.has('ShiftLeft') || mag < 1;
     let speed = moveSpeedFor(w.id) * (walk ? S.walkMul : 1) * (P.crouch ? S.crouchMul : 1) * (P.scoped ? 0.6 : 1);
@@ -1284,7 +1308,10 @@ export class ShooterGame {
     const t = now();
     const dt = Math.min(0.05, t - this.lastT);
     this.lastT = t;
-    if (!this.active || !this.me) return;
+    if (!this.active || !this.me) {
+      if (!this.active && this.menuMap && this.view) this.renderMenu(t, dt);   // nền menu
+      return;
+    }
 
     if (this.touch?.enabled) {
       const lk = this.touch.takeLook();
