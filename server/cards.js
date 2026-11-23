@@ -279,7 +279,7 @@ export class CardRoom {
         const o = { seat: i, id: p.id, name: p.name, char: p.char, bot: p.bot, chips: p.chips, n: p.hand.length, cards: open ? p.hand : [] };
         if (this.game === 'xidach') Object.assign(o, { bet: p.bet, ready: p.ready, done: !!p.done });
         if (!p.bot) o.lready = p.id === this.hostId || !!p.lready;   // sẵn sàng ở phòng chờ (chủ phòng luôn sẵn sàng)
-        else Object.assign(o, { passed: !!this.passed?.has(i) });
+        if (this.game === 'tienlen') o.passed = !!this.passed?.has(i);
         if (open && this.game === 'xidach' && p.hand.length) Object.assign(o, { score: xdScore(p.hand), kind: xdKind(p.hand) });
         if (p.result) o.result = p.result;
         return o;
