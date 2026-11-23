@@ -387,7 +387,8 @@ export class FX {
   add(e) {
     // Tab bị ẩn: rAF dừng nên hiệu ứng không được cập nhật/xoá, mà gói tin vẫn tới → dồn hàng nghìn hiệu ứng,
     // quay lại tab thì phát cùng lúc (khựng vài giây, trắng màn hình). Bỏ luôn, đối tượng trả về vẫn dùng được.
-    if (typeof document !== 'undefined' && document.hidden) { e.dispose(); e.done = true; return e; }
+    // Trừ thứ tồn tại lâu có va chạm/tác dụng (công trình, vùng sàn, tường, cây): bỏ thì mất suốt đời của nó.
+    if (!e.persist && typeof document !== 'undefined' && document.hidden) { e.dispose(); e.done = true; return e; }
     this.list.push(e); return e;
   }
 
@@ -520,6 +521,7 @@ export class FX {
     };
     const dispose = e.dispose.bind(e);
     e.dispose = () => { if (obs) { this.removeObstacle(obs); obs = null; } dispose(); };
+    e.persist = true;
     return this.add(e);
   }
 
@@ -547,6 +549,7 @@ export class FX {
     disc.position.set(zn.x, zn.y + (fire ? 0.05 : 0.04), zn.z);
     disc.scale.setScalar(zn.r);
     disc.renderOrder = 3;
+    e.persist = true;
     return this.add(e);
   }
 
@@ -797,6 +800,7 @@ export class FX {
     const dispose = e.dispose.bind(e);
     e.dispose = () => { for (const o of obs) this.removeObstacle(o); obs.length = 0; for (const m of pillars) m.geometry.dispose(); dispose(); };
     this.dust(center, 20);
+    e.persist = true;
     return this.add(e);
   }
 
@@ -1025,7 +1029,9 @@ export class FX {
     if (!build) return null;
     // chiêu cuối điều hướng theo tâm: trạng thái chung, game.js cập nhật st.aim
     ctx.steer = s.steer ? initSteer(s, [ctx.p.x, ctx.p.y, ctx.p.z], [ctx.d.x, ctx.d.y, ctx.d.z], [ctx.h.x, ctx.h.z]) : null;
-    const e = this.add(build(this, ctx));
+    const b = build(this, ctx);
+    if (b && (s.type === 'summon' || s.type === 'wall' || s.walls)) b.persist = true;   // dựng chướng ngại vật
+    const e = this.add(b);
     if (e) e.steer = ctx.steer;
     return e;
   }
