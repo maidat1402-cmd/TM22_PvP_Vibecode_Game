@@ -166,9 +166,9 @@ export class CardGame {
   }
   leave() { this.active = false; this.clear(); this.ui.hidden = true; this.closeChat(); }
   clear() {
-    for (const c of this.cards.values()) c.mesh.removeFromParent();
+    for (const c of this.cards.values()) { c.mesh.removeFromParent(); c.mesh.material.dispose(); }
     this.cards.clear();
-    for (const a of this.avatars.values()) a.model.root.removeFromParent();
+    for (const a of this.avatars.values()) a.model.dispose();   // gỡ cả geometry khỏi GPU, không chỉ khỏi scene
     this.avatars.clear();
     this.st = null; this.sel.clear(); this.history = []; this.lastGames = -1;
     $('cPlates').innerHTML = ''; $('cHand').innerHTML = ''; $('cActs').innerHTML = ''; $('cChat').innerHTML = '';
@@ -207,7 +207,7 @@ export class CardGame {
 
   placeAvatar(key, charId, angle, back = 0) {
     let a = this.avatars.get(key);
-    if (a && a.char !== charId) { a.model.root.removeFromParent(); a = null; }
+    if (a && a.char !== charId) { a.model.dispose(); a = null; }
     if (!a) {
       const model = buildChibi(getChar(charId).look);
       this.scene.add(model.root);
@@ -324,7 +324,7 @@ export class CardGame {
     }
     // lá bài không còn trong trạng thái: bỏ đi
     for (const [k, c] of this.cards) if (!c.seen && !k.startsWith('menu')) { c.mesh.removeFromParent(); c.mesh.material.dispose(); this.cards.delete(k); }
-    for (const [k, a] of this.avatars) if (!a.seen) { a.model.root.removeFromParent(); this.avatars.delete(k); }
+    for (const [k, a] of this.avatars) if (!a.seen) { a.model.dispose(); this.avatars.delete(k); }
     // giữ lá đã chọn còn trên tay
     const hand = s.seats[s.you]?.cards || [];
     for (const id of [...this.sel]) if (!hand.includes(id)) this.sel.delete(id);
