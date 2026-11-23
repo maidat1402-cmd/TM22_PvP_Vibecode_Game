@@ -42,7 +42,13 @@ const MOUNTS = [
 ];
 
 function serveStatic(req, res) {
-  let url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let url;
+  try {
+    url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    res.writeHead(400); return res.end('Bad Request');
+  }
+  if (url.includes('\0')) { res.writeHead(400); return res.end('Bad Request'); }
   if (url === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ ...publicInfo, rooms: hub.roomList(), online: hub.clients.size }));
@@ -51,7 +57,8 @@ function serveStatic(req, res) {
   for (const [prefix, dir] of MOUNTS) {
     if (!url.startsWith(prefix)) continue;
     const file = path.normalize(path.join(dir, url.slice(prefix.length)));
-    if (!file.startsWith(dir)) break; // chống path traversal
+    const relative = path.relative(dir, file);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) break;
     return fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
