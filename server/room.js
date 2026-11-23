@@ -149,8 +149,8 @@ export class Room {
     const spot = (x, z) => this.freeSpot(x, z, 0, 0);
     const chars = CHARACTERS.map(c => c.id);
     const [ax, az] = spot(R, -R * 0.4), [bx, bz] = spot(-R, -R * 0.4), [cx, cz] = spot(0, R);
-    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'gantetsu', x: ax, z: az, home: [ax, az], yaw: Math.atan2(-ax, -az) });
-    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'kage', x: bx, z: bz, home: [bx, bz], yaw: Math.atan2(-bx, -bz) });
+    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'dummy', x: ax, z: az, home: [ax, az], yaw: Math.atan2(-ax, -az) });
+    this.addFake({ fake: 'dummy', sideId: 'bots', name: '🎯 Bia tập', char: 'dummy', x: bx, z: bz, home: [bx, bz], yaw: Math.atan2(-bx, -bz) });
     this.addFake({ fake: 'bot', sideId: 'bots', name: '🤖 Võ sĩ tập', char: chars[(Math.random() * chars.length) | 0], x: cx, z: cz, home: [cx, cz], ai: { range: 5 } });
   }
 

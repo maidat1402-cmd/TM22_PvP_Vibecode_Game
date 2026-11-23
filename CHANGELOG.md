@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.8.1 (2026-11-23)
+## 0.11.1 (2026-11-23)
 
 - Bắn súng: đạn không còn tản loạn và tia đạn không lệch khi đang di chuyển; đi bộ (Shift) gần như không bị phạt độ tản.
 - Sniper: phát thứ 2 trở đi không còn bay cao hơn tâm scope; server bù trễ theo ping (đo bằng ping/pong WebSocket) nên bắn trúng mục tiêu đang chạy khi mạng chậm, vẫn từ chối phát gian lận.
@@ -17,7 +17,44 @@ Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong 
 - Cảm ứng: độ nhạy xoay camera không còn bị bình phương, đối kháng áp dụng đảo trục dọc. iPhone: có lại âm thanh sau cuộc gọi/chuyển app.
 - Bớt tải GPU/DOM mỗi khung hình; làm nóng shader vòng phép 2 mặt và đá (cột đá, cọc sét) để lần dùng đầu không khựng.
 
-## 0.8.0 (2026-11-20)
+## 0.11.0 (2026-11-23) · `d8f71f0`
+
+- Đánh bài: **phòng chờ** thay cho vào là chia bài ngay. Người chơi bấm **✔ Sẵn sàng**, chủ phòng 👑 bấm **▶ Bắt đầu** khi mọi người đã sẵn sàng; nút **⏸** của chủ phòng hẹn dừng sau ván đang chơi để về lại phòng chờ. Chủ phòng rời bàn thì người vào sớm nhất thành chủ phòng.
+- Xì dách: chủ phòng chọn **ai làm nhà cái** trong phòng chờ, mình hoặc máy. Chủ phòng làm nhà cái thì tự rút / dằn (đủ 15 điểm, 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn.
+
+- Đánh bài: nút **🤖 − / +** chọn số máy (AI) chơi cùng để chơi một mình (Xì dách 0–4 máy, chỉ mình với nhà cái cũng được; Tiến lên 1–3 máy).
+- Tiến lên: **tới trắng** (tứ quý heo, sảnh rồng, 6 đôi, 5 đôi thông) thắng ngay khi chia; **thối heo** phạt thêm khi còn lá 2 lúc hết ván (heo đen 20 xu, heo đỏ 40 xu mỗi lá).
+
+## 0.10.0 (2026-11-23) · `58e7f7e`
+
+- Menu "Vào phòng" chia chế độ theo danh mục: ⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài.
+- Chế độ **đánh bài** mới: các nhân vật ngồi quanh bàn tròn 3D, lá bài (vẽ bằng canvas) được chia, đánh ra và nằm trên bàn.
+  - **Xì dách**: đấu nhà cái, đặt cược, rút / dằn (đủ 16 điểm), xì bàng, xì dách, ngũ linh, quắc.
+  - **Tiến lên miền Nam**: 4 người, rác / đôi / sám / tứ quý / sảnh / đôi thông, chặt heo, lượt đầu có 3♠, gợi ý nước đi, trả tiền theo lá còn lại (cháy ×2).
+  - Bot tự ngồi ghế trống và chơi thay người rời bàn; chơi được trên điện thoại (nút bấm, màn dọc).
+- Thêm `tests/cards.mjs`.
+
+## 0.9.0 (2026-11-23) · `9936d83`
+
+- Chiêu thức rõ và đã mắt hơn:
+  - Khựng hình 50–100 ms khi trúng đòn mạnh (mình đánh hoặc bị đánh), góc nhìn camera rộng ra thoáng chốc khi bung tuyệt kỹ / nổ lớn.
+  - Tuyệt kỹ nổ thành cột năng lượng cao 9 m, vết cháy và vết nứt phát sáng nằm lại trên sàn 3 giây, khói tối dâng lên, đá vụn bắn tung, 2 lớp sóng xung kích.
+  - Pha tụ lực tuyệt kỹ: màn hình tối dần, chỉ chừa sáng quanh người ra chiêu; lúc bung chiêu chớp nhanh màu của chiêu. Tuyệt kỹ thường cũng có vòng tụ lực.
+  - Lõi shader và hạt pha màu chính của chiêu thay vì trắng: chói theo màu, không trắng bệch.
+- Bắt buộc nhập tên người chơi (2–16 ký tự) trước khi vào / tạo phòng hoặc mở link mời; bỏ tên tự sinh "NinjaXXX". Link có thể gắn sẵn tên bằng `?name=`.
+- Nền menu đổi theo chế độ và map đang chọn (4 map đối kháng, 2 map bắn súng), camera bay vòng theo cỡ map; trước đây luôn là Đền Anh Đào.
+- **Gán phím** (Cài đặt → ⌨ Gán phím): đổi phím cho từng hành động ở cả 2 chế độ, mỗi hành động 2 phím (bàn phím hoặc chuột), tự gỡ phím trùng, khôi phục mặc định, lưu trong trình duyệt. Thanh chiêu, danh sách chiêu, hướng dẫn F1 và thông báo hiện đúng phím đã gán.
+- Màn chọn nhân vật: nút **!** ở mỗi dòng chiêu mở mô tả chiêu (cách hoạt động, cơ chế riêng, sát thương, tầm, hồi chiêu, mana, khống chế), sinh tự động từ dữ liệu chiêu.
+- Màn chọn nhân vật: có bia tập đứng đúng tầm, nhận đòn theo từng chiêu (số sát thương, bị đẩy / kéo / hất tung, choáng, làm chậm).
+- Bia ở chế độ Đấu tập đổi thành người rơm có hồng tâm.
+- Camera không còn chui vào cột / hộp / chướng ngại vật (trước đây che mất nửa màn hình ở map Đền Anh Đào).
+- Sửa hiệu ứng làm trắng xoá màn hình (đo bằng cách tung lần lượt 96 chiêu của 8 nhân vật, chất lượng cao và thấp):
+  - Đèn chớp: giảm cường độ, đặt cao hơn mặt sàn, không bật chồng quá 2 đèn mạnh cùng lúc (trước đây mỗi gai trong chuỗi gai bật 1 đèn).
+  - Vụ nổ: quầng sáng nhỏ và mờ hơn, quả cầu nổ càng to càng mờ.
+  - Tia lửa trúng đòn, đấm loạn (Raiga), quả cầu Tinh Cầu Hủy Diệt, hiệu ứng gục ngã, băng vỡ cuối Thời Băng Giới: bớt sáng, bớt màu trắng.
+- Sửa lỗi JS khi bộ chiêu đổi (biến hình / hết dị biến / đổi nhân vật) giữa lúc Raiga đang giữ phím tụ lực.
+
+## 0.8.0 (2026-11-20) · `396794a`
 
 - Chế độ **Đấu tập**: phòng có sẵn 2 bia tập + 1 võ sĩ máy, phím `P` (menu ☰ trên điện thoại) nạp đầy thanh dị biến.
 - Dị biến v2, đợt 2 và đợt 3:

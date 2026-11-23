@@ -4,7 +4,7 @@
 
 Game 3D nhân vật chibi, chơi nhiều người qua phòng (room), chạy trên trình duyệt máy tính **và điện thoại**. Server Node.js rất nhẹ.
 
-Có 5 chế độ, chọn khi tạo phòng:
+Có 7 chế độ, chia thành 3 danh mục (⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài), chọn khi tạo phòng:
 
 | Chế độ | Mô tả |
 |---|---|
@@ -13,6 +13,8 @@ Có 5 chế độ, chọn khi tạo phòng:
 | 🎯 **Đấu tập** | Như Đối kháng nhưng có sẵn 2 bia tập và 1 võ sĩ máy: chơi một mình vẫn luyện chiêu và biến hình được |
 | 💣 **Đặt bom** | Bắn súng góc nhìn thứ nhất, 2 phe Công (Hắc Long) / Thủ (Thiên Ưng), theo vòng, có mua đồ và tiền thưởng |
 | 🔫 **Sinh tử** | Bắn súng tự do, ai cũng là đối thủ, hồi sinh nhanh, súng miễn phí |
+| 🃏 **Xì dách** | Đánh bài: các nhân vật ngồi quanh bàn tròn, đấu với nhà cái, ai gần 21 điểm nhất |
+| 🂡 **Tiến lên** | Đánh bài: 4 người quanh bàn tròn, ai đánh hết bài trước thắng |
 
 - **Đồ hoạ**: nhân vật chibi dựng từ khối cơ bản + toon shading + viền đen; chiêu thức dùng particle GPU, shader năng lượng, vòng phép thuật, tia, lốc xoáy, cột lửa, mưa băng, bloom.
 - **Nhẹ**: không có file model/texture/âm thanh nào — tất cả được sinh bằng code (âm thanh tổng hợp bằng WebAudio). Toàn bộ client khoảng 370 KB code chưa nén + three.js, không có bước build.
@@ -56,6 +58,8 @@ Sau đó mở `http://localhost:3000`. Trên Windows có thể bấm đúp các 
 
 Tham số khác: `--port 3001` để đổi port. Ví dụ: `npm start -- --port 8080`.
 
+Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); tên được lưu lại cho lần sau.
+
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
 ## Cách chơi
@@ -76,6 +80,8 @@ Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng p
 | giữ `U` | Vận khí: hồi mana rất nhanh nhưng phải đứng yên |
 | `P` | Chỉ ở **Đấu tập**: nạp đầy thanh dị biến ngay (điện thoại: menu ☰ → ⚡ Nạp đầy thanh dị biến) |
 | `Tab` / `Enter` / `F1` / `Esc` | Bảng điểm / chat / hướng dẫn / menu |
+
+Đây là phím mặc định. **Đổi phím:** Cài đặt → **⌨ Gán phím**. Mỗi hành động có 2 phím (chính + phụ), gán được cả phím bàn phím lẫn nút chuột; có tab riêng cho chế độ Đối kháng và Bắn súng, nút khôi phục mặc định. Phím đã dùng cho hành động khác sẽ tự chuyển sang hành động mới. `Tab`, `Enter`, `Esc`, `F1` là phím hệ thống, không đổi được. Thanh chiêu, danh sách chiêu ở menu và hướng dẫn F1 hiện đúng phím đã gán. Phím được lưu trong trình duyệt.
 
 Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây). Chiêu tự khoá mục tiêu gần tâm màn hình nhất và **ngắm cả theo chiều dọc**: đối thủ đang bay cao (hoặc mình đang bay bắn xuống) thì đạn, tia chưởng bay chếch thẳng tới ngực đối thủ. Không khoá được ai thì ngẩng camera lên để bắn chếch lên trời.
 
@@ -102,7 +108,7 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 
 Tạo phòng ở chế độ **🎯 Đấu tập** (chọn map như Đối kháng). Trong phòng có sẵn:
 
-- **2 bia tập** 🎯 đứng yên, bị đánh văng thì tự đi về chỗ cũ, 2.5 giây không bị đánh thì hồi đầy máu.
+- **2 bia tập** 🎯 (người rơm có hồng tâm) đứng yên, bị đánh văng thì tự đi về chỗ cũ, 2.5 giây không bị đánh thì hồi đầy máu.
 - **1 võ sĩ máy** 🤖 (nhân vật ngẫu nhiên) chạy vòng quanh bạn, thỉnh thoảng nhảy, đánh thường và bắn chiêu K (sát thương giảm một nửa). Hợp để thử ngắm dọc, thử né.
 - Bấm `P` (điện thoại: menu ☰ → **⚡ Nạp đầy thanh dị biến**) để nạp đầy thanh dị biến ngay, rồi `L` `L` để biến hình.
 
@@ -130,6 +136,28 @@ Chọn map khi tạo phòng (mục **Map đối kháng**):
 | 🍃 **Làng Ninja Rừng Trúc** | Nhà gỗ nhảy lên mái được, tháp nước, bãi tập cọc gỗ, giếng đá, rừng trúc bao quanh |
 
 Các map là địa điểm tự thiết kế, chỉ lấy cảm hứng từ không khí phim võ thuật/ninja. Thêm map: khai báo trong [shared/arenas.js](shared/arenas.js) (trụ, hộp, điểm hồi sinh) và viết theme giao diện trong [client/js/world.js](client/js/world.js).
+
+## Chế độ đánh bài
+
+Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân vật bạn đang chọn) ngồi quanh một bàn tròn phủ nỉ xanh; bài được chia ra, đánh ra và nằm trên bàn. Ghế của bạn luôn ở phía dưới màn hình. Thiếu người thì **máy (bot)** tự ngồi vào ghế trống; người vào lúc ván đang chơi sẽ vào bàn ở ván sau (máy nhường ghế). Nút **🤖 − / +** ở góc trên bên phải chọn số máy chơi cùng để **chơi một mình**: Xì dách từ 0 máy (chỉ mình với nhà cái) tới 4 máy, Tiến lên từ 1 tới 3 máy (bàn cần ít nhất 2 người). Đổi số máy lúc đang chờ, đang đặt cược hoặc lúc xem kết quả thì có tác dụng ngay, đang giữa ván thì áp dụng từ ván sau. Mỗi người bắt đầu với 1000 xu (chỉ để tính điểm, hết xu thì được cấp lại). Mọi thao tác là nút bấm nên chơi được trên cả máy tính lẫn điện thoại; `Enter` để chat, `Esc` (hoặc ☰) mở menu.
+
+**Phòng chờ:** vào phòng là ngồi vào bàn nhưng chưa chia bài. Người vào trước là **chủ phòng 👑**. Những người khác bấm **✔ Sẵn sàng**; khi mọi người đã sẵn sàng, chủ phòng bấm **▶ Bắt đầu**. Sau đó các ván nối tiếp nhau tự động; chủ phòng bấm **⏸** (góc trên bên phải) để dừng sau ván đang chơi và về lại phòng chờ. Chủ phòng rời bàn thì người vào sớm nhất còn lại làm chủ phòng.
+
+**🃏 Xì dách** (bàn 5 ghế + nhà cái; có ít hơn 3 người thì bot ngồi cho đủ 3). **Nhà cái** do chủ phòng chọn trong phòng chờ: **🤖 máy** (mặc định) hoặc **🎩 chính chủ phòng**. Chủ phòng làm nhà cái thì ngồi ở phía dưới, thấy bài của mình, tới lượt nhà cái thì tự **Rút bài** / **Dằn** (phải đủ 15 điểm, có 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn:
+1. Đặt cược 50 / 100 / 200 xu rồi bấm **Sẵn sàng** (hết 9 giây thì tự chia).
+2. Mỗi người và nhà cái được 2 lá. Tính điểm: 2–10 theo số, J Q K = 10 điểm, A tính 1, 10 hoặc 11 (tự chọn cách có lợi nhất).
+3. Lần lượt từng người **Rút bài** (tối đa 5 lá) hoặc **Dằn** (dừng). Phải có ít nhất **16 điểm** mới được dằn. Quá 21 điểm là **quắc**.
+4. Nhà cái lật bài và rút cho tới khi có ít nhất 15 điểm, rồi so bài với từng người: điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
+5. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
+
+**🂡 Tiến lên** (miền Nam, 4 người, mỗi người 13 lá):
+- Thứ tự lá: 3 nhỏ nhất … K, A, **2 (heo) lớn nhất**; cùng hạng thì so chất ♠ < ♣ < ♦ < ♥.
+- Bộ được đánh: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2), đôi thông (từ 3 đôi liên tiếp).
+- Chặn bài bằng bộ cùng loại, cùng số lá và lá cao nhất lớn hơn. **Chặt heo:** 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt cả tứ quý.
+- Ván đầu, ai cầm 3♠ đánh trước và phải đánh lá đó; các ván sau người thắng ván trước đánh trước. Bỏ lượt thì không được đánh lại cho tới khi vòng đó kết thúc; mọi người khác đã bỏ thì người đánh cuối được đánh tự do.
+- Bấm vào lá trên tay để chọn (bấm lại để bỏ), **Đánh** khi bộ chọn hợp lệ, **💡 Gợi ý** để tự chọn bộ nhỏ nhất chặn được. Mỗi lượt 25 giây, hết giờ thì tự bỏ lượt (đang đánh tự do thì tự đánh lá nhỏ nhất).
+- Ai hết bài trước thắng ván. Người còn bài trả 10 xu mỗi lá còn lại; chưa đánh được lá nào ("cháy") thì trả gấp đôi. **Thối heo:** còn lá 2 trên tay khi hết ván bị phạt thêm 20 xu mỗi heo đen (♠ ♣), 40 xu mỗi heo đỏ (♦ ♥).
+- **Tới trắng:** vừa chia bài mà có **tứ quý heo**, **sảnh rồng** (đủ 3 → A), **6 đôi** hoặc **5 đôi thông** thì thắng ngay, mỗi người còn lại trả như thua trọn 13 lá (130 xu).
 
 ## Chế độ bắn súng
 
@@ -192,7 +220,7 @@ Mở cùng link như máy tính (ví dụ `http://192.168.1.136:3000`), điện 
 
 Cả 8 nhân vật đều **tự sáng tác**: tên, ngoại hình và chiêu thức chỉ lấy cảm hứng chung từ các hình mẫu quen thuộc (ninja gió, kiếm sĩ lửa, pháp sư băng…), không mô phỏng nhân vật có bản quyền nào.
 
-Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến, bấm vào một dòng chiêu để xem riêng chiêu đó.
+Ở menu, chọn một nhân vật để xem **bảng chỉ số** (máu, sát thương, tầm đánh, khống chế, cơ động) và **xem trước từng chiêu**: khung 3D tự diễn lần lượt 6 chiêu thường rồi biến hình và diễn 6 chiêu dị biến lên một **bia tập**, bấm vào một dòng chiêu để xem riêng chiêu đó. Bia hiện số sát thương và phản ứng đúng như đối thủ trong trận: bị đẩy lùi, bị kéo lại, bị hất tung, choáng, làm chậm. Bấm nút **!** cuối mỗi dòng chiêu để xem mô tả chiêu: chiêu làm gì, cơ chế đặc biệt, sát thương, tầm, hồi chiêu, mana, hiệu ứng khống chế (mô tả tự sinh từ dữ liệu chiêu nên luôn khớp số liệu).
 
 | Nhân vật | Máu | Phong cách | Chiêu nổi bật |
 |---|---|---|---|
@@ -259,7 +287,8 @@ tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 
 ## Kiểm tra khi phát triển
 
-- Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `practice`, `bomb`, `dm`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
+- Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `practice`, `bomb`, `dm`, `xidach`, `tienlen`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
+- Test chế độ đánh bài: `node tests/cards.mjs` (cùng server cổng 3123).
 - Test dị biến và đấu tập: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn, mất khoảng 5 phút).
 - Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).
 - Số phiên bản hiện ở góc dưới menu và trong bảng tạm dừng (Esc). Lịch sử thay đổi theo từng phiên bản ở [CHANGELOG.md](CHANGELOG.md). Nếu thấy dòng chữ đỏ `vX ≠ server vY` thì trình duyệt đang chạy bản cũ: tải lại trang.

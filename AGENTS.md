@@ -52,6 +52,7 @@ server/            Node.js (ESM). 1 cổng duy nhất: HTTP tĩnh + WebSocket �
   index.js         Hub: sảnh chờ, tạo/vào phòng, phục vụ file tĩnh, /api/info, nhịp tim + đo RTT, cờ --port --host --upnp --tunnel
   room.js          Phòng đối kháng (cả đấu đội, đấu tập): mô phỏng chiêu, sát thương, hồi máu/mana; newRoomId() dùng chung cho mọi loại phòng
   shooter.js       Phòng bắn súng: vòng đấu, kinh tế, bom, súng rơi, lựu đạn
+  cards.js         Phòng đánh bài (Xì dách / Tiến lên): chia bài, lượt, tính tiền, bot ngồi ghế trống
   loop.js          Vòng lặp tick theo lịch cố định (xem mục 5)
   upnp.js, tunnel.js  Mở port qua UPnP / tạo link qua Cloudflare Tunnel
 shared/            Code chạy chung cho server và trình duyệt
@@ -62,13 +63,15 @@ shared/            Code chạy chung cho server và trình duyệt
   steer.js         Lái tuyệt kỹ theo tâm ngắm
   weapons.js       Súng, trang bị, lựu đạn, bảng mua đồ, phe, hằng số chế độ bắn súng, độ tản shotSpread()
   maps.js          Map bắn súng, va chạm, raycast, mô phỏng lựu đạn
+  cards.js         Luật bài: bộ bài, điểm Xì dách, bộ / chặn / gợi ý Tiến lên
 client/            Trình duyệt, không có bước build
   index.html, style.css
-  js/main.js       Menu, chọn chế độ/map, chuyển giữa 2 game
+  js/main.js       Menu, chọn chế độ/map, chuyển giữa đối kháng / bắn súng / đánh bài
   js/game.js       Chế độ đối kháng (góc nhìn thứ 3)
   js/effects.js    Particle GPU, shader và hiệu ứng từng loại chiêu
-  js/chibi.js, world.js, ui.js, audio.js, net.js, touch.js
+  js/chibi.js, world.js, ui.js, audio.js, net.js, touch.js, keys.js (gán phím)
   js/shooter/      Chế độ bắn súng: sgame.js, mapview.js, guns.js
+  js/cards/        Chế độ đánh bài: cgame.js (bàn tròn 3D, lá bài vẽ canvas, giao diện HTML)
 tests/             Script kiểm tra bằng WebSocket: shooter-hit.mjs, stress.mjs, awaken.mjs (xem mục 4)
 tools/             cloudflared.exe (không commit), README.txt
 ```
@@ -92,9 +95,10 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
 - Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`. Hiện có `tests/shooter-hit.mjs`: giả lập trễ mạng, kiểm tra server nhận phát bắn hợp lệ (sniper xa, người bắn đang chạy) và từ chối phát gian lận (`node tests/shooter-hit.mjs 3123 150 60` khi server chạy ở cổng 3123).
 - `tests/stress.mjs`: bot ở cả 5 chế độ (gồm đấu tập) vào/ra liên tục, ngắt đột ngột, bot không trả ping, gói rác/thiếu trường/số khổng lồ; đạt khi server không chết, bot ở suốt trận không bị ngắt và không còn phòng sót (`node tests/stress.mjs 3123 60`). Log server cũng phải sạch: dòng `[msg] ...` là một handler đã ném lỗi, cần sửa. Sửa xử lý gói tin ở server hoặc thêm gói/chế độ mới thì chạy lại (thêm gói mới vào `TYPES`/`FIELDS` của script).
+- `tests/cards.mjs`: kiểm tra chế độ đánh bài (Xì dách và Tiến lên với bot, che bài, tính tiền, sang ván). Chạy server ở cổng 3123 rồi `node tests/cards.mjs`.
 - `tests/awaken.mjs`: kiểm tra dị biến (thanh tích, biến hình, nội tại, các kiểu chiêu dị biến, ngắm dọc, cơ chế dị biến v2 của cả 8 nhân vật) và chế độ đấu tập. Mất khoảng 5 phút. Chạy server ở cổng 3123 rồi `node tests/awaken.mjs`; sửa dị biến hay `damage()` thì chạy lại.
-- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm&map=<id map>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn.
-- **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
+- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm|xidach|tienlen&map=<id map>&name=<tên>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn. Người chơi bắt buộc có tên, không có `name` (và chưa lưu tên) thì hiện hộp hỏi tên trước khi vào phòng.
+- **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng, `window.__cards` là chế độ đánh bài.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
 
 ## 5. Kiến trúc mạng: đọc kỹ trước khi sửa
@@ -145,6 +149,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Vùng trên sàn** (`room.zones`, `game.zones` / `fx.zoneList`): `fire` (Homura: đứng vào bị bỏng), `ice` (Yuki: client tự xử lý trơn trượt, server không kiểm tra), `slow` (Thời Băng Giới: `mul` nhân tốc độ chạy ở client và tốc độ đạn của đối phương ở cả server `zoneSlow()` lẫn client `fx.zoneSlow()`). Server gửi gói `zone` một lần khi tạo, client tự xoá khi hết `dur`; người vào giữa chừng nhận trong `joined.zones`.
 - **Đấu tập** (`mode: 'practice'`, `room.practice`): phòng đối kháng có sẵn 2 bia + 1 võ sĩ máy (`spawnPracticeBots()`); gói `pfill` nạp đầy thanh dị biến (chỉ chạy trong phòng đấu tập). `?quick&mode=practice` vào nhanh.
 - **Dị biến v2 đợt 2–3**: Homura (`fireZone`, `passive.fireTrail`, `boomerang`, `ignite`, `passive.revive` xử lý đầu `kill()`, gói `revive`), Kage (`decoy`, blink `swap`, multiblink `dark` → gói `dark`), Yuki (`iceAt`, `iceTrail`, `icewall` là công trình có `shatter`, `timezone`, `passive.iceSpeed`), Raiga (`hold`: client gửi `hold` lúc bắt đầu giữ phím, `cast` kèm `hold` giây; server giới hạn theo lúc nhận gói `hold`, gửi `cast` kèm `hk` 0..1; bản chiêu phóng to lấy qua `holdSkill(s, k)`; `grab`: server điều khiển vị trí nạn nhân trong `stepGrab()`, bỏ qua gói `s` của nạn nhân, gói `grab`), Midori (`turret` là công trình bắn bằng `fireShot()`, gửi `cast` kèm `sub: 'tur'`; `pet` là người chơi giả, khung nhân vật lấy từ `SUMMONS` trong `shared/characters.js`). Gói mới: `zone`, `hold`, `grab`, `revive`, `dark`, `pfill`; `pulse` thêm `flame` / `shadowPop` / `iceBurst` / `slam`; `pleave` có thể kèm `why`.
+- **Đánh bài** (`server/cards.js`, `shared/cards.js`, `client/js/cards/cgame.js`): chế độ `xidach` / `tienlen`, id phòng từ 5000. Server quyết định toàn bộ và gửi trạng thái riêng cho từng người (gói `cs`: chỉ thấy bài của mình, bài người khác chỉ có số lá `n` cho tới khi lật). Client gửi `cbet`, `cready`, `chit`, `cstand` (xì dách), `cplay {cards}`, `cpass` (tiến lên), `cbot {d: ±1}` (thêm / bớt máy, lưu ở `room.botWant`, áp dụng ngay khi `canChangeBots()`, không thì từ ván sau), `char`, `chat`. Phòng mới ở giai đoạn `lobby` (không tự chia): `cready` ở phòng chờ bật / tắt `p.lready`, chủ phòng (`room.hostId`) gửi `cstart` (server kiểm tra `startBlock()`), `cdealer` (xì dách: chủ phòng làm nhà cái, `dealer.pid` = id chủ phòng, ghế `-1`, `p.isDealer`; `chit` / `cstand` của nhà cái đi vào `xdDealerHit/Stand`, tiền nhà cái = âm tổng tiền cả bàn), `cstop` (bật `stopAfter`, hết ván gọi `toLobby()`); server trả `cj` khi vào bàn, `cno` khi nước đi bị từ chối. Lá bài là số 0..51 (`hạng*4 + chất`, hạng theo Tiến lên: 3 … A, 2). Client tự diễn hoạt cảnh (chia, đánh, lật) bằng cách so trạng thái mới với lá bài đang có, nên không cần gói sự kiện riêng. Bot ngồi ghế trống (`rebalance()` đầu mỗi ván, số máy theo `botTarget()`); tới trắng xét ngay khi chia (`tlInstantWin`), thối heo cộng vào tiền trả khi hết ván (`tlHeoFine`); người rời giữa ván Tiến lên thì bot chơi thay. Luật nằm ở `shared/cards.js` để client hiện điểm, kiểm tra bộ chọn và gợi ý giống hệt server; sửa luật thì chạy lại `tests/cards.mjs`.
 - **Đấu đội** dùng chung `server/room.js` với cờ `this.team`. Gói tin có tiền tố `t`: client gửi `tteam`, `tready`, `tstart`; server gửi `tstate` (giai đoạn, chủ phòng, tỉ số, thời gian còn lại, lý do chưa bắt đầu được, danh sách `[id, đội, sẵn sàng, hạ, gục]`). Mọi chỗ chọn mục tiêu (`targets()` ở server, `aimDir`/`steerAim` ở client) phải bỏ qua đồng đội. Ngoài giai đoạn `play`, `damage()` không trừ máu. Bắt đầu/kết thúc trận xoá chiêu đang tồn tại bằng `clearEntities()` (gửi `pend` `k: 0` để client xoá hiệu ứng), đừng gán `this.entities = []`. `teamCounts()` chỉ đếm người thật, không đếm người chơi giả.
 - **Đặt bom:** phe rời hết giữa lúc chờ sang vòng thì `newRound()` gọi `checkWin()` để quay về khởi động; bom nổ gọi `endRound()` trước khi trừ máu (để thưởng đúng phe). Lựu đạn lưu `team` của người ném nên người ném rời phòng rồi thì lựu đạn vẫn không nổ trúng đồng đội của họ.
 
@@ -156,6 +161,15 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Ưu tiên chế độ hoà màu thường. Hạn chế hoà màu cộng sáng (additive) và độ sáng của bloom.
   - Particle ở gần camera phải mờ dần.
   - Chiêu lớn hoặc nhiều chiêu cùng lúc rất dễ làm màn hình trắng xoá. Kiểm tra lại các trường hợp này.
+- **Đồ sộ mà vẫn rõ:** độ hoành tráng lấy từ quy mô và nhịp, không lấy từ ánh sáng trắng.
+  - Nổ tuyệt kỹ dùng `fx.ultImpact(pos, màu, lõi, bán kính)` (cột năng lượng, vết cháy, vết nứt, khói). Client tự gọi qua `ultCue()` ở `game.js` theo kiểu chiêu, khi có gói `boom` bán kính ≥ 4.5, và khi chiêu `leap` lớn đáp xuống.
+  - Khựng hình `game.hitstop(giây)` và giật góc nhìn `game.fovKick(độ)` chỉ làm chậm hiệu ứng / hoạt ảnh, không đụng vật lý hay mạng.
+  - Pha tụ lực tuyệt kỹ làm tối màn hình bằng lớp `#chargeVig`; lúc bung chiêu chớp màu bằng `#chargeFlash`. Hai lớp này cùng `#darkfog` phải nằm dưới HUD.
+  - `fx.flash()` đã tự giới hạn cường độ và số đèn sáng cùng lúc. Đừng tăng lại hay gọi đèn cho từng mảnh nhỏ.
+  - Lõi shader pha màu chính (không trắng thuần); sprite và quả cầu cộng sáng ở gần camera phải mờ.
+  - Kiểm tra chiêu mới bằng cách chụp khung hình đậm nhất ở cả chất lượng cao lẫn thấp: phần màn hình trắng hoàn toàn nên dưới khoảng 10%.
+- **Mô tả chiêu** (nút ! ở màn chọn nhân vật) sinh tự động trong `describeSkill()` ở `client/js/main.js` từ các trường của chiêu; tên gọi hình ảnh lấy theo `fx.kind` (`FX_NOUN`, `FX_DASH`...). Thêm trường hay kiểu chiêu mới thì thêm câu mô tả tương ứng; chiêu có `desc` thì câu đó đứng đầu.
+- **Màn chọn nhân vật** có bia tập (`SUMMONS.dummy`) nhận đòn theo lịch ước lượng `previewHits()` trong `client/js/main.js`. Thêm kiểu chiêu mới thì thêm luôn một nhánh ở `previewHits()` và `pvTargetDist()`.
 - **Shader cần làm nóng trước** (warmup trong `fx.warmup()`) để lần ra chiêu đầu tiên không bị giật khung hình. Thêm material hay shader mới thì đưa vào phần warmup. three.js biên dịch program riêng cho mỗi tổ hợp tham số: `side: DoubleSide`, `transparent`, `MeshToonMaterial` có hay không có `gradientMap` là các program khác nhau, phải có mặt từng loại trong warmup.
 - **Giải phóng bộ nhớ GPU:** `removeFromParent()` chỉ gỡ khỏi cảnh, geometry vẫn nằm trên GPU. Cảnh chơi lâu sẽ tràn bộ nhớ trên điện thoại.
   - Model chibi gỡ bằng `model.dispose()` (`disposeObject()` trong `chibi.js`): dispose geometry và material riêng, bỏ qua material toon cache từ `toon()`, `outlineMat`, `FLASH_MAT`. Đổi dạng dị biến hay đổi nhân vật (cả mô hình xem trước ở menu) cũng phải gọi.
@@ -176,6 +190,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - CSS dùng `touch-action: manipulation` cho cả trang. Riêng canvas và lớp `#touch` dùng `touch-action: none`.
   - Không bỏ các thiết lập này. Menu vẫn phải cuộn được.
 - Mỗi phím mới trên bàn phím phải có nút cảm ứng tương ứng, hoặc có cách khác để làm được việc đó trên điện thoại.
+- **Gán phím** (`client/js/keys.js`): logic game chỉ đọc "phím chuẩn" (`KeyJ`, `Space`, `ShiftLeft`…); phím thật người chơi bấm (kể cả chuột `Mouse0`/`Mouse2`) được dịch qua `translate(mode, code)` ở handler `keydown`/`mousedown`. Thêm phím mới thì khai báo một hành động trong `ACTIONS` (mục `brawl` hoặc `shooter`, có `code` chuẩn và `def` mặc định) rồi xử lý `code` chuẩn đó trong game; đừng đọc thẳng `e.code`. Chữ hiện cho người chơi lấy qua `actionKey()` / `comboKey()` hoặc thẻ `<kbd data-k="mode.id">` (tự điền), không ghi cứng tên phím.
 
 ## 8. Thêm nội dung
 

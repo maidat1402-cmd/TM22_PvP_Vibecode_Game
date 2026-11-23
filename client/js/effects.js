@@ -84,7 +84,8 @@ function energyMat(color, core = 0xffffff, opacity = 1) {
       varying vec3 vN; varying vec3 vV; varying vec3 vP; varying float vD; ${NOISE_GLSL}
       void main(){ float f = 1.0 - abs(dot(normalize(vN), vV));
         float n = fbm(vP.xy*3.0 + vec2(uTime*2.0, -uTime*1.3) + vP.z*2.0);
-        vec3 c = mix(uCore, uColor, smoothstep(0.0, 0.75, f));
+        vec3 core = mix(uCore, uColor, 0.35);   // lõi pha màu chính: chói theo màu chứ không trắng bệch
+        vec3 c = mix(core, uColor, smoothstep(0.0, 0.75, f));
         float a = (0.22 + pow(f, 1.5) * 0.9 + n*0.25) * uOpacity * smoothstep(1.0, 4.5, vD);
         gl_FragColor = vec4(c * (0.85 + n*0.5), a); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -109,7 +110,7 @@ function flowMat(color, core = 0xffffff, opts = {}) {
         float streak = pow(n, 2.0) * 1.6;
         float edge = smoothstep(0.0, uEdge, vUv.y) * smoothstep(1.0, 1.0-uEdge, vUv.y);
         float rim = 1.0 - abs(dot(normalize(vN), vV));
-        vec3 c = mix(uColor, uCore, smoothstep(0.45, 0.95, n));
+        vec3 c = mix(uColor, mix(uCore, uColor, 0.3), smoothstep(0.45, 0.95, n));
         float a = clamp((0.3 + streak) * edge * (0.65 + rim*0.5), 0.0, 1.0) * uOpacity * smoothstep(1.0, 5.0, vD);
         gl_FragColor = vec4(c, a); }`,
     transparent: true, blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false, side: THREE.DoubleSide,
@@ -125,7 +126,7 @@ function arcMat(color, core = 0xffffff) {
       void main(){ float along = vUv.x; float across = vUv.y;
         float tail = smoothstep(uHead-0.9, uHead, along) * step(along, uHead);
         float band = smoothstep(0.0, 0.5, across) * smoothstep(1.0, 0.75, across);
-        vec3 c = mix(uColor, uCore, smoothstep(0.55, 0.9, across));
+        vec3 c = mix(uColor, mix(uCore, uColor, 0.25), smoothstep(0.55, 0.9, across));
         gl_FragColor = vec4(c, tail*band*uOpacity*smoothstep(0.8, 3.0, vD)); }`,
     transparent: true, blending: THREE.NormalBlending, depthWrite: false, side: THREE.DoubleSide,
   });
@@ -181,7 +182,7 @@ class Particles {
       fragmentShader: `varying vec3 vC; varying float vA;
         void main(){ float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard;
           float a = pow(1.0 - d, 1.3); float core = smoothstep(0.5, 0.0, d);
-          gl_FragColor = vec4(mix(vC, vec3(1.0), core * 0.3) * 1.1, a * vA * 0.9); }`,
+          gl_FragColor = vec4(mix(vC, vec3(1.0), core * 0.12) * 1.05, a * vA * 0.9); }`,
       transparent: true, depthWrite: false, blending: THREE.NormalBlending,
     });
     this.points = new THREE.Points(g, this.mat);
@@ -575,10 +576,10 @@ export class FX {
   iceBurst(p, color, r) {
     const P = this.parts;
     this.shockwave(tmpV.set(p.x, 0.05, p.z), color, r * 1.15, 0.6);
-    this.shockwave(tmpV.set(p.x, 0.05, p.z), 0xffffff, r * 0.6, 0.45);
-    for (let i = 0; i < Math.round(14 * this.quality); i++) {
+    this.shockwave(tmpV.set(p.x, 0.05, p.z), 0xbdf0ff, r * 0.6, 0.45);
+    for (let i = 0; i < Math.round(12 * this.quality); i++) {
       const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * r;
-      P.burst(tmpV.set(p.x + Math.cos(a) * rr, 0.6, p.z + Math.sin(a) * rr), 6, Math.random() < 0.5 ? 0xffffff : 0xbdf0ff, { speed: 7, size: 0.35, life: 0.7, up: 1.5, grav: 12 });
+      P.burst(tmpV.set(p.x + Math.cos(a) * rr, 0.6, p.z + Math.sin(a) * rr), 5, Math.random() < 0.25 ? 0xffffff : 0x9bdcff, { speed: 7, size: 0.32, life: 0.7, up: 1.5, grav: 12 });
     }
     this.shake(0.4, p);
   }
@@ -836,11 +837,71 @@ export class FX {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.5);
   }
 
+  // ---------- Tuyệt kỹ: nổ lớn có quy mô ----------
+  // Cột năng lượng cao 9 m (hoà màu thường, không trắng), vết cháy + vết nứt phát sáng nằm lại trên sàn,
+  // khói tối dâng lên, đá vụn bắn tung, 2 lớp sóng xung kích lệch nhịp. Vết cháy tối tạo tương phản để chiêu nổi bật.
+  ultImpact(pos, color, core = color, radius = 4) {
+    const P = this.parts, q = this.quality, R = Math.max(2.5, Math.min(9, radius));
+    const at = new THREE.Vector3(pos.x, 0, pos.z);
+    const fm = flowMat(color, core, { speed: 3.5, sx: 3, sy: 2, edge: 0.06 });
+    const scorchM = new THREE.MeshBasicMaterial({ color: 0x140c08, transparent: true, opacity: 0, depthWrite: false });
+    const crackM = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    let wave2 = false;
+    const e = new FnEffect(this, (dt, el) => {
+      // cột năng lượng vọt lên rồi tan dần
+      const up = Math.min(1, el / 0.18), fade = Math.max(0, 1 - Math.max(0, el - 0.35) / 0.6);
+      column.position.set(at.x, 4.5 * up, at.z);
+      column.scale.set(R * 0.38 * (1 + el * 0.8), 9 * up, R * 0.38 * (1 + el * 0.8));
+      column.rotation.y += dt * 4;
+      fm.uniforms.uOpacity.value = 0.6 * fade;
+      // vết cháy và vết nứt mờ dần sau 3 giây
+      const g = Math.min(1, el * 8), f2 = el > 2.4 ? Math.max(0, (3 - el) / 0.6) : 1;
+      scorchM.opacity = 0.5 * g * f2;
+      crackM.opacity = (0.85 - Math.min(0.5, el * 0.25)) * g * f2;
+      if (!wave2 && el > 0.15) { wave2 = true; this.shockwave(at, color, R * 2.1, 0.7); }
+      // khói tối dâng lên trong 0.8 giây đầu
+      if (el < 0.8 && Math.random() < 0.8 * q) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * R * 0.8;
+        P.emit(at.x + Math.cos(a) * r, 0.4, at.z + Math.sin(a) * r, Math.cos(a) * 0.8, 1.2 + Math.random(), Math.sin(a) * 0.8, Math.random() < 0.5 ? 0x3a3330 : 0x5a504a, 1.3, 1.6, { drag: 0.8, size1: 2 });
+      }
+      return el < 3;
+    });
+    e.mats.push(fm, scorchM, crackM);
+    const column = e.add(new THREE.Mesh(GEO.cylOpen, fm));
+    const scorch = e.add(new THREE.Mesh(GEO.disc, scorchM));
+    scorch.rotation.x = -Math.PI / 2;
+    scorch.position.set(at.x, 0.03, at.z);
+    scorch.scale.setScalar(R * 0.85);
+    scorch.renderOrder = 2;
+    const n = q < 1 ? 6 : 10;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, L = R * (0.5 + Math.random() * 0.6);
+      const c = e.add(new THREE.Mesh(GEO.plane, crackM));
+      c.rotation.set(-Math.PI / 2, 0, -a);
+      c.scale.set(L, 0.09 + Math.random() * 0.06, 1);
+      c.position.set(at.x + Math.cos(a) * L / 2, 0.045, at.z + Math.sin(a) * L / 2);
+      c.renderOrder = 3;
+    }
+    this.shockwave(at, color, R * 1.3, 0.5);
+    P.burst(tmpV.set(at.x, 0.6, at.z), Math.round(36 * q), 0x6b5444, { speed: R * 3.2, size: 0.5, life: 1, up: 1.6, grav: 14 });
+    P.burst(tmpV.set(at.x, 1, at.z), Math.round(30 * q), color, { speed: R * 2.4, size: 0.55, life: 0.7, drag: 2 });
+    this.dust(at, 30);
+    this.shake(0.55 + R * 0.05, at);
+    return this.add(e);
+  }
+
+  // Đèn chớp. Sàn tô toon + bloom rất dễ trắng xoá khi đèn mạnh đặt sát sàn hoặc nhiều đèn sáng cùng lúc:
+  // giảm cường độ (tối đa 14), đặt đèn cao ít nhất 2.5 m, đã có đèn đang sáng thì đèn mới yếu đi, có từ 2 đèn thì bỏ đèn nhỏ
   flash(p, color, intensity = 30, dur = 0.3) {
+    let active = 0;
+    for (const l of this.lights) if (l.userData.life > 0) active++;
+    const k = Math.min(14, intensity * 0.35);
+    if (active >= 2 && k < 8) return;
     const L = this.lights[this.lightIdx++ % this.lights.length];
     L.position.copy(p);
+    L.position.y = Math.max(p.y, 2.5);
     L.color.set(color);
-    L.userData.peak = intensity; L.userData.life = dur; L.userData.dur = dur;
+    L.userData.peak = k / (1 + active * 0.6); L.userData.life = dur; L.userData.dur = dur;
   }
 
   shake(amount, from) {
@@ -930,15 +991,16 @@ export class FX {
     const e = new FnEffect(this, (dt, el) => {
       const f = el / 0.55;
       ball.scale.setScalar(radius * (0.25 + 0.7 * Math.pow(Math.min(1, f), 0.4)));
-      m1.uniforms.uOpacity.value = Math.max(0, 0.6 - f * 0.8);
-      fl.material.opacity = Math.max(0, 0.75 - f * 1.4);
-      fl.scale.setScalar(radius * 2.6 * (1 + f));
+      // cầu nổ cộng sáng: mờ để vụ nổ lớn không trắng xoá (nổ càng to càng mờ, vì dễ phủ kín màn hình)
+      m1.uniforms.uOpacity.value = Math.max(0, 0.32 - f * 0.45) * Math.min(1, 3 / radius);
+      fl.material.opacity = Math.max(0, 0.4 - f * 0.8);
+      fl.scale.setScalar(Math.min(9, radius * 1.8) * (1 + f * 0.6));
       return f < 1;
     });
     e.mats.push(m1);
     const ball = e.add(new THREE.Mesh(GEO.sphere, m1));
     ball.position.copy(p);
-    const fl = e.add(sprite(color, radius * 5));
+    const fl = e.add(sprite(color, Math.min(9, radius * 1.8)));
     e.mats.push(fl.material);
     fl.position.copy(p);
     this.add(e);
@@ -953,12 +1015,12 @@ export class FX {
     p = p.clone();
     const P = this.parts;
     P.burst(p, big ? 28 : 16, color, { speed: big ? 10 : 7, size: 0.32, life: 0.35, drag: 4 });
-    P.burst(p, 6, 0xffffff, { speed: 4, size: 0.5, life: 0.18, drag: 5 });
-    const s = sprite(color, big ? 2.6 : 1.8);
+    P.burst(p, 4, 0xffffff, { speed: 4, size: 0.4, life: 0.18, drag: 5 });
+    const s = sprite(color, big ? 2 : 1.4);
     s.position.copy(p);
     const e = new FnEffect(this, (dt, el) => {
-      s.material.opacity = 1 - el / 0.18;
-      s.scale.setScalar((big ? 2.6 : 1.8) * (1 + el * 4));
+      s.material.opacity = 0.55 * (1 - el / 0.18);
+      s.scale.setScalar((big ? 2 : 1.4) * (1 + el * 3));
       return el < 0.18;
     });
     e.add(s); e.mats.push(s.material);
@@ -1014,7 +1076,7 @@ export class FX {
 
   deathBurst(p, color) {
     this.explosion(tmpV.set(p.x, p.y + 0.8, p.z), color, 2);
-    this.parts.burst(tmpV.set(p.x, p.y + 0.8, p.z), 40, 0xffffff, { speed: 5, size: 0.3, life: 1.2, up: 1, drag: 1, grav: -1 });
+    this.parts.burst(tmpV.set(p.x, p.y + 0.8, p.z), 18, 0xe8e8ff, { speed: 5, size: 0.3, life: 1.2, up: 1, drag: 1, grav: -1 });
   }
 
   // =========================================================
@@ -1026,6 +1088,8 @@ export class FX {
     if (s.mana >= 25) this.magicCircle(() => ctx.caster.pos(), s.fx.color, s.lock + 0.2, s.mana >= 55 ? 3.4 : 2.4);
     // tuyệt kỹ dị biến: tụ lực lâu với hiệu ứng tích lũy lớn
     if (s.bigCharge) this.chargeUp(() => ctx.caster.pos(), s.fx.color, s.fx.core || 0xffffff, s.delay);
+    // tuyệt kỹ thường cũng có pha tụ lực (ngắn hơn) để cú bung có đà
+    else if (s.combo === 'JKL' && s.delay >= 0.3) this.chargeUp(() => ctx.caster.pos(), s.fx.color, s.fx.core || 0xffffff, s.delay);
     const build = SKILL_FX[s.type];
     if (!build) return null;
     // chiêu cuối điều hướng theo tâm: trạng thái chung, game.js cập nhật st.aim
@@ -1267,13 +1331,14 @@ const SKILL_FX = {
         g.add(body, sprite(color, s.radius * 3, 0.6));
       } else {
         const big = kind === 'bigBomb';
-        const em = e.mat(energyMat(s.fx.color, s.fx.core));
+        // quả cầu lớn (Tinh Cầu Hủy Diệt) ở gần camera: cộng sáng nhẹ tay để không trắng xoá
+        const em = e.mat(energyMat(s.fx.color, s.fx.core, big ? 0.55 : 1));
         body = new THREE.Mesh(GEO.sphere, em);
         body.scale.setScalar(s.radius * (big ? 1 : 0.8));
-        g.add(body, sprite(color, s.radius * (big ? 2.4 : 3.2), big ? 0.45 : 0.7));
+        g.add(body, sprite(color, s.radius * (big ? 2 : 3.2), big ? 0.28 : 0.7));
         if (big) {
           for (let r = 0; r < 3; r++) {
-            const rm = e.mat(new THREE.MeshBasicMaterial({ color: core, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+            const rm = e.mat(new THREE.MeshBasicMaterial({ color: core, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }));
             const ring = new THREE.Mesh(GEO.torus, rm);
             ring.scale.setScalar(s.radius * 1.35);
             ring.rotation.set(Math.random() * 3, Math.random() * 3, 0);
@@ -1578,7 +1643,7 @@ const SKILL_FX = {
             const hp = tmpV.set(p.x + h.x * (1 + Math.random()) - h.z * ox, p.y + oy, p.z + h.z * (1 + Math.random()) + h.x * ox);
             P.emit(hp.x, hp.y, hp.z, h.x * 6, 0, h.z * 6, Math.random() < 0.4 ? core : color, big ? 0.9 : 0.6, 0.18, { drag: 6 });
           }
-          if (moving && Math.random() < 0.35) fx.hitSpark(tmpV2.set(p.x + h.x * 1.6, p.y + 1, p.z + h.z * 1.6), s.fx.color, big);
+          if (moving && Math.random() < 0.12) fx.hitSpark(tmpV2.set(p.x + h.x * 1.6, p.y + 1, p.z + h.z * 1.6), s.fx.color, false);
         }
         if (tf > s.dur) {
           if (!e.state) { e.state = 1; fx.shockwave(p, color, big ? 5 : 3); }
@@ -1794,6 +1859,7 @@ const SKILL_FX = {
         fx.flash(tmpV.set(to.x, 2, to.z), s.fx.color, 30, 0.4);
         fx.shake(big ? 0.9 : 0.6, to);
         if (W) fx.stoneWalls(to.clone(), W, ctx.seed);
+        if (s.combo === 'JKL' || s.radius >= 5) fx.ultImpact(to, s.fx.color, s.fx.core || s.fx.color, s.radius);
       }
       return !landed || el < land + 0.1;
     };

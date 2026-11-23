@@ -570,6 +570,37 @@ function buildForm(look, rig) {
       }
       break;
     }
+    case 'dummy': {
+      // bia tập: hồng tâm đỏ trắng trước ngực và sau lưng, búi rơm trên đầu và vai, dây buộc
+      const red = toon(fc), white = toon(core), straw = toon(0xe9c46a), rope = toon(0x7f5539);
+      for (const sz of [1, -1]) {
+        const g = new THREE.Group();
+        g.position.set(0, 0.68, 0.27 * sz);
+        if (sz < 0) g.rotation.y = Math.PI;
+        [[0.24, red], [0.17, white], [0.1, red], [0.04, white]].forEach(([r, m], i) => {
+          const d = new THREE.Mesh(new THREE.CircleGeometry(r, 20), m);
+          d.position.z = 0.004 * i;
+          g.add(d);
+        });
+        body.add(g);
+      }
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const tuft = mesh(G.cone(0.05, 0.28, 5), straw, 0.012);
+        tuft.position.set(Math.cos(a) * 0.18, 0.5, Math.sin(a) * 0.18);
+        tuft.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6);
+        head.add(tuft);
+      }
+      for (const sx of [-1, 1]) {
+        const tuft = mesh(G.cone(0.06, 0.25, 5), straw, 0.012);
+        tuft.position.set(sx * 0.34, 0.98, 0); tuft.rotation.z = -sx * 1.2;
+        body.add(tuft);
+      }
+      const band = mesh(G.torus(0.33, 0.025), rope, 0);
+      band.rotation.x = Math.PI / 2; band.position.y = 0.95;
+      body.add(band);
+      break;
+    }
     case 'treant': {
       // người cây Mộc Thần (vật triệu hồi của Midori): cành cây mọc từ vai và đầu, tán lá, rêu, mắt phát sáng
       const bark = toon(0x6b4f3a), bark2 = toon(0x4a3426), leaf = toon(0x40916c), leaf2 = toon(0x74c69d), moss = toon(0x588157);
