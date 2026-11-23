@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
+import { CardRoom } from './cards.js';
 import { getChar } from '../shared/characters.js';
 import { VERSION } from '../shared/version.js';
 
@@ -97,9 +98,11 @@ class Hub {
         case 'create': {
           this.leaveRoom(c);
           const name = String(m.name || '').replace(/[<>]/g, '').slice(0, 24).trim() || `Phòng của ${c.name}`;
-          const mode = ['bomb', 'dm', 'team', 'practice'].includes(m.mode) ? m.mode : 'brawl';
+          const mode = ['bomb', 'dm', 'team', 'practice', 'xidach', 'tienlen'].includes(m.mode) ? m.mode : 'brawl';
           // đấu tập: phòng đối kháng có bia tập + võ sĩ máy (chơi một mình vẫn tích được thanh dị biến)
-          const r = mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(name, this, String(m.map || ''), mode === 'team', mode === 'practice')
+          // đánh bài: bàn tròn Xì dách / Tiến lên
+          const r = mode === 'xidach' || mode === 'tienlen' ? new CardRoom(name, this, mode)
+            : mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(name, this, String(m.map || ''), mode === 'team', mode === 'practice')
             : new ShooterRoom(name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
           if (m.char) c.char = getChar(m.char).id;

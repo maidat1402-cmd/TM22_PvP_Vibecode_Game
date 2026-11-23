@@ -52,6 +52,7 @@ server/            Node.js (ESM). 1 cổng duy nhất: HTTP tĩnh + WebSocket �
   index.js         Hub: sảnh chờ, tạo/vào phòng, phục vụ file tĩnh, /api/info, cờ --port --host --upnp --tunnel
   room.js          Phòng đối kháng (cả đấu đội: phòng chờ → trận → kết quả): mô phỏng chiêu, sát thương, hồi máu/mana
   shooter.js       Phòng bắn súng: vòng đấu, kinh tế, bom, súng rơi, lựu đạn
+  cards.js         Phòng đánh bài (Xì dách / Tiến lên): chia bài, lượt, tính tiền, bot ngồi ghế trống
   loop.js          Vòng lặp tick theo lịch cố định (xem mục 5)
   upnp.js, tunnel.js  Mở port qua UPnP / tạo link qua Cloudflare Tunnel
 shared/            Code chạy chung cho server và trình duyệt
@@ -62,6 +63,7 @@ shared/            Code chạy chung cho server và trình duyệt
   steer.js         Lái tuyệt kỹ theo tâm ngắm
   weapons.js       Súng, trang bị, lựu đạn, bảng mua đồ, phe, hằng số chế độ bắn súng
   maps.js          Map bắn súng, va chạm, raycast, mô phỏng lựu đạn
+  cards.js         Luật bài: bộ bài, điểm Xì dách, bộ / chặn / gợi ý Tiến lên
 client/            Trình duyệt, không có bước build
   index.html, style.css
   js/main.js       Menu, chọn chế độ/map, chuyển giữa 2 game
@@ -69,6 +71,7 @@ client/            Trình duyệt, không có bước build
   js/effects.js    Particle GPU, shader và hiệu ứng từng loại chiêu
   js/chibi.js, world.js, ui.js, audio.js, net.js, touch.js
   js/shooter/      Chế độ bắn súng: sgame.js, mapview.js, guns.js
+  js/cards/        Chế độ đánh bài: cgame.js (bàn tròn 3D, lá bài vẽ canvas, giao diện HTML)
 tools/             cloudflared.exe (không commit), README.txt
 ```
 
@@ -90,8 +93,9 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   2. Chạy server và mở 2 tab trình duyệt vào cùng phòng, xem cả 2 người chơi có thấy nhau, đánh hay bắn trúng nhau không.
   3. Sửa giao diện cảm ứng thì thử ở chế độ giả lập điện thoại trong DevTools, cả màn hình ngang lẫn dọc.
 - Viết script test dùng WebSocket (Node ≥ 22 có sẵn `WebSocket`) để giả lập nhiều người chơi khi sửa logic server. Nếu đáng giữ lại, đặt script vào thư mục `tests/`.
+- `tests/cards.mjs`: kiểm tra chế độ đánh bài (Xì dách và Tiến lên với bot, che bài, tính tiền, sang ván). Chạy server ở cổng 3123 rồi `node tests/cards.mjs`.
 - `tests/awaken.mjs`: kiểm tra dị biến (thanh tích, biến hình, nội tại, các kiểu chiêu dị biến, ngắm dọc, cơ chế dị biến v2 của cả 8 nhân vật) và chế độ đấu tập. Mất khoảng 5 phút. Chạy server ở cổng 3123 rồi `node tests/awaken.mjs`; sửa dị biến hay `damage()` thì chạy lại.
-- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm&map=<id map>&name=<tên>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn. Người chơi bắt buộc có tên, không có `name` (và chưa lưu tên) thì hiện hộp hỏi tên trước khi vào phòng.
+- **Mở nhanh để test:** `/?quick&mode=brawl|practice|bomb|dm|xidach|tienlen&map=<id map>&name=<tên>` (đối kháng: `shrine`, `tournament`, `wasteland`, `village`; bắn súng: `lantern`, `temple`) vào thẳng phòng có map đó, chưa có thì tạo mới, `/?room=<ID>` vào phòng có sẵn. Người chơi bắt buộc có tên, không có `name` (và chưa lưu tên) thì hiện hộp hỏi tên trước khi vào phòng.
 - **Gỡ lỗi trong console:** `window.__game` là chế độ đối kháng, `window.__shooter` là chế độ bắn súng.
 - File client được phục vụ với `no-cache`. Sửa client chỉ cần tải lại trang. Sửa `server/` hoặc `shared/` thì phải khởi động lại server.
 
@@ -130,6 +134,7 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
 - **Vùng trên sàn** (`room.zones`, `game.zones` / `fx.zoneList`): `fire` (Homura: đứng vào bị bỏng), `ice` (Yuki: client tự xử lý trơn trượt, server không kiểm tra), `slow` (Thời Băng Giới: `mul` nhân tốc độ chạy ở client và tốc độ đạn của đối phương ở cả server `zoneSlow()` lẫn client `fx.zoneSlow()`). Server gửi gói `zone` một lần khi tạo, client tự xoá khi hết `dur`; người vào giữa chừng nhận trong `joined.zones`.
 - **Đấu tập** (`mode: 'practice'`, `room.practice`): phòng đối kháng có sẵn 2 bia + 1 võ sĩ máy (`spawnPracticeBots()`); gói `pfill` nạp đầy thanh dị biến (chỉ chạy trong phòng đấu tập). `?quick&mode=practice` vào nhanh.
 - **Dị biến v2 đợt 2–3**: Homura (`fireZone`, `passive.fireTrail`, `boomerang`, `ignite`, `passive.revive` xử lý đầu `kill()`, gói `revive`), Kage (`decoy`, blink `swap`, multiblink `dark` → gói `dark`), Yuki (`iceAt`, `iceTrail`, `icewall` là công trình có `shatter`, `timezone`, `passive.iceSpeed`), Raiga (`hold`: client gửi `hold` lúc bắt đầu giữ phím, `cast` kèm `hold` giây; server giới hạn theo lúc nhận gói `hold`, gửi `cast` kèm `hk` 0..1; bản chiêu phóng to lấy qua `holdSkill(s, k)`; `grab`: server điều khiển vị trí nạn nhân trong `stepGrab()`, bỏ qua gói `s` của nạn nhân, gói `grab`), Midori (`turret` là công trình bắn bằng `fireShot()`, gửi `cast` kèm `sub: 'tur'`; `pet` là người chơi giả, khung nhân vật lấy từ `SUMMONS` trong `shared/characters.js`). Gói mới: `zone`, `hold`, `grab`, `revive`, `dark`, `pfill`; `pulse` thêm `flame` / `shadowPop` / `iceBurst` / `slam`; `pleave` có thể kèm `why`.
+- **Đánh bài** (`server/cards.js`, `shared/cards.js`, `client/js/cards/cgame.js`): chế độ `xidach` / `tienlen`, id phòng từ 5000. Server quyết định toàn bộ và gửi trạng thái riêng cho từng người (gói `cs`: chỉ thấy bài của mình, bài người khác chỉ có số lá `n` cho tới khi lật). Client gửi `cbet`, `cready`, `chit`, `cstand` (xì dách), `cplay {cards}`, `cpass` (tiến lên), `char`, `chat`; server trả `cj` khi vào bàn, `cno` khi nước đi bị từ chối. Lá bài là số 0..51 (`hạng*4 + chất`, hạng theo Tiến lên: 3 … A, 2). Client tự diễn hoạt cảnh (chia, đánh, lật) bằng cách so trạng thái mới với lá bài đang có, nên không cần gói sự kiện riêng. Bot ngồi ghế trống (`rebalance()` đầu mỗi ván); người rời giữa ván Tiến lên thì bot chơi thay. Luật nằm ở `shared/cards.js` để client hiện điểm, kiểm tra bộ chọn và gợi ý giống hệt server; sửa luật thì chạy lại `tests/cards.mjs`.
 - **Đấu đội** dùng chung `server/room.js` với cờ `this.team`. Gói tin có tiền tố `t`: client gửi `tteam`, `tready`, `tstart`; server gửi `tstate` (giai đoạn, chủ phòng, tỉ số, thời gian còn lại, lý do chưa bắt đầu được, danh sách `[id, đội, sẵn sàng, hạ, gục]`). Mọi chỗ chọn mục tiêu (`targets()` ở server, `aimDir`/`steerAim` ở client) phải bỏ qua đồng đội. Ngoài giai đoạn `play`, `damage()` không trừ máu.
 
 ## 6. Đồ hoạ và hiệu ứng

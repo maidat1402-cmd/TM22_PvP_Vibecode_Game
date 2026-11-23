@@ -10,6 +10,7 @@ import { buildChibi, ANIM } from './chibi.js';
 import { $, hex, esc, lockPointer } from './ui.js';
 import { initAudio, sfx, setVolume } from './audio.js';
 import { ShooterGame } from './shooter/sgame.js';
+import { CardGame } from './cards/cgame.js';
 import { TouchControls, isTouchDevice } from './touch.js';
 
 // ---------- Cài đặt (lưu localStorage nếu được) ----------
@@ -37,6 +38,8 @@ const game = new Game(net, settings);
 const shooter = new ShooterGame(net, settings, game.renderer, game.hud);
 window.__game = game; // tiện debug trong DevTools
 window.__shooter = shooter;
+const cards = new CardGame(net, settings, game.renderer, game.hud);   // đánh bài quanh bàn tròn
+window.__cards = cards;
 let inGame = false;
 let current = null;   // game đang chơi: game | shooter
 
@@ -45,9 +48,9 @@ const touch = new TouchControls();
 game.touch = shooter.touch = touch;
 function applyTouch() {
   const on = settings.touch === 'on' || (settings.touch === 'auto' && IS_TOUCH);
-  touch.setEnabled(on && inGame);
+  touch.setEnabled(on && inGame && current !== cards);   // đánh bài: chỉ dùng nút HTML, không cần joystick
   touch.sens = settings.sens;
-  if (on && inGame) (current === shooter ? shooter : game).setupTouch();
+  if (on && inGame && current !== cards) (current === shooter ? shooter : game).setupTouch();
 }
 function goFullscreen() {
   if (!IS_TOUCH) return;
@@ -651,7 +654,7 @@ function renderRooms(list) {
   for (const r of list) {
     const d = document.createElement('div');
     d.className = 'room';
-    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
+    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử', xidach: '🃏 Xì dách', tienlen: '🂡 Tiến lên' }[r.mode || 'brawl']
       + (r.mode === 'team' ? (r.phase === 'lobby' ? ' · đang chờ' : ' · đang đấu') : '');
     d.innerHTML = `<div><b>${esc(r.name)}</b><span class="mtag ${r.mode}">${tag}</span><small>${r.mapName ? esc(r.mapName) + ' · ' : ''}${r.count} người chơi · không giới hạn</small></div>`;
     const b = document.createElement('button');
@@ -723,8 +726,9 @@ net.on('rooms', m => {
 net.on('joined', m => {
   inGame = true;
   current = game;
-  shooter.setMenuMap(null);
+  shooter.setMenuMap(null); cards.setMenuBg(false);
   if (shooter.active) shooter.leave();
+  if (cards.active) cards.leave();
   game.suspended = false;
   $('menu').hidden = true;
   game.enter(m);
@@ -733,6 +737,8 @@ net.on('joined', m => {
 net.on('sj', m => {
   inGame = true;
   current = shooter;
+  cards.setMenuBg(false);
+  if (cards.active) cards.leave();
   if (game.active) game.leave();
   game.suspended = true;     // tạm dừng render chế độ đối kháng, dùng chung canvas
   $('menu').hidden = true;
@@ -741,10 +747,22 @@ net.on('sj', m => {
   afterJoin();
   if (!touch.enabled) shooter.centerMsg('Click để điều khiển · B để mua đồ', '', 3);
 });
+// vào bàn bài
+net.on('cj', m => {
+  inGame = true;
+  current = cards;
+  shooter.setMenuMap(null);
+  if (game.active) game.leave();
+  if (shooter.active) shooter.leave();
+  game.suspended = true;     // dùng chung canvas với cảnh bàn bài
+  $('menu').hidden = true;
+  cards.enter(m);
+  afterJoin();
+});
 function afterJoin() {
   document.body.classList.add('ingame');
   applyTouch();
-  $('clickToPlay').hidden = touch.enabled;
+  $('clickToPlay').hidden = touch.enabled || current === cards;
   $('changeCharBtn').hidden = current === shooter;
   $('switchTeamBtn').hidden = !(current === shooter && shooter.mode === 'bomb');
 }
@@ -787,10 +805,33 @@ for (const r of document.querySelectorAll('input[name=mode]')) {
   r.checked = r.value === settings.mode;
   r.onchange = () => { showMapPick(r.value); updateMenuBg(); };
 }
+// Danh mục chế độ: chỉ hiện các chế độ trong danh mục đang chọn
+const MODE_CAT = { brawl: 'skill', team: 'skill', practice: 'skill', bomb: 'gun', dm: 'gun', xidach: 'card', tienlen: 'card' };
+const CARD_MODES = ['xidach', 'tienlen'];
+function showCat(cat, pickFirst) {
+  for (const b of document.querySelectorAll('#modeCats .btn')) b.classList.toggle('on', b.dataset.cat === cat);
+  for (const l of document.querySelectorAll('#modeSelect label')) l.hidden = l.dataset.cat !== cat;
+  const cur = document.querySelector('input[name=mode]:checked');
+  if (pickFirst || !cur || MODE_CAT[cur.value] !== cat) {
+    const first = document.querySelector(`#modeSelect label[data-cat="${cat}"] input`);
+    first.checked = true;
+    showMapPick(first.value); updateMenuBg();
+  }
+}
+for (const b of document.querySelectorAll('#modeCats .btn')) b.onclick = () => { sfx('ui'); showCat(b.dataset.cat, true); };
+if (!document.querySelector('input[name=mode]:checked')) document.querySelector('input[name=mode]').checked = true;
 // Nền menu đổi theo chế độ và map đang chọn: map đối kháng dựng bằng cảnh đối kháng, map bắn súng bằng cảnh bắn súng
 function updateMenuBg() {
   if (inGame) return;
   const mode = document.querySelector('input[name=mode]:checked')?.value || 'brawl';
+  if (CARD_MODES.includes(mode)) {
+    // đánh bài: nền là bàn bài với vài nhân vật ngồi quanh
+    shooter.setMenuMap(null);
+    game.suspended = true;
+    cards.setMenuBg(true);
+    return;
+  }
+  cards.setMenuBg(false);
   if (['brawl', 'team', 'practice'].includes(mode)) {
     shooter.setMenuMap(null);
     game.suspended = false;
@@ -804,26 +845,27 @@ for (const r of document.querySelectorAll('input[name=arena], input[name=map]'))
 // chỉ hiện ô chọn map của chế độ đang chọn
 function showMapPick(mode) {
   const brawlLike = mode === 'brawl' || mode === 'team' || mode === 'practice';
-  $('mapPick').classList.toggle('off', brawlLike);
+  $('mapPick').classList.toggle('off', brawlLike || CARD_MODES.includes(mode));   // đánh bài: không chọn map
   $('arenaPick').classList.toggle('off', !brawlLike);
 }
 for (const r of document.querySelectorAll('input[name=map]')) r.checked = r.value === (settings.map || 'lantern');
 for (const r of document.querySelectorAll('input[name=arena]')) r.checked = r.value === (settings.arena || 'shrine');
 showMapPick(settings.mode || 'brawl');
+showCat(MODE_CAT[document.querySelector('input[name=mode]:checked').value] || 'skill');
 updateMenuBg();
 $('refreshBtn').onclick = () => { net.send({ t: 'list' }); loadServerInfo(); };
 $('nameInput').value = settings.name;
 $('nameInput').onchange = sendHello;
 
 // ---------- Tạm dừng ----------
-game.onUnlock = shooter.onUnlock = () => {
+game.onUnlock = shooter.onUnlock = cards.onUnlock = () => {
   if ($('settings').hidden && $('keybinds').hidden && $('charModal').hidden && $('help').hidden && $('teamLobby').hidden) $('pause').hidden = false;
 };
-$('resumeBtn').onclick = () => { $('pause').hidden = true; if (!touch.enabled) lockPointer(); };
+$('resumeBtn').onclick = () => { $('pause').hidden = true; if (!touch.enabled && current !== cards) lockPointer(); };
 $('leaveBtn').onclick = () => {
   $('pause').hidden = true;
   net.send({ t: 'leave' });
-  if (current === shooter) shooter.leave(); else game.leave();
+  if (current === shooter) shooter.leave(); else if (current === cards) cards.leave(); else game.leave();
   game.suspended = false;
   current = null;
   inGame = false;
@@ -837,7 +879,7 @@ $('leaveBtn').onclick = () => {
 };
 // đấu tập: nạp đầy thanh dị biến rồi quay lại trận
 $('fillAwkBtn').onclick = () => { game.net.send({ t: 'pfill' }); sfx('ui'); $('resumeBtn').click(); };
-$('inviteBtn').onclick = () => copy(`${window.__inviteUrl || location.origin}/?room=${current === shooter ? shooter.roomId : game.roomId}`);
+$('inviteBtn').onclick = () => copy(`${window.__inviteUrl || location.origin}/?room=${(current === shooter ? shooter : current === cards ? cards : game).roomId}`);
 $('switchTeamBtn').onclick = () => { shooter.switchTeam(); $('pause').hidden = true; };
 $('fullscreenBtn').onclick = () => {
   const el = document.documentElement;

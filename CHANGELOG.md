@@ -2,7 +2,16 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.9.0 (2026-11-23)
+## 0.10.0 (2026-11-23)
+
+- Menu "Vào phòng" chia chế độ theo danh mục: ⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài.
+- Chế độ **đánh bài** mới: các nhân vật ngồi quanh bàn tròn 3D, lá bài (vẽ bằng canvas) được chia, đánh ra và nằm trên bàn.
+  - **Xì dách**: đấu nhà cái, đặt cược, rút / dằn (đủ 16 điểm), xì bàng, xì dách, ngũ linh, quắc.
+  - **Tiến lên miền Nam**: 4 người, rác / đôi / sám / tứ quý / sảnh / đôi thông, chặt heo, lượt đầu có 3♠, gợi ý nước đi, trả tiền theo lá còn lại (cháy ×2).
+  - Bot tự ngồi ghế trống và chơi thay người rời bàn; chơi được trên điện thoại (nút bấm, màn dọc).
+- Thêm `tests/cards.mjs`.
+
+## 0.9.0 (2026-11-23) · `9936d83`
 
 - Chiêu thức rõ và đã mắt hơn:
   - Khựng hình 50–100 ms khi trúng đòn mạnh (mình đánh hoặc bị đánh), góc nhìn camera rộng ra thoáng chốc khi bung tuyệt kỹ / nổ lớn.

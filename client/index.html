@@ -48,12 +48,20 @@
 
       <section class="panel" id="roomPanel">
         <h2>2. Vào phòng</h2>
+        <!-- danh mục chế độ: chiêu thức / bắn súng / đánh bài -->
+        <div class="mode-cats" id="modeCats">
+          <button class="btn small" data-cat="skill">⚔ Chiêu thức</button>
+          <button class="btn small" data-cat="gun">🔫 Bắn súng</button>
+          <button class="btn small" data-cat="card">🃏 Đánh bài</button>
+        </div>
         <div class="modes" id="modeSelect">
-          <label><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, ai cũng là đối thủ</small></span></label>
-          <label><input type="radio" name="mode" value="team"><span>👥 Đấu đội<small>Chiêu thức, chia 2 đội</small></span></label>
-          <label><input type="radio" name="mode" value="practice"><span>🎯 Đấu tập<small>Một mình với bia tập + võ sĩ máy</small></span></label>
-          <label><input type="radio" name="mode" value="bomb"><span>💣 Đặt bom<small>Bắn súng 2 phe, theo vòng</small></span></label>
-          <label><input type="radio" name="mode" value="dm"><span>🔫 Sinh tử<small>Bắn súng tự do, hồi sinh nhanh</small></span></label>
+          <label data-cat="skill"><input type="radio" name="mode" value="brawl" checked><span>⚔ Đối kháng<small>Chiêu thức, ai cũng là đối thủ</small></span></label>
+          <label data-cat="skill"><input type="radio" name="mode" value="team"><span>👥 Đấu đội<small>Chiêu thức, chia 2 đội</small></span></label>
+          <label data-cat="skill"><input type="radio" name="mode" value="practice"><span>🎯 Đấu tập<small>Một mình với bia tập + võ sĩ máy</small></span></label>
+          <label data-cat="gun"><input type="radio" name="mode" value="bomb"><span>💣 Đặt bom<small>Bắn súng 2 phe, theo vòng</small></span></label>
+          <label data-cat="gun"><input type="radio" name="mode" value="dm"><span>🔫 Sinh tử<small>Bắn súng tự do, hồi sinh nhanh</small></span></label>
+          <label data-cat="card"><input type="radio" name="mode" value="xidach"><span>🃏 Xì dách<small>Đấu nhà cái, ai gần 21 điểm nhất</small></span></label>
+          <label data-cat="card"><input type="radio" name="mode" value="tienlen"><span>🂡 Tiến lên<small>4 người, ai hết bài trước thắng</small></span></label>
         </div>
         <div class="map-pick" id="arenaPick">
           <span>Map đối kháng:</span>
