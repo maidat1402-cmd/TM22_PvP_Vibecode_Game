@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.15.0 (2026-11-23)
+## 0.15.0 (2026-11-23) · `02330d4`
 
 - Nhà cái Xì dách có thể mở từng ghế, chốt kết quả theo điểm lúc mở rồi rút thêm trước khi so với ghế khác.
 
