@@ -2,6 +2,21 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.8.1 (2026-11-23)
+
+- Bắn súng: đạn không còn tản loạn và tia đạn không lệch khi đang di chuyển; đi bộ (Shift) gần như không bị phạt độ tản.
+- Sniper: phát thứ 2 trở đi không còn bay cao hơn tâm scope; server bù trễ theo ping (đo bằng ping/pong WebSocket) nên bắn trúng mục tiêu đang chạy khi mạng chậm, vẫn từ chối phát gian lận.
+- Bắn súng không còn đứng hình khi biển tên đồng đội/đối thủ hiện ra.
+- Server không còn văng (mọi người bị out) vì đường dẫn hay gói tin dị dạng; trùng id phòng sau khoảng 1000 phòng.
+- Chặn gói tin gian lận: máu thành NaN, tự hiện "đã chết", spam né để bất tử, chọn Mộc Thần làm nhân vật.
+- "Kết nối lại" sau khi rớt mạng đưa vào lại đúng phòng đang chơi; nhịp tim đo RTT chính xác hơn.
+- Rò rỉ bộ nhớ GPU (nhân vật, súng, lựu đạn, map, hiệu ứng, đổi dạng dị biến); hiệu ứng và tia đạn dồn khi tab bị ẩn. Tab ẩn không còn làm mất cột đá, tường, vùng sàn của đối thủ.
+- Đặt bom: một phe rời lúc chờ sang vòng thì về khởi động; thưởng nổ bom đúng phe; lựu đạn không nổ trúng đồng đội khi người ném đã rời.
+- Đấu đội: chiêu còn sót được xoá khi bắt đầu/kết thúc trận; phân thân/người cây không tính là người của đội.
+- Kẹt trạng thái ở client: chat trên điện thoại, xem người đã rời, nạp đạn, scope, bảng điểm; huỷ lướt/nhảy khi server từ chối chiêu.
+- Cảm ứng: độ nhạy xoay camera không còn bị bình phương, đối kháng áp dụng đảo trục dọc. iPhone: có lại âm thanh sau cuộc gọi/chuyển app.
+- Bớt tải GPU/DOM mỗi khung hình; làm nóng shader vòng phép 2 mặt và đá (cột đá, cọc sét) để lần dùng đầu không khựng.
+
 ## 0.8.0 (2026-11-20)
 
 - Chế độ **Đấu tập**: phòng có sẵn 2 bia tập + 1 võ sĩ máy, phím `P` (menu ☰ trên điện thoại) nạp đầy thanh dị biến.
