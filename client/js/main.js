@@ -263,7 +263,7 @@ function setPreview(id) {
 function setPvForm(aw) {
   if (pvModel && demo.aw === aw && pvModel.char === pvChar) return;
   const pos = pvModel ? pvModel.root.position.clone() : null;
-  if (pvModel) pvModel.root.removeFromParent();
+  pvModel?.dispose();
   const A = pvChar.awaken;
   pvModel = buildChibi(aw ? { ...pvChar.look, ...A.look, form: A.form, formColor: A.color, formCore: A.core } : pvChar.look);
   pvModel.char = pvChar;

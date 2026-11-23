@@ -14,14 +14,19 @@ function toonGradient() {
 }
 
 const matCache = new Map();
+const sharedMaterials = new WeakSet();
 export function toon(color, opts = {}) {
   const key = color + JSON.stringify(opts);
   if (!opts.unique && matCache.has(key)) return matCache.get(key);
   const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient(), ...opts.params });
-  if (!opts.unique) matCache.set(key, m);
+  if (!opts.unique) {
+    matCache.set(key, m);
+    sharedMaterials.add(m);
+  }
   return m;
 }
 const outlineMat = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.BackSide });
+sharedMaterials.add(outlineMat);
 
 function mesh(geo, mat, outline = 0.035) {
   const m = new THREE.Mesh(geo, mat);
@@ -761,11 +766,6 @@ export function buildChibi(look) {
   shadow.renderOrder = 1;
   rig.shadow = shadow;
 
-  // Thu thập vật liệu để làm hiệu ứng nháy trắng khi trúng đòn
-  const flashables = [];
-  root.traverse(o => { if (o.isMesh && o.material.isMeshToonMaterial) flashables.push(o); });
-  rig.flashables = flashables;
-
   root.scale.setScalar(look.scale || 1);   // nhân vật to con trông lớn hơn (không đổi va chạm)
   return new ChibiAnimator(rig);
 }
@@ -788,6 +788,27 @@ export class ChibiAnimator {
     this.punchAlt = 0;
     this.cur = { bodyY: 0, lean: 0, spin: 0, aRx: 0, aRz: 0, aLx: 0, aLz: 0, lRx: 0, lLx: 0, headX: 0, roll: 0 };
     this.flashMat = new Map();
+
+    // Ghi lại đồ của mô hình trước khi chế độ chơi gắn thêm vật thể hoặc đổi vật liệu.
+    this.geometries = new Set([rig.shadow.geometry]);
+    this.materials = new Set([rig.shadow.material]);
+    rig.flashables = [];
+    this.root.traverse(o => {
+      if (!o.isMesh) return;
+      this.geometries.add(o.geometry);
+      if (!sharedMaterials.has(o.material)) this.materials.add(o.material);
+      if (o.material.isMeshToonMaterial) rig.flashables.push(o);
+    });
+  }
+
+  dispose() {
+    this.root.removeFromParent();
+    this.rig.shadow.removeFromParent();
+    for (const geometry of this.geometries) geometry.dispose();
+    for (const material of this.materials) material.dispose();
+    this.geometries.clear();
+    this.materials.clear();
+    this.flashMat.clear();
   }
 
   play(pose, dur) {

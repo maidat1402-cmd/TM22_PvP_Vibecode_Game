@@ -2,7 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.11.4 (2026-11-23)
+## 0.11.5 (2026-11-23)
+
+- Giải phóng tài nguyên riêng của mô hình và lá bài khi đổi nhân vật hoặc rời phòng để giảm tích lũy bộ nhớ đồ họa.
+
+## 0.11.4 (2026-11-23) · `a4a28a0`
 
 - Nút Kết nối lại thử vào phòng vừa chơi nếu phòng còn trên server.
 
