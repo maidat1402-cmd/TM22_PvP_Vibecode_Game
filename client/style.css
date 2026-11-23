@@ -533,7 +533,8 @@ body.touch #tlShow kbd { display: none; }
 
 /* ================= Đánh bài (bàn tròn) ================= */
 #chud { position: fixed; inset: 0; pointer-events: none; z-index: 6; font-size: 14px; }
-#chud button, #chud .hcard, #chud input { pointer-events: auto; }
+#chud button, #chud .hcard, #chud input, #chud select { pointer-events: auto; }
+#cOpenSeat { max-width: min(180px, 42vw); }
 #chud .c-rules { pointer-events: auto; width: min(440px, calc(100vw - 32px)); max-height: 90dvh; color: var(--text); }
 .c-rules::backdrop { background: rgba(10,8,25,.65); }
 .c-rules form { display: grid; gap: 14px; }

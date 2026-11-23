@@ -397,6 +397,7 @@ export class CardGame {
       else if (this.game === 'xidach') {
         if (s.phase === 'bet') st = `Cược ${p.bet}${p.ready ? ' ✔' : ''}`;
         else if (p.result) st = p.result.r > 0 ? `+${p.result.delta}` : p.result.r < 0 ? `${p.result.delta}` : 'Hoà';
+        else if (p.opened) st = `Đã so với ${p.opened.dealerScore}đ · ${p.opened.delta > 0 ? '+' : ''}${p.opened.delta}`;
         else if (p.kind === 'quac') st = 'Quắc';
         else if (p.done) st = p.kind && p.kind !== 'normal' ? XD_KIND[p.kind] : 'Dằn';
         else st = `Cược ${p.bet}`;
@@ -446,10 +447,19 @@ export class CardGame {
       else if (s.phase === 'play') info.push('Người chơi đang rút bài…');
       else if (s.phase === 'dealer' && !d.auto) {
         acts.push(`<button class="btn primary" data-a="hit"${d.n >= XD.maxCards || d.score >= 21 ? ' disabled' : ''}>🂠 Rút bài</button>`);
-        acts.push(`<button class="btn" data-a="stand"${d.score < XD.dealerMin ? ` disabled title="Chưa đủ ${XD.dealerMin} điểm"` : ''}>✋ Dằn</button>`);
-        if (d.score < XD.dealerMin) info.push(`Nhà cái cần ít nhất ${XD.dealerMin} điểm mới được dằn`);
+        const closed = s.seats.filter(p => p?.n && !p.opened);
+        if (closed.length) {
+          const options = closed.map(p => `<option value="${p.seat}">${esc(p.name)}</option>`).join('');
+          acts.push(`<select id="cOpenSeat" aria-label="Người chơi cần mở bài"${d.canOpen ? '' : ' disabled'}>${options}</select>`);
+          acts.push(`<button class="btn" data-a="open"${d.canOpen ? '' : ' disabled'}>Mở bài</button>`);
+        }
+        acts.push(`<button class="btn" data-a="stand"${d.canOpen ? '' : ' disabled'}>Mở hết</button>`);
+        if (!d.canOpen) info.push(`Nhà cái cần ít nhất ${XD.dealerMin} điểm để mở bài`);
       } else if (s.phase === 'dealer') info.push('Máy đang đánh thay nhà cái…');
-      if (d.result) info.push(d.result.penalty ? `Đền cả bàn ${-d.result.delta} xu` : d.result.delta > 0 ? `🎉 Nhà cái ăn ${d.result.delta} xu` : d.result.delta < 0 ? `Nhà cái chung ${-d.result.delta} xu` : 'Hoà cả bàn');
+      if (d.result) {
+        info.push(d.result.delta > 0 ? `🎉 Nhà cái ăn ${d.result.delta} xu` : d.result.delta < 0 ? `Nhà cái chung ${-d.result.delta} xu` : 'Hoà cả bàn');
+        if (d.result.penalty) info.push(`Đền cả bàn ${-d.result.penalty} xu`);
+      }
     } else if (me) info.push(`💰 ${me.chips} xu${this.game === 'xidach' && s.phase !== 'result' ? ` · cược ${me.bet}` : ''}`);
     if (lobby || s.youDealer) { /* đã xử lý ở trên */ }
     else if (!me) info.push('Bạn đang xem — sẽ vào bàn ở ván sau');
@@ -463,7 +473,9 @@ export class CardGame {
         acts.push(`<button class="btn" data-a="stand"${me.score < XD.minStand ? ' disabled title="Chưa đủ 16 điểm"' : ''}>✋ Dằn</button>`);
         if (me.score < XD.minStand) info.push(`Cần ít nhất ${XD.minStand} điểm mới được dằn`);
         if (me.score > 21) info.push('Bài vẫn úp. Bạn có thể rút tiếp hoặc dằn.');
-      } else if (s.phase === 'play' || s.phase === 'dealer') info.push(me.done ? 'Chờ nhà cái…' : 'Chờ tới lượt…');
+      } else if (me.opened && s.phase === 'dealer') {
+        info.push(`Đã so với nhà cái ${me.opened.dealerScore} điểm · ${me.opened.delta > 0 ? '+' : ''}${me.opened.delta} xu`);
+      } else if (s.phase === 'play' || s.phase === 'dealer') info.push(me.done || s.phase === 'dealer' ? 'Chờ nhà cái…' : 'Chờ tới lượt…');
       if (me.result) {
         info.push(me.result.r > 0 ? `🎉 Thắng ${me.result.delta} xu` : me.result.r < 0 ? `Thua ${-me.result.delta} xu` : 'Hoà');
         if (me.result.penalty) info.push(`Đền bài: ${me.result.penalty > 0 ? '+' : ''}${me.result.penalty} xu`);
@@ -503,6 +515,7 @@ export class CardGame {
       case 'start': this.net.send({ t: 'cstart' }); break;
       case 'dealer': this.net.send({ t: 'cdealer' }); break;
       case 'hit': this.net.send({ t: 'chit' }); break;
+      case 'open': this.net.send({ t: 'copen', seat: Number($('cOpenSeat').value) }); break;
       case 'stand': this.net.send({ t: 'cstand' }); break;
       case 'play': this.net.send({ t: 'cplay', cards: [...this.sel] }); this.sel.clear(); break;
       case 'pass': this.net.send({ t: 'cpass' }); this.sel.clear(); break;

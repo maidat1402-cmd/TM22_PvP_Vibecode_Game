@@ -147,12 +147,12 @@ Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân
 
 Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn ban đầu cho cả hai chế độ. Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức từ 1 xu đến số vốn. Người mới và người được cấp lại vốn dùng cấu hình hiện tại. Trước ván đầu, đổi vốn cũng cập nhật số xu của người đã vào bàn. Sau ván đầu, người đang chơi giữ số dư của họ.
 
-**🃏 Xì dách** (8 ghế cược + 1 nhà cái; có ít hơn 3 người thì bot ngồi cho đủ 3). **Nhà cái** do chủ phòng chọn trong phòng chờ: **🤖 máy** (mặc định) hoặc **🎩 chính chủ phòng**. Chủ phòng làm nhà cái thì ngồi ở phía dưới, thấy bài của mình, tới lượt nhà cái thì tự **Rút bài** / **Dằn** (phải đủ 15 điểm, có 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn:
+**🃏 Xì dách** (8 ghế cược + 1 nhà cái; có ít hơn 3 người thì bot ngồi cho đủ 3). **Nhà cái** do chủ phòng chọn trong phòng chờ: **🤖 máy** (mặc định) hoặc **🎩 chính chủ phòng**. Chủ phòng làm nhà cái thì ngồi ở phía dưới, thấy bài của mình, tới lượt nhà cái thì tự **Rút bài** hoặc mở bài để so với từng ghế. Có 20 giây mỗi thao tác, hết giờ máy đánh thay:
 1. Chọn một mức cược của bàn rồi bấm **Sẵn sàng** (hết 9 giây thì tự chia). Mặc định là 50 / 100 / 200 xu.
 2. Mỗi người và nhà cái được 2 lá. Tính điểm: 2–10 theo số, J Q K = 10 điểm, A tính 1, 10 hoặc 11 (tự chọn cách có lợi nhất).
 3. Lần lượt từng người **Rút bài** (tối đa 5 lá) hoặc **Dằn** (dừng). Phải có ít nhất **16 điểm** mới được dằn. Quá 21 điểm là **quắc**. Người ngồi cược vẫn giữ lượt và có thể rút thêm hoặc dằn. Người khác chỉ thấy số lá tới khi so bài.
-4. Nhà cái lật bài và rút cho tới khi có ít nhất 15 điểm, rồi so bài với từng người: điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
-5. **Đền bài:** từ **28 điểm** trở lên, người quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nếu nhà cái quắc từ 28 điểm, nhà cái chung một lần mức cược cho mọi ghế cược.
+4. Khi có ít nhất 15 điểm hoặc đã đủ 5 lá, nhà cái có thể chọn một ghế và bấm **Mở bài**. Kết quả ghế đó chốt theo bài nhà cái lúc mở. Nhà cái có thể rút tiếp rồi mở các ghế còn lại theo thứ tự tùy chọn, hoặc bấm **Mở hết** để chốt cùng lúc. Điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
+5. **Đền bài:** từ **28 điểm** trở lên, người quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nếu nhà cái quắc từ 28 điểm, nhà cái chung một lần mức cược cho mọi ghế cược. Ghế đã mở giữ kết quả so bài trước đó và nhận thêm khoản đền. Ghế chưa mở nhận một lần mức cược.
 6. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
 
 **🂡 Tiến lên** (miền Nam, 4 người, mỗi người 13 lá):

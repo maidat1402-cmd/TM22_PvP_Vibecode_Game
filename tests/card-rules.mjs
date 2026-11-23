@@ -186,6 +186,8 @@ test('Nhà cái quắc đúng 28 điểm chung một lần cược cho từng gh
   room.deck = [20];
   room.phase = 'dealer';
   room.onMessage(dealer.id, { t: 'chit' });
+  assert.equal(room.phase, 'dealer');
+  room.onMessage(dealer.id, { t: 'cstand' });
   assert.equal(room.phase, 'result');
   assert.equal(xdScore(room.dealer.hand), 28);
   assert.equal(dealer.result.delta, -300);
@@ -244,4 +246,57 @@ test('Tiến lên cấp vốn tùy chỉnh và giữ nguyên luật tính tiền
   room.tlFinish(host);
   assert.equal(guest.result.delta, -10);
   assert.equal(guest.chips, 5);
+});
+
+test('Nhà cái mở từng người và giữ nguyên kết quả sau khi rút thêm', () => {
+  const { room, join } = makeTable('xidach');
+  const dealer = join(1).player;
+  const first = join(2).player;
+  const second = join(3).player;
+  room.setHostDealer(true);
+  Object.assign(first, { hand: [24, 22], bet: 100 });
+  Object.assign(second, { hand: [25, 26], bet: 200 });
+  room.xdPlayers = [first, second];
+  room.dealer.hand = [20, 21];  // 16 điểm
+  room.dealer.open = true;
+  room.deck = [4];              // thêm 4 điểm
+  room.phase = 'dealer';
+
+  room.onMessage(first.id, { t: 'copen', seat: second.seat });
+  assert.equal(room.xdOpened.size, 0);
+  room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
+  const seen = room.view(second).seats[first.seat];
+  assert.deepEqual(seen.cards, first.hand);
+  assert.deepEqual(seen.opened, { dealerScore: 16, delta: 100, penalty: 0 });
+  assert.deepEqual(room.view(dealer).seats[second.seat].cards, []);
+  room.onMessage(dealer.id, { t: 'chit' });
+  room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
+  assert.equal(room.xdOpened.get(first.id).dealerScore, 16);
+  room.onMessage(dealer.id, { t: 'copen', seat: second.seat });
+  assert.equal(room.phase, 'result');
+  assert.equal(first.result.delta, 100);
+  assert.equal(second.result.delta, -200);
+  assert.equal(dealer.result.delta, 100);
+});
+
+test('Nhà cái rút lên 28 sau khi mở vẫn đền đủ bàn và giữ kết quả đã chốt', () => {
+  const { room, join } = makeTable('xidach');
+  const dealer = join(1).player;
+  const first = join(2).player;
+  const second = join(3).player;
+  room.setHostDealer(true);
+  Object.assign(first, { hand: [0, 4], bet: 100 });
+  Object.assign(second, { hand: [44, 31], bet: 200 });
+  room.xdPlayers = [first, second];
+  room.dealer.hand = [28, 29];
+  room.deck = [20];
+  room.phase = 'dealer';
+  room.onMessage(dealer.id, { t: 'copen', seat: first.seat });
+  room.onMessage(dealer.id, { t: 'chit' });
+  room.onMessage(dealer.id, { t: 'copen', seat: second.seat });
+  assert.equal(first.result.delta, 0);
+  assert.equal(first.result.penalty, 100);
+  assert.equal(second.result.delta, 200);
+  assert.equal(dealer.result.delta, -200);
+  assert.equal(dealer.result.penalty, -300);
 });
