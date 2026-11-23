@@ -562,7 +562,9 @@ body.touch #tlShow kbd { display: none; }
 #cActs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 #cActs .btn.on { background: #ffd166; color: #1b1630; }
 #cActs .btn:disabled { opacity: .45; cursor: not-allowed; }
-#chud .c-side { position: absolute; top: 10px; right: 12px; display: flex; gap: 6px; }
+#chud .c-side { position: absolute; top: 10px; right: 12px; display: flex; gap: 6px; align-items: center; }
+.c-bots { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 12px; background: rgba(0,0,0,.4); color: #fff; font-size: 12.5px; }
+.c-bots .btn { min-width: 28px; padding: 3px 8px; }
 #cChat { position: absolute; left: 12px; bottom: 120px; width: min(320px, 60vw); display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: #fff; text-shadow: 0 1px 2px #000; }
 #cChat div { transition: opacity 1s; } #cChat .old { opacity: 0; } #cChat .sys { color: #ffd166; }
 #cChatIn { position: absolute; left: 12px; bottom: 92px; width: min(320px, 70vw); }

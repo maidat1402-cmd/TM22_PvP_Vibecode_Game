@@ -2,7 +2,15 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.10.0 (2026-11-23)
+## 0.11.0 (2026-11-23)
+
+- Đánh bài: **phòng chờ** thay cho vào là chia bài ngay. Người chơi bấm **✔ Sẵn sàng**, chủ phòng 👑 bấm **▶ Bắt đầu** khi mọi người đã sẵn sàng; nút **⏸** của chủ phòng hẹn dừng sau ván đang chơi để về lại phòng chờ. Chủ phòng rời bàn thì người vào sớm nhất thành chủ phòng.
+- Xì dách: chủ phòng chọn **ai làm nhà cái** trong phòng chờ, mình hoặc máy. Chủ phòng làm nhà cái thì tự rút / dằn (đủ 15 điểm, 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn.
+
+- Đánh bài: nút **🤖 − / +** chọn số máy (AI) chơi cùng để chơi một mình (Xì dách 0–4 máy, chỉ mình với nhà cái cũng được; Tiến lên 1–3 máy).
+- Tiến lên: **tới trắng** (tứ quý heo, sảnh rồng, 6 đôi, 5 đôi thông) thắng ngay khi chia; **thối heo** phạt thêm khi còn lá 2 lúc hết ván (heo đen 20 xu, heo đỏ 40 xu mỗi lá).
+
+## 0.10.0 (2026-11-23) · `58e7f7e`
 
 - Menu "Vào phòng" chia chế độ theo danh mục: ⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài.
 - Chế độ **đánh bài** mới: các nhân vật ngồi quanh bàn tròn 3D, lá bài (vẽ bằng canvas) được chia, đánh ra và nằm trên bàn.

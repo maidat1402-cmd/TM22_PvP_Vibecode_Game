@@ -158,3 +158,24 @@ export function tlSuggest(hand, cur, mustHave = -1) {
   ok.sort((a, b) => (isBomb(a.combo) - isBomb(b.combo)) || a.combo.top - b.combo.top);
   return ok[0].cards;
 }
+
+// Tới trắng: thắng ngay khi vừa chia bài (chưa ai đánh). Trả tên kiểu tới trắng, không có thì null.
+//   tứ quý heo (4 lá 2) · sảnh rồng (đủ 12 hạng 3 → A) · 6 đôi (tứ quý tính 2 đôi) · 5 đôi thông
+export function tlInstantWin(hand) {
+  if (hand.length !== TL.handSize) return null;
+  const cnt = new Array(13).fill(0);
+  for (const c of hand) cnt[cardRank(c)]++;
+  if (cnt[RANK_TWO] === 4) return 'Tứ quý heo';
+  if (cnt.slice(0, RANK_TWO).every(n => n >= 1)) return 'Sảnh rồng';
+  if (cnt.reduce((a, n) => a + Math.floor(n / 2), 0) >= 6) return '6 đôi';
+  let run = 0;
+  for (let r = 0; r < RANK_TWO; r++) { run = cnt[r] >= 2 ? run + 1 : 0; if (run >= 5) return '5 đôi thông'; }
+  return null;
+}
+// Thối heo: người thua còn heo (lá 2) khi hết ván bị phạt thêm, trả cho người thắng.
+export const TL_HEO_FINE = { black: 20, red: 40 };   // heo ♠ ♣ / heo ♦ ♥, mỗi lá
+export function tlHeoFine(hand) {
+  let n = 0, xu = 0;
+  for (const c of hand) if (cardRank(c) === RANK_TWO) { n++; xu += isRed(c) ? TL_HEO_FINE.red : TL_HEO_FINE.black; }
+  return { n, xu };
+}

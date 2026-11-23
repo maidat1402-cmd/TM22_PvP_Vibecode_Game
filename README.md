@@ -139,9 +139,11 @@ Các map là địa điểm tự thiết kế, chỉ lấy cảm hứng từ kh�
 
 ## Chế độ đánh bài
 
-Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân vật bạn đang chọn) ngồi quanh một bàn tròn phủ nỉ xanh; bài được chia ra, đánh ra và nằm trên bàn. Ghế của bạn luôn ở phía dưới màn hình. Thiếu người thì **bot** tự ngồi vào ghế trống; người vào lúc ván đang chơi sẽ vào bàn ở ván sau (bot nhường ghế). Mỗi người bắt đầu với 1000 xu (chỉ để tính điểm, hết xu thì được cấp lại). Mọi thao tác là nút bấm nên chơi được trên cả máy tính lẫn điện thoại; `Enter` để chat, `Esc` (hoặc ☰) mở menu.
+Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân vật bạn đang chọn) ngồi quanh một bàn tròn phủ nỉ xanh; bài được chia ra, đánh ra và nằm trên bàn. Ghế của bạn luôn ở phía dưới màn hình. Thiếu người thì **máy (bot)** tự ngồi vào ghế trống; người vào lúc ván đang chơi sẽ vào bàn ở ván sau (máy nhường ghế). Nút **🤖 − / +** ở góc trên bên phải chọn số máy chơi cùng để **chơi một mình**: Xì dách từ 0 máy (chỉ mình với nhà cái) tới 4 máy, Tiến lên từ 1 tới 3 máy (bàn cần ít nhất 2 người). Đổi số máy lúc đang chờ, đang đặt cược hoặc lúc xem kết quả thì có tác dụng ngay, đang giữa ván thì áp dụng từ ván sau. Mỗi người bắt đầu với 1000 xu (chỉ để tính điểm, hết xu thì được cấp lại). Mọi thao tác là nút bấm nên chơi được trên cả máy tính lẫn điện thoại; `Enter` để chat, `Esc` (hoặc ☰) mở menu.
 
-**🃏 Xì dách** (bàn 5 ghế + nhà cái là máy; có ít hơn 3 người thì bot ngồi cho đủ 3):
+**Phòng chờ:** vào phòng là ngồi vào bàn nhưng chưa chia bài. Người vào trước là **chủ phòng 👑**. Những người khác bấm **✔ Sẵn sàng**; khi mọi người đã sẵn sàng, chủ phòng bấm **▶ Bắt đầu**. Sau đó các ván nối tiếp nhau tự động; chủ phòng bấm **⏸** (góc trên bên phải) để dừng sau ván đang chơi và về lại phòng chờ. Chủ phòng rời bàn thì người vào sớm nhất còn lại làm chủ phòng.
+
+**🃏 Xì dách** (bàn 5 ghế + nhà cái; có ít hơn 3 người thì bot ngồi cho đủ 3). **Nhà cái** do chủ phòng chọn trong phòng chờ: **🤖 máy** (mặc định) hoặc **🎩 chính chủ phòng**. Chủ phòng làm nhà cái thì ngồi ở phía dưới, thấy bài của mình, tới lượt nhà cái thì tự **Rút bài** / **Dằn** (phải đủ 15 điểm, có 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn:
 1. Đặt cược 50 / 100 / 200 xu rồi bấm **Sẵn sàng** (hết 9 giây thì tự chia).
 2. Mỗi người và nhà cái được 2 lá. Tính điểm: 2–10 theo số, J Q K = 10 điểm, A tính 1, 10 hoặc 11 (tự chọn cách có lợi nhất).
 3. Lần lượt từng người **Rút bài** (tối đa 5 lá) hoặc **Dằn** (dừng). Phải có ít nhất **16 điểm** mới được dằn. Quá 21 điểm là **quắc**.
@@ -154,7 +156,8 @@ Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân
 - Chặn bài bằng bộ cùng loại, cùng số lá và lá cao nhất lớn hơn. **Chặt heo:** 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt cả tứ quý.
 - Ván đầu, ai cầm 3♠ đánh trước và phải đánh lá đó; các ván sau người thắng ván trước đánh trước. Bỏ lượt thì không được đánh lại cho tới khi vòng đó kết thúc; mọi người khác đã bỏ thì người đánh cuối được đánh tự do.
 - Bấm vào lá trên tay để chọn (bấm lại để bỏ), **Đánh** khi bộ chọn hợp lệ, **💡 Gợi ý** để tự chọn bộ nhỏ nhất chặn được. Mỗi lượt 25 giây, hết giờ thì tự bỏ lượt (đang đánh tự do thì tự đánh lá nhỏ nhất).
-- Ai hết bài trước thắng ván. Người còn bài trả 10 xu mỗi lá còn lại; chưa đánh được lá nào ("cháy") thì trả gấp đôi.
+- Ai hết bài trước thắng ván. Người còn bài trả 10 xu mỗi lá còn lại; chưa đánh được lá nào ("cháy") thì trả gấp đôi. **Thối heo:** còn lá 2 trên tay khi hết ván bị phạt thêm 20 xu mỗi heo đen (♠ ♣), 40 xu mỗi heo đỏ (♦ ♥).
+- **Tới trắng:** vừa chia bài mà có **tứ quý heo**, **sảnh rồng** (đủ 3 → A), **6 đôi** hoặc **5 đôi thông** thì thắng ngay, mỗi người còn lại trả như thua trọn 13 lá (130 xu).
 
 ## Chế độ bắn súng
 
