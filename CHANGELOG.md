@@ -2,6 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.11.7 (2026-11-23)
+
+- Lướt né của Kaze dị biến cấp miễn sát thương theo đúng hồi chiêu trên màn hình.
+- Khi bắt đầu hoặc kết thúc trận Đấu đội, dọn toàn bộ chiêu, hiệu ứng và vật cản tạm của trận cũ.
+
 ## 0.11.6 (2026-11-23)
 
 - Bắn súng: đạn không còn tản loạn và tia đạn không lệch khi đang di chuyển; đi bộ (Shift) gần như không bị phạt độ tản.

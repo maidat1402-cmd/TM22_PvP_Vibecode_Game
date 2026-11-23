@@ -1,6 +1,6 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
-import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle, arenaGround, arenaCollide, dynCollide } from '../shared/config.js';
+import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, dashCooldown, rainPoints, hitsObstacle, arenaGround, arenaCollide, dynCollide } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
 import { CHARACTERS, getChar, playableChar, charMaxHp, charSkills, skillLifetime, holdSkill } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
@@ -472,14 +472,11 @@ export class Room {
     this.score = { A: 0, B: 0 };
     this.winner = null;
     this.phaseEnd = t + TEAM.timeLimit;
-    this.clearEntities();
-    for (const pr of [...this.props]) this.removeProp(pr, 'time');
-    this.zones = [];
-    for (const q of [...this.players.values()]) if (q.master) this.removeFake(q, 'expire');
+    this.clearMatchEffects();
     for (const p of this.players.values()) {
       const [sx, sz] = this.spawnPoint(p.team);
       Object.assign(p, { dead: false, hp: p.maxHp, mp: GAME.maxMana, x: sx, y: 0, z: sz, kills: 0, deaths: 0,
-        invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, healCd: 0, healUntil: 0, ready: false, burn: null, frost: null });
+        invulnUntil: t + 1.5, stunUntil: 0, lockUntil: 0, cds: {}, dodgeAt: 0, healCd: 0, healUntil: 0, ready: false, burn: null, frost: null });
       this.endAwaken(p, true);
       p.awk = 0;
       this.broadcast({ t: 'respawn', id: p.id, p: [sx, 0, sz] });
@@ -494,15 +491,30 @@ export class Room {
     this.phase = 'end';
     this.winner = winner;          // 'A' | 'B' | 'draw'
     this.phaseEnd = now() + TEAM.endDelay;
-    this.clearEntities();
+    // Đòn chốt điểm có thể còn tạo vùng hoặc vật cản trong cùng lượt xử lý.
+    queueMicrotask(() => { if (this.phase === 'end') this.clearMatchEffects(); });
     this.broadcast({ t: 'sys', msg: winner === 'draw' ? '🤝 Hai đội hoà!' : `🏆 ${TEAM.names[winner]} chiến thắng ${this.score.A} - ${this.score.B}!` });
     this.sendTeamState();
   }
 
-  // Bỏ mọi chiêu đang tồn tại (bẫy, vật triệu hồi…) và báo client xoá hiệu ứng; đánh dấu dead để 'steer' ngừng chuyển tiếp
-  clearEntities() {
-    for (const e of this.entities) { e.dead = true; this.broadcast({ t: 'pend', eid: e.id, k: 0 }); }
+  // Dọn toàn bộ chiêu và địa hình tạm khi chuyển trận; pend chỉ kết thúc một viên đạn hoặc bẫy.
+  clearMatchEffects() {
+    for (const e of this.entities) e.dead = true;
     this.entities = [];
+    for (const pr of [...this.props]) this.removeProp(pr, 'time');
+    this.dyn = [];
+    this.zones = [];
+    this.fenceCd.clear();
+    for (const p of [...this.players.values()]) {
+      if (p.master) { this.removeFake(p, 'expire'); continue; }
+      p.steerEnt = null;
+      p.grab = null;
+      p.shadowMark = null;
+      p.holdSk = null;
+      p.healUntil = 0;
+      this.endBuff(p);
+    }
+    this.broadcast({ t: 'tclear' });
   }
 
   backToLobby() {
@@ -571,11 +583,14 @@ export class Room {
         p.x = x; p.y = Math.max(0, y); p.z = z;
         break;
       }
-      case 'dodge': // né (dash) => bất tử ngắn
+      case 'dodge': { // né (dash) => bất tử ngắn
         if (p.dead || t < (p.dodgeAt || 0)) break;   // spam 'dodge' không hồi chiêu = bất tử vĩnh viễn
-        p.dodgeAt = t + MOVE.dashCd - 0.15;          // dung sai cho lag
+        const cd = dashCooldown(this.awOf(p, t));
+        const tolerance = Math.min(0.15, Math.max(0, (cd - MOVE.dashInvuln) / 2));
+        p.dodgeAt = t + cd - tolerance;           // chừa khoảng hở giữa hai lần miễn sát thương
         p.invulnUntil = Math.max(p.invulnUntil, t + MOVE.dashInvuln);
         break;
+      }
       case 'cast': this.handleCast(p, m, t); break;
       case 'tteam': case 'tready': case 'tstart': if (this.team) this.onTeamMessage(p, m); break;
       case 'heal': this.handleHeal(p, t); break;
