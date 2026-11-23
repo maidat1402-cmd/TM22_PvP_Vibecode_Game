@@ -768,6 +768,15 @@ function afterJoin() {
 }
 net.on('err', m => game.hud.toast(m.msg, 2500));
 net.on('close', () => { $('disconnected').hidden = false; });
+$('reconnectBtn').onclick = () => {
+  if (inGame && current?.roomId) {
+    const url = new URL(location.href);
+    url.searchParams.set('room', current.roomId);
+    for (const key of ['quick', 'mode', 'map']) url.searchParams.delete(key);
+    history.replaceState(history.state, '', url);
+  }
+  location.reload();
+};
 
 $('createBtn').onclick = () => requireName(() => {
   initAudio(); sfx('ui'); sendHello(); goFullscreen();
@@ -869,6 +878,11 @@ $('leaveBtn').onclick = () => {
   game.suspended = false;
   current = null;
   inGame = false;
+  const url = new URL(location.href);
+  if (url.searchParams.has('room')) {
+    url.searchParams.delete('room');
+    history.replaceState(history.state, '', url);
+  }
   updateMenuBg();
   document.body.classList.remove('ingame');
   touch.setEnabled(false);

@@ -2,7 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.11.3 (2026-11-23)
+## 0.11.4 (2026-11-23)
+
+- Nút Kết nối lại thử vào phòng vừa chơi nếu phòng còn trên server.
+
+## 0.11.3 (2026-11-23) · `6c1b3e8`
 
 - Tiến lên hiển thị trạng thái bỏ lượt của cả người thật lẫn máy.
 

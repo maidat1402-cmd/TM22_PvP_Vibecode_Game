@@ -62,6 +62,8 @@ Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); 
 
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Nếu phòng đã đóng, game đưa bạn về sảnh. Khi vào lại, server xử lý như một lượt vào phòng mới.
+
 ## Cách chơi
 
 | Phím | Tác dụng |
