@@ -1,10 +1,10 @@
 // Phòng đánh bài quanh bàn tròn: Xì dách hoặc Tiến lên. Server quyết định toàn bộ (xáo bài, chia, lượt, tính tiền);
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
-import { CHARACTERS, getChar } from '../shared/characters.js';
+import { newRoomId } from './room.js';
+import { CHARACTERS, getChar, playableChar } from '../shared/characters.js';
 import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES } from '../shared/cards.js';
 
-let nextId = 5000;      // id phòng bài (phòng đối kháng từ 1, bắn súng từ 1000)
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
 const now = () => performance.now() / 1000;
@@ -12,7 +12,7 @@ const pick = a => a[(Math.random() * a.length) | 0];
 
 export class CardRoom {
   constructor(name, hub, game) {
-    this.id = String(nextId++);
+    this.id = newRoomId();   // bộ đếm chung với mọi loại phòng: bộ đếm riêng sẽ trùng id sau vài nghìn phòng
     this.name = name;
     this.hub = hub;
     this.game = game === 'tienlen' ? 'tienlen' : 'xidach';
@@ -189,7 +189,7 @@ export class CardRoom {
     if (!p) return;
     switch (m.t) {
       case 'chat': { const msg = String(m.msg || '').slice(0, 140).trim(); if (msg) this.broadcast({ t: 'chat', id: p.id, name: p.name, msg }); return; }
-      case 'char': p.char = getChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
+      case 'char': p.char = playableChar(m.char).id; if (p.isDealer) this.dealer.char = p.char; this.sendState(); return;
       case 'cstart': {   // chủ phòng bắt đầu
         if (this.phase !== 'lobby' || p.id !== this.hostId) return;
         const why = this.startBlock();
