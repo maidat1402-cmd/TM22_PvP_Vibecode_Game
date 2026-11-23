@@ -4,6 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
@@ -42,7 +43,13 @@ const MOUNTS = [
 ];
 
 function serveStatic(req, res) {
-  let url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let url;
+  try {
+    url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    res.writeHead(400); return res.end('Bad Request');
+  }
+  if (url.includes('\0')) { res.writeHead(400); return res.end('Bad Request'); }
   if (url === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ ...publicInfo, rooms: hub.roomList(), online: hub.clients.size }));
@@ -51,7 +58,8 @@ function serveStatic(req, res) {
   for (const [prefix, dir] of MOUNTS) {
     if (!url.startsWith(prefix)) continue;
     const file = path.normalize(path.join(dir, url.slice(prefix.length)));
-    if (!file.startsWith(dir)) break; // chống path traversal
+    const relative = path.relative(dir, file);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) break;
     return fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -101,9 +109,10 @@ class Hub {
           const mode = ['bomb', 'dm', 'team', 'practice', 'xidach', 'tienlen'].includes(m.mode) ? m.mode : 'brawl';
           // đấu tập: phòng đối kháng có bia tập + võ sĩ máy (chơi một mình vẫn tích được thanh dị biến)
           // đánh bài: bàn tròn Xì dách / Tiến lên
-          const r = mode === 'xidach' || mode === 'tienlen' ? new CardRoom(name, this, mode)
-            : mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(name, this, String(m.map || ''), mode === 'team', mode === 'practice')
-            : new ShooterRoom(name, this, mode, String(m.map || ''));
+          const id = randomUUID();
+          const r = mode === 'xidach' || mode === 'tienlen' ? new CardRoom(id, name, this, mode)
+            : mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(id, name, this, String(m.map || ''), mode === 'team', mode === 'practice')
+            : new ShooterRoom(id, name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
           if (m.char) c.char = getChar(m.char).id;
           r.add(c);

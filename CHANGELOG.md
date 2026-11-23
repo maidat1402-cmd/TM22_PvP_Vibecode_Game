@@ -2,7 +2,27 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.11.0 (2026-11-23)
+## 0.11.5 (2026-11-23) · `82d1447`
+
+- Giải phóng tài nguyên riêng của mô hình và lá bài khi đổi nhân vật hoặc rời phòng để giảm tích lũy bộ nhớ đồ họa.
+
+## 0.11.4 (2026-11-23) · `a4a28a0`
+
+- Nút Kết nối lại thử vào phòng vừa chơi nếu phòng còn trên server.
+
+## 0.11.3 (2026-11-23) · `6c1b3e8`
+
+- Tiến lên hiển thị trạng thái bỏ lượt của cả người thật lẫn máy.
+
+## 0.11.2 (2026-11-23) · `b8b375d`
+
+- Hub cấp UUID cho mọi phòng, giúp link mời luôn trỏ tới đúng phòng đang chơi.
+
+## 0.11.1 (2026-11-23) · `6e406c7`
+
+- Máy chủ kiểm tra URL và tọa độ phát bắn trước khi đọc tệp, trừ đạn hoặc gửi hiệu ứng.
+
+## 0.11.0 (2026-11-23) · `d8f71f0`
 
 - Đánh bài: **phòng chờ** thay cho vào là chia bài ngay. Người chơi bấm **✔ Sẵn sàng**, chủ phòng 👑 bấm **▶ Bắt đầu** khi mọi người đã sẵn sàng; nút **⏸** của chủ phòng hẹn dừng sau ván đang chơi để về lại phòng chờ. Chủ phòng rời bàn thì người vào sớm nhất thành chủ phòng.
 - Xì dách: chủ phòng chọn **ai làm nhà cái** trong phòng chờ, mình hoặc máy. Chủ phòng làm nhà cái thì tự rút / dằn (đủ 15 điểm, 20 giây, hết giờ máy đánh thay) và ăn / chung tiền với cả bàn.

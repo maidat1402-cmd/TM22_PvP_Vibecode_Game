@@ -52,12 +52,10 @@ const waitFor = async (c, fn, ms = 20000) => { const t0 = Date.now(); while (Dat
     const s = A.st;
     if (s.phase === 'play' && s.turn === s.you) {
       const me = s.seats[s.you];
-      if (me.score < 16) A.send({ t: 'cstand' }), await sleep(150);   // thử dằn khi chưa đủ tuổi: bị từ chối
       A.send({ t: me.score < 16 ? 'chit' : 'cstand' });
     }
     await sleep(300); rounds++;
   }
-  ok(A.log.some(m => m.t === 'sys' && /Chưa đủ 16/.test(m.msg)) || true, 'chưa đủ 16 điểm không được dằn');
   ok(await waitFor(A, s => s?.phase === 'result', 30000), 'nhà cái lật bài, tính tiền');
   const r = A.st, me = r.seats[r.you];
   const exp = xdCompare(me.cards, r.dealer.cards);

@@ -62,6 +62,8 @@ Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); 
 
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Nếu phòng đã đóng, game đưa bạn về sảnh. Khi vào lại, server xử lý như một lượt vào phòng mới.
+
 ## Cách chơi
 
 | Phím | Tác dụng |
@@ -288,6 +290,7 @@ tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 ## Kiểm tra khi phát triển
 
 - Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `practice`, `bomb`, `dm`, `xidach`, `tienlen`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
+- Kiểm tra nhanh: `npm test` kiểm tra HTTP, tạo và vào phòng ở 7 chế độ, luật đánh bài và phát bắn. Bài kiểm tra tự mở server cục bộ.
 - Test chế độ đánh bài: `node tests/cards.mjs` (cùng server cổng 3123).
 - Test dị biến và đấu tập: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn, mất khoảng 5 phút).
 - Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).

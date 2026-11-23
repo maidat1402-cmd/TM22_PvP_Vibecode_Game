@@ -4,15 +4,14 @@ import { startLoop } from './loop.js';
 import { CHARACTERS, getChar } from '../shared/characters.js';
 import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES } from '../shared/cards.js';
 
-let nextId = 5000;      // id phòng bài (phòng đối kháng từ 1, bắn súng từ 1000)
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
 const now = () => performance.now() / 1000;
 const pick = a => a[(Math.random() * a.length) | 0];
 
 export class CardRoom {
-  constructor(name, hub, game) {
-    this.id = String(nextId++);
+  constructor(id, name, hub, game) {
+    this.id = id;
     this.name = name;
     this.hub = hub;
     this.game = game === 'tienlen' ? 'tienlen' : 'xidach';
@@ -280,7 +279,7 @@ export class CardRoom {
         const o = { seat: i, id: p.id, name: p.name, char: p.char, bot: p.bot, chips: p.chips, n: p.hand.length, cards: open ? p.hand : [] };
         if (this.game === 'xidach') Object.assign(o, { bet: p.bet, ready: p.ready, done: !!p.done });
         if (!p.bot) o.lready = p.id === this.hostId || !!p.lready;   // sẵn sàng ở phòng chờ (chủ phòng luôn sẵn sàng)
-        else Object.assign(o, { passed: !!this.passed?.has(i) });
+        if (this.game === 'tienlen') o.passed = !!this.passed?.has(i);
         if (open && this.game === 'xidach' && p.hand.length) Object.assign(o, { score: xdScore(p.hand), kind: xdKind(p.hand) });
         if (p.result) o.result = p.result;
         return o;

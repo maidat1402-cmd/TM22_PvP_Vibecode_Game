@@ -10,11 +10,10 @@ const now = () => performance.now() / 1000;
 const r2 = v => Math.round(v * 100) / 100;
 const r3 = v => Math.round(v * 1000) / 1000;
 const NO_NADES = () => ({ he: 0, flash: 0, smoke: 0 });
-let nextId = 1000;
 
 export class ShooterRoom {
-  constructor(name, hub, mode, mapId) {
-    this.id = String(nextId++);
+  constructor(id, name, hub, mode, mapId) {
+    this.id = id;
     this.name = name;
     this.hub = hub;
     this.mode = mode === 'dm' ? 'dm' : 'bomb';
@@ -270,6 +269,21 @@ export class ShooterRoom {
     const interval = 60 / w.rpm;
     if (t - p.lastFire < interval * 0.6) return;        // dung sai cho mạng chập chờn
     if (t < p.reloadUntil) return;
+    const o = m.o, pellets = m.p;
+    if (!Array.isArray(o) || o.length !== 3 || !o.every(Number.isFinite)) return;
+    // Gốc bắn phải gần người chơi. Chừa dung sai cho điểm chạm được làm tròn.
+    if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2.5 || Math.abs(o[1] - p.y - 1.3) > 2) return;
+
+    const range = w.melee ? w.reach : 250;
+    if (!Array.isArray(pellets) || pellets.length !== (w.pellets || 1)) return;
+    for (const q of pellets) {
+      if (!Array.isArray(q) || q.length !== 5) return;
+      const [x, y, z, target, zone] = q;
+      if (![x, y, z].every(Number.isFinite) || !Number.isSafeInteger(target) || target < 0) return;
+      if (!Number.isInteger(zone) || zone < 0 || zone > 3) return;
+      if (Math.hypot(x - o[0], y - o[1], z - o[2]) > range + 1) return;
+    }
+
     const a = p.ammo[wid];
     if (!w.melee) {
       if (!a || a.mag <= 0) return this.me(p);
@@ -277,25 +291,18 @@ export class ShooterRoom {
     }
     p.lastFire = t;
     p.protectUntil = 0;
-    if (!Array.isArray(m.o) || !Array.isArray(m.p)) return;
-    const o = m.o.map(Number);
-    if (!o.every(Number.isFinite)) return;
-    // gốc bắn phải gần vị trí người chơi
-    if (Math.hypot(o[0] - p.x, o[2] - p.z) > 2.5 || Math.abs(o[1] - p.y - 1.3) > 2) return;
-
-    const pellets = m.p.slice(0, w.pellets || 1);
     this.broadcast({ t: 'sshot', id: p.id, w: weaponIndex(wid), o: o.map(r2), e: pellets.map(q => [r2(q[0]), r2(q[1]), r2(q[2])]) }, p.id);
     const dmgBy = new Map();
     for (const q of pellets) {
       const [ex, ey, ez, tid, zone] = q;
       if (!tid) continue;
-      const tgt = this.players.get(tid | 0);
+      const tgt = this.players.get(tid);
       if (!tgt || !tgt.alive || tgt === p) continue;
       if (this.mode === 'bomb' && tgt.team === p.team) continue;  // không bắn đồng đội
       if (t < tgt.protectUntil) continue;
       const dx = ex - o[0], dy = ey - o[1], dz = ez - o[2];
       const dist = Math.hypot(dx, dy, dz);
-      if (w.melee && dist > w.reach + 1) continue;
+      if (dist === 0) continue;
       // điểm trúng phải gần vị trí mục tiêu server biết (dung sai do trễ mạng)
       if (Math.hypot(ex - tgt.x, ez - tgt.z) > 2.6 || ey < tgt.y - 1 || ey > tgt.y + 3) continue;
       // không có tường chắn

@@ -66,11 +66,7 @@ class SAvatar {
     this.model.rig.handR.add(this.gun);
   }
 
-  dispose() {
-    if (!this.model) return;
-    this.model.root.removeFromParent();
-    this.model.rig.shadow.removeFromParent();
-  }
+  dispose() { this.model?.dispose(); }
 
   pushSnap(x, y, z, yaw, pitch) {
     this.buf.push({ t: now(), x, y, z, yaw, pitch });
