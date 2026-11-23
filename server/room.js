@@ -445,7 +445,7 @@ export class Room {
   // ---------- Đấu đội ----------
   teamCounts() {
     const n = { A: 0, B: 0 };
-    for (const q of this.players.values()) n[q.team]++;
+    for (const q of this.players.values()) if (!q.fake) n[q.team]++;   // phân thân / người cây không tính là người của đội
     return n;
   }
 
