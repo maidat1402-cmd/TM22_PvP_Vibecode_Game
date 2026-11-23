@@ -74,7 +74,7 @@ const server = http.createServer(serveStatic);
 // ---------- Hub: lobby + phòng ----------
 class Hub {
   constructor() {
-    this.clients = new Map(); // id -> client
+    this.clients = new Set(); // các kết nối đang mở
     this.rooms = new Map();
     this.nextId = 1;
   }
@@ -88,11 +88,12 @@ class Hub {
     if (c.room) { const r = c.room; c.room = null; r.remove(c.id); }
   }
   onConnection(ws) {
-    const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null };
-    this.clients.set(c.id, c);
+    const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null, session: randomUUID() };
+    this.clients.add(c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
-    send({ t: 'welcome', id: c.id, v: VERSION });
+    send({ t: 'welcome', id: c.id, v: VERSION, session: c.session });
     ws.on('message', raw => {
+      if (ws.readyState !== 1) return;
       let m;
       try { m = JSON.parse(raw); } catch { return; }
       if (!m || typeof m.t !== 'string') return;
@@ -126,6 +127,12 @@ class Hub {
           r.add(c);
           return;
         }
+        case 'cresume': {
+          if (c.room) return;
+          const room = typeof m.id === 'string' && m.id.length === 36 ? this.rooms.get(m.id) : null;
+          if (room instanceof CardRoom && typeof m.session === 'string' && m.session.length === 36 && room.resume(c, m.session)) return;
+          return send({ t: 'cresumeno' });
+        }
         case 'leave':
           this.leaveRoom(c);
           return send({ t: 'rooms', list: this.roomList() });
@@ -133,7 +140,12 @@ class Hub {
           if (c.room) c.room.onMessage(c.id, m);
       }
     });
-    ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
+    ws.on('close', () => {
+      this.clients.delete(c);
+      if (c.room instanceof CardRoom) c.room.disconnect(c);
+      else this.leaveRoom(c);
+      c.room = null;
+    });
     ws.on('error', () => {});
     // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
     ws.isAlive = true;
@@ -152,7 +164,7 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
 }, maxPayload: 16 * 1024 });
 wss.on('connection', ws => hub.onConnection(ws));
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
-// Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
+// Không trả lời ping trong 2 lượt (~10 giây) thì cắt. Bàn bài giữ chỗ cho người mất kết nối.
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) { ws.terminate(); continue; }

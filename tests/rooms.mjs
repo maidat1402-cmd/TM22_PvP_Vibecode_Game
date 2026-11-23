@@ -24,6 +24,7 @@ function connect() {
   ws.addEventListener('message', event => messages.push(JSON.parse(event.data)));
   return {
     send: message => ws.send(JSON.stringify(message)),
+    close: () => ws.close(),
     wait: async (type, predicate = () => true) => {
       for (let attempt = 0; attempt < 150; attempt++) {
         const match = messages.find(message => message.t === type && predicate(message));
@@ -67,6 +68,22 @@ try {
     guest.send({ t: 'join', id: first.room.id });
     const second = await guest.wait(joined);
     assert.equal(second.room.id, first.room.id);
+    if (mode === 'xidach') {
+      hostClient.send({ t: 'cdealer' });
+      await guest.wait('cs', state => state.dealer.human);
+      hostClient.close();
+      await guest.wait('cs', state => state.dealer.offline && state.host === first.you);
+      const returned = connect();
+      const welcome = await returned.wait('welcome');
+      assert.notEqual(welcome.session, welcomes[0].session);
+      returned.send({ t: 'cresume', id: first.room.id, session: welcomes[0].session });
+      assert.equal((await returned.wait('cj', packet => packet.resumed)).you, first.you);
+      await returned.wait('cs', state => state.youDealer && state.host === first.you);
+      const replay = connect();
+      await replay.wait('welcome');
+      replay.send({ t: 'cresume', id: first.room.id, session: welcomes[0].session });
+      await replay.wait('cresumeno');
+    }
     console.log(mode + ': hai người vào đúng phòng ' + first.room.id);
   }
   const response = await fetch(base + '/api/info');

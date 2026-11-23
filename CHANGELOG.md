@@ -2,6 +2,10 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.12.0 (2026-11-23)
+
+- Bàn bài giữ ghế, bài, xu và vai trò trong 60 giây khi mất kết nối. Người chơi có thể lấy lại chỗ trong cùng tab.
+
 ## 0.11.5 (2026-11-23) · `82d1447`
 
 - Giải phóng tài nguyên riêng của mô hình và lá bài khi đổi nhân vật hoặc rời phòng để giảm tích lũy bộ nhớ đồ họa.

@@ -10,6 +10,7 @@ export const cardSuit = id => id & 3;
 export const cardLabel = id => RANKS[cardRank(id)] + SUITS[cardSuit(id)];
 export const isRed = id => cardSuit(id) >= 2;
 export const CARD_GAMES = { xidach: 'Xì dách', tienlen: 'Tiến lên' };
+export const CARD_REJOIN_SECONDS = 60;
 
 // Bộ bài đã xáo (rng: hàm trả 0..1)
 export function newDeck(rng = Math.random) {

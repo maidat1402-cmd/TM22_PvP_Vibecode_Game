@@ -364,6 +364,7 @@ export class CardGame {
         if (p.result) st = p.result.r > 0 ? `🏆 ${p.result.instant ? p.result.instant + ' ' : ''}+${p.result.delta}` : `Hạng ${p.result.rank} · ${p.result.delta}${p.result.burn ? ' (cháy)' : ''}${p.result.heo ? ` · thối ${p.result.heo} heo` : ''}`;
         else st = (p.passed ? 'Bỏ lượt · ' : '') + `🂠 ${p.n}`;
       }
+      if (p.offline) st += ' · Mất kết nối';
       if (i === s.you) return;   // bảng tên của mình: thông tin hiện ở khu vực dưới cùng
       const cls = (i === s.turn ? ' turn' : '') + (p.result ? (p.result.r > 0 ? ' win' : p.result.r < 0 ? ' lose' : '') : '') + (i === s.you ? ' me' : '');
       plates.push(`<div class="cplate${cls}${lobby && p.lready ? ' win' : ''}" data-seat="${i}"><b>${p.id === s.host ? '👑 ' : ''}${esc(p.name)}${p.bot ? ' 🤖' : ''}</b><small>💰 ${p.chips}</small><i>${esc(st)}</i></div>`);
@@ -372,6 +373,7 @@ export class CardGame {
       const d = s.dealer;
       let st = d.result ? (d.result.delta > 0 ? `+${d.result.delta}` : d.result.delta < 0 ? `${d.result.delta}` : 'Hoà') + ' · ' : '';
       st += d.cards.length ? (d.kind && d.kind !== 'normal' ? XD_KIND[d.kind] + ' · ' : '') + `${d.score}đ` : lobby ? (d.human ? 'Chủ phòng' : 'Máy') : `🂠 ${d.n}`;
+      if (d.offline) st += ' · Mất kết nối';
       const cls = (s.phase === 'dealer' ? ' turn' : '') + (d.result ? (d.result.r > 0 ? ' win' : d.result.r < 0 ? ' lose' : '') : '');
       plates.push(`<div class="cplate dealer${cls}" data-seat="dealer"><b>🎩 ${esc(d.name)}${d.human ? '' : ' 🤖'}</b>${d.human ? `<small>💰 ${d.chips}</small>` : ''}<i>${esc(st)}</i></div>`);
     }

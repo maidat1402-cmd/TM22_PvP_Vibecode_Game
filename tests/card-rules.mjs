@@ -7,15 +7,20 @@ import { tlCombo } from '../shared/cards.js';
 function makeTable(game) {
   const room = new CardRoom('kiem-thu', 'Kiểm thử', { roomsChanged() {} }, game);
   room.destroy();   // gọi hành động trực tiếp để thời gian và bài luôn xác định
-  function join(id) {
+  function connection(id) {
     const log = [];
-    room.add({ id, name: 'Người chơi ' + id, char: 'kaze', ws: {
-      readyState: 1,
+    const client = { id, session: 'phien-' + id, name: 'Người chơi ' + id, char: 'kaze', ws: {
+      readyState: 1, close() { this.readyState = 3; },
       send: raw => log.push(JSON.parse(raw)),
-    } });
-    return { player: room.players.get(id), log };
+    } };
+    return { client, log };
   }
-  return { room, join };
+  function join(id) {
+    const { client, log } = connection(id);
+    room.add(client);
+    return { player: room.players.get(id), client, log };
+  }
+  return { room, join, connection };
 }
 
 test('Xì dách từ chối dằn dưới 16 điểm và giữ nguyên lượt', () => {
@@ -58,4 +63,63 @@ test('Tiến lên báo người thật và máy bỏ lượt cho người chơi 
   room.tlPass(bots[1]);
   assert.equal(room.turn, first.seat);
   assert.equal(log.at(-1).seats[second.seat].passed, false);
+});
+
+test('Tiến lên giữ bài, xu và lượt khi rớt mạng rồi vào lại', () => {
+  const { room, join, connection } = makeTable('tienlen');
+  const { player, client } = join(1);
+  join(2);
+  Object.assign(player, { hand: [0, 8], chips: 760 });
+  room.phase = 'play';
+  room.turn = player.seat;
+  room.setTurnDeadline(25);
+
+  room.disconnect(client);
+  assert.ok(room.deadline >= player.rejoinUntil);
+  assert.equal(room.view(player).seats[player.seat].offline, true);
+  const returned = connection(3);
+  assert.equal(room.resume(returned.client, client.session), true);
+  assert.equal(returned.client.id, player.id);
+  const state = returned.log.at(-1);
+  assert.equal(state.turn, player.seat);
+  assert.deepEqual(state.seats[player.seat].cards, [0, 8]);
+  assert.equal(state.seats[player.seat].chips, 760);
+  assert.equal(state.seats[player.seat].offline, false);
+  assert.equal(room.resume(connection(4).client, client.session), false);
+});
+
+test('Hết hạn ở Tiến lên thì máy giữ bài và xu của người rời', () => {
+  const { room, join, connection } = makeTable('tienlen');
+  const { player, client } = join(1);
+  const next = join(2).player;
+  Object.assign(player, { hand: [0, 8], chips: 760 });
+  Object.assign(next, { hand: [4, 12] });
+  room.phase = 'play';
+  room.turn = player.seat;
+  room.setTurnDeadline(25);
+  room.disconnect(client);
+  player.rejoinUntil = performance.now() / 1000 - 0.01;
+  assert.equal(room.resume(connection(3).client, client.session), false);
+  room.tick();
+  const bot = room.bySeat(player.seat);
+  assert.equal(bot.bot, true);
+  assert.deepEqual(bot.hand, [0, 8]);
+  assert.equal(bot.chips, 760);
+  assert.equal(room.hostId, next.id);
+});
+
+test('Hết hạn ở Xì dách thì chuyển chủ và để máy tiếp quản nhà cái', () => {
+  const { room, join } = makeTable('xidach');
+  const { player, client } = join(1);
+  const next = join(2).player;
+  room.setHostDealer(true);
+  room.dealer.hand = [16, 20];
+  room.disconnect(client);
+  assert.equal(room.dealer.pid, player.id);
+  assert.equal(room.hostId, player.id);
+  player.rejoinUntil = performance.now() / 1000 - 0.01;
+  room.tick();
+  assert.equal(room.hostId, next.id);
+  assert.equal(room.dealer.pid, 0);
+  assert.deepEqual(room.dealer.hand, [16, 20]);
 });

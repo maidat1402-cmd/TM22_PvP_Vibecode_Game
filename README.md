@@ -62,7 +62,7 @@ Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); 
 
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
-Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Nếu phòng đã đóng, game đưa bạn về sảnh. Khi vào lại, server xử lý như một lượt vào phòng mới.
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Nếu tới lượt bạn khi đang mất mạng, bàn chờ tới hết thời gian giữ chỗ. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
 
 ## Cách chơi
 

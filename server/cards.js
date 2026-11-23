@@ -2,7 +2,7 @@
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
 import { CHARACTERS, getChar } from '../shared/characters.js';
-import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES } from '../shared/cards.js';
+import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
@@ -39,13 +39,13 @@ export class CardRoom {
   info() { return { id: this.id, name: this.name, count: this.count, mode: this.game, map: 'table', mapName: 'Bàn ' + CARD_GAMES[this.game], phase: this.phase === 'lobby' ? 'lobby' : 'play' }; }
   destroy() { this.stopLoop(); }
 
-  send(p, m) { if (!p.bot && p.ws.readyState === 1) p.ws.send(JSON.stringify(m)); }
-  broadcast(m) { const d = JSON.stringify(m); for (const p of this.players.values()) if (!p.bot && p.ws.readyState === 1) p.ws.send(d); }
+  send(p, m) { if (p.client?.ws.readyState === 1) p.client.ws.send(JSON.stringify(m)); }
+  broadcast(m) { const d = JSON.stringify(m); for (const p of this.players.values()) if (p.client?.ws.readyState === 1) p.client.ws.send(d); }
   sys(msg) { this.broadcast({ t: 'sys', msg }); }
 
   // ================= Người chơi =================
   add(client) {
-    const p = { id: client.id, ws: client.ws, name: client.name, char: getChar(client.char).id, bot: false, seat: -1,
+    const p = { id: client.id, client, session: client.session, name: client.name, char: getChar(client.char).id, bot: false, seat: -1,
       chips: this.game === 'xidach' ? XD.startChips : TL.startChips, hand: [], bet: 100, ready: false, lready: false };
     this.players.set(p.id, p);
     client.room = this;
@@ -55,11 +55,44 @@ export class CardRoom {
     const canSit = this.phase === 'lobby' || this.phase === 'result' || (this.game === 'xidach' && this.phase === 'bet');
     if (free >= 0 && canSit) this.sit(p, free);
     if (this.phase === 'lobby') this.rebalance();   // phòng chờ cũng hiện máy ngồi sẵn
-    this.send(p, { t: 'cj', you: p.id, room: { id: this.id, name: this.name, game: this.game } });
+    this.sendJoined(p);
     this.sys(`${p.name} đã vào bàn${p.id === this.hostId ? ' (chủ phòng 👑)' : ''}`);
     if (p.seat < 0 && this.phase !== 'lobby') this.send(p, { t: 'sys', msg: 'Ván đang chơi — bạn sẽ vào bàn ở ván sau.' });
     this.sendState();
     this.hub.roomsChanged();
+  }
+
+  sendJoined(p, resumed = false) {
+    this.send(p, { t: 'cj', you: p.id, resumed, room: { id: this.id, name: this.name, game: this.game } });
+  }
+
+  disconnect(client) {
+    const p = this.players.get(client.id);
+    if (p?.client !== client) return;
+    if (p.seat < 0 && !p.isDealer && p.id !== this.hostId) return this.remove(p.id);
+    p.client = null;
+    p.rejoinUntil = now() + CARD_REJOIN_SECONDS;
+    if (this.turnPlayer() === p) this.deadline = Math.max(this.deadline, p.rejoinUntil);
+    this.sys(p.name + ' mất kết nối, bàn giữ chỗ ' + CARD_REJOIN_SECONDS + ' giây');
+    this.sendState();
+  }
+
+  resume(client, session) {
+    const p = [...this.players.values()].find(q => !q.bot && q.session === session);
+    if (!p || (p.rejoinUntil && p.rejoinUntil <= now())) return false;
+    // Tải lại trang có thể mở kết nối mới trước khi kết nối cũ báo đóng.
+    if (p.client) {
+      p.client.room = null;
+      p.client.ws.close();
+    }
+    const wasOffline = Boolean(p.rejoinUntil);
+    Object.assign(client, { id: p.id, name: p.name, char: p.char, room: this });
+    Object.assign(p, { client, session: client.session, rejoinUntil: 0 });
+    if (wasOffline && this.turnPlayer() === p) this.setTurnDeadline(this.game === 'tienlen' ? TL.turnTime : 20);
+    this.sendJoined(p, true);
+    this.sys(p.name + ' đã kết nối lại');
+    this.sendState();
+    return true;
   }
 
   sit(p, seat) { p.seat = seat; this.seats[seat] = p.id; }
@@ -82,6 +115,7 @@ export class CardRoom {
       this.players.delete(p.id);
       this.players.set(b.id, b);
       this.seats[p.seat] = b.id;
+      if (this.turn === p.seat && this.deadline <= now()) this.setTurnDeadline(TL.turnTime);
     } else {
       this.players.delete(p.id);
       if (p.seat >= 0) this.seats[p.seat] = null;
@@ -89,7 +123,8 @@ export class CardRoom {
     }
     // chủ phòng rời: người vào sớm nhất còn lại thành chủ phòng
     if (this.hostId === p.id) {
-      const next = [...this.players.values()].find(q => !q.bot);
+      const humans = [...this.players.values()].filter(q => !q.bot);
+      const next = humans.find(q => q.client) ?? humans[0];
       this.hostId = next ? next.id : 0;
       if (next) this.sys(`👑 ${next.name} trở thành chủ phòng`);
     }
@@ -140,6 +175,7 @@ export class CardRoom {
 
   // Lý do chưa bắt đầu được (null = bắt đầu được)
   startBlock() {
+    if (this.seated().some(p => p.rejoinUntil)) return 'Đang chờ người chơi kết nối lại';
     const wait = [...this.players.values()].filter(q => !q.bot && q.id !== this.hostId && !q.isDealer && q.seat >= 0 && !q.lready).length;
     if (wait) return `Còn ${wait} người chưa sẵn sàng`;
     const n = this.seated().length;
@@ -181,6 +217,14 @@ export class CardRoom {
 
   seated() { return this.seats.map(id => (id == null ? null : this.players.get(id))).filter(Boolean); }
   bySeat(s) { const id = this.seats[s]; return id == null ? null : this.players.get(id); }
+  turnPlayer() {
+    if (this.phase === 'play') return this.bySeat(this.turn);
+    if (this.phase === 'dealer' && !this.dealerAuto) return this.players.get(this.dealer.pid);
+    return null;
+  }
+  setTurnDeadline(seconds) {
+    this.deadline = Math.max(now() + seconds, this.turnPlayer()?.rejoinUntil || 0);
+  }
 
   // ================= Tin nhắn =================
   onMessage(id, m) {
@@ -241,6 +285,7 @@ export class CardRoom {
   // ================= Vòng lặp =================
   tick() {
     const t = now();
+    for (const p of this.players.values()) if (p.rejoinUntil && t >= p.rejoinUntil) this.remove(p.id);
     if (!this.count || this.phase === 'lobby') return;   // phòng chờ: chờ chủ phòng bấm Bắt đầu
     if (t >= this.deadline) {
       if (this.phase === 'result' && this.stopAfter) return this.toLobby();
@@ -278,7 +323,10 @@ export class CardRoom {
         const own = p === viewer, open = own || reveal || (this.game === 'xidach' && p.done && p.bust);
         const o = { seat: i, id: p.id, name: p.name, char: p.char, bot: p.bot, chips: p.chips, n: p.hand.length, cards: open ? p.hand : [] };
         if (this.game === 'xidach') Object.assign(o, { bet: p.bet, ready: p.ready, done: !!p.done });
-        if (!p.bot) o.lready = p.id === this.hostId || !!p.lready;   // sẵn sàng ở phòng chờ (chủ phòng luôn sẵn sàng)
+        if (!p.bot) {
+          o.lready = p.id === this.hostId || !!p.lready;
+          o.offline = !!p.rejoinUntil;
+        }
         if (this.game === 'tienlen') o.passed = !!this.passed?.has(i);
         if (open && this.game === 'xidach' && p.hand.length) Object.assign(o, { score: xdScore(p.hand), kind: xdKind(p.hand) });
         if (p.result) o.result = p.result;
@@ -288,7 +336,7 @@ export class CardRoom {
     if (this.game === 'xidach') {
       const d = this.dealer, open = d.open || reveal || d.pid === viewer.id;
       const dp = d.pid ? this.players.get(d.pid) : null;
-      v.dealer = { name: d.name, char: d.char, n: d.hand.length, cards: open ? d.hand : [], pid: d.pid, chips: dp?.chips, human: !!dp, auto: !!this.dealerAuto, result: dp?.result || null };
+      v.dealer = { name: d.name, char: d.char, n: d.hand.length, cards: open ? d.hand : [], pid: d.pid, chips: dp?.chips, human: !!dp, offline: !!dp?.rejoinUntil, auto: !!this.dealerAuto, result: dp?.result || null };
       v.hostDealer = this.hostDealer;
       v.youDealer = !!dp && dp.id === viewer.id;
       if (open && d.hand.length) Object.assign(v.dealer, { score: xdScore(d.hand), kind: xdKind(d.hand) });
@@ -342,14 +390,14 @@ export class CardRoom {
   nextTurn() {
     for (let s = this.turn + 1; s < this.seatCount; s++) {
       const p = this.bySeat(s);
-      if (p && p.hand.length && !p.done) { this.turn = s; this.deadline = now() + 20; this.sendState(); return; }
+      if (p && p.hand.length && !p.done) { this.turn = s; this.setTurnDeadline(20); this.sendState(); return; }
     }
     this.phase = 'dealer';
     this.turn = -1;
     this.dealer.open = true;
     // nhà cái là người thật: tự rút / dằn trong 20 giây; nhà cái máy: rút dần mỗi 0.9 giây
     const human = this.dealer.pid && !this.dealerAuto;
-    this.deadline = now() + (human ? 20 : 1.1);
+    this.setTurnDeadline(human ? 20 : 1.1);
     this.msg = human ? `Nhà cái ${this.dealer.name} lật bài — rút hoặc dằn (cần ${XD.dealerMin} điểm)` : 'Nhà cái lật bài';
     this.sendState();
   }
@@ -469,7 +517,7 @@ export class CardRoom {
       if (name) return this.tlInstant(q, name);
     }
     this.phase = 'play';
-    this.deadline = now() + TL.turnTime;
+    this.setTurnDeadline(TL.turnTime);
     this.msg = `${this.bySeat(this.turn).name} đánh trước` + (this.mustHave >= 0 ? ` (phải có ${cardLabel(this.mustHave)})` : '');
     this.sendState();
   }
@@ -508,7 +556,7 @@ export class CardRoom {
       if (this.trick && s === this.trick.by) { this.trick = null; this.passed.clear(); this.turn = s; this.msg = `${q.name} được đánh tự do`; break; }
       if (!this.passed.has(s)) { this.turn = s; break; }
     }
-    this.deadline = now() + TL.turnTime;
+    this.setTurnDeadline(TL.turnTime);
     this.sendState();
   }
 
