@@ -21,20 +21,21 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const fails = [];
 const fail = msg => { fails.push(msg); console.log('  ✗ ' + msg); };
 
-const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple']];
+const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple'], ['xidach', ''], ['tienlen', '']];
 const BUY_ITEMS = BUY_MENU.flatMap(c => c.items);
 const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', 'tready', 'tstart', 'awk', 'hold', 'pfill',
+  'cbet', 'cready', 'cbot', 'chit', 'cstand', 'cplay', 'cpass', 'cstart', 'cdealer', 'cstop',
   'fire', 'throw', 'drop', 'pickup', 'reload', 'switch', 'buy', 'use', 'loadout', 'team',
   'hello', 'list', 'create', 'join', 'leave', 'ping', '__proto__', 'constructor', 'toString', ''];
 const FIELDS = ['p', 'd', 'a', 'r', 'f', 'sk', 'cs', 'seed', 'tg', 'team', 'on', 'msg', 'char', 'k', 'o', 'v',
-  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk'];
+  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards'];
 const BIG = 'x'.repeat(3000);
 const JUNK = [undefined, null, true, false, 0, -1, 1, 3, 99, -99999, 1e308, -1e308, 2 ** 53, 0.5, '', 'NaN', 'Infinity',
   '__proto__', 'constructor', 'toString', 'hasOwnProperty', BIG, [], [null], [1], [1, 2], ['a', 'b', 'c'],
   [1e308, 1e308, 1e308], [-1e308, 0, 1e308], [0, 0, 0], [[1, 2, 3, 1, 1]], [[0, 0, 0, '1', 1], [1e308, 0, 0, 2, 9]],
   Array(300).fill([1, 1, 1, 1, 1]), Array(300).fill(0), {}, { a: 1 }, { toString: 1 }, { valueOf: 1, toString: 1 }, { length: 5 }, { 0: 1, 1: 2, 2: 3, length: 3 },
   'T', 'CT', 'A', 'B', 'he', 'flash', 'smoke', 'rifle', 'sniper', 'knife', 'armor', 'kit', 'kaze',
-  'treant', ...CHARACTERS.map(c => c.id), ...WEAPON_LIST, ...NADE_LIST];
+  'treant', 'dummy', ...CHARACTERS.map(c => c.id), ...WEAPON_LIST, ...NADE_LIST];
 
 function junkPacket() {
   const m = { t: pick(TYPES) };
@@ -74,12 +75,17 @@ async function anchor(mode, map, roomId, name) {
   const c = await connect();
   const shooter = mode === 'dm' || mode === 'bomb';
   c.mode = mode; c.name = name;
+  c.cards = mode === 'xidach' || mode === 'tienlen';
   c.send({ t: 'hello', name, char: pick(CHARACTERS).id });
-  const joined = waitFor(c, shooter ? 'sj' : 'joined');
+  const joined = waitFor(c, c.cards ? 'cj' : shooter ? 'sj' : 'joined');
   c.send(roomId ? { t: 'join', id: roomId, char: pick(CHARACTERS).id } : { t: 'create', name, mode, map, char: pick(CHARACTERS).id });
   const j = await joined;
   c.roomId = j.room.id;
   c.pos = [0, 0, 0];
+  if (c.cards) {   // đánh bài không có snapshot: chỉ ghi nhận bị ngắt
+    c.on('close', code => { if (!c.stopping) fail(`bot trụ ${name} (${mode}) bị ngắt, mã ${code}`); });
+    return c;
+  }
   const me = j.players.find(p => p.id === j.you);
   if (me && Number.isFinite(me.x)) c.pos = [me.x, me.y || 0, me.z];
   c.on(shooter ? 'sspawn' : 'respawn', m => { if (m.id === c.id || m.id == null) { if (Array.isArray(m.p)) c.pos = m.p.slice(0, 3); else if (Number.isFinite(m.x)) c.pos = [m.x, 0, m.z]; } });
@@ -90,6 +96,18 @@ async function anchor(mode, map, roomId, name) {
 }
 
 function anchorTick(c, others) {
+  if (c.cards) {
+    const r = Math.random();
+    if (r < 0.02) c.send({ t: 'cstart' });
+    else if (r < 0.04) c.send({ t: 'cready' });
+    else if (r < 0.05) c.send({ t: 'cbet', v: pick([50, 100, 200, 500, -1, 1e308]) });
+    else if (r < 0.07) c.send({ t: pick(['chit', 'cstand', 'cpass']) });
+    else if (r < 0.09) c.send({ t: 'cplay', cards: pick([[0], [3, 3], [1, 2, 3], [51, 50], [-1], [1e308], Array(60).fill(7)]) });
+    else if (r < 0.095) c.send({ t: 'cbot', d: pick([1, -1]) });
+    else if (r < 0.097) c.send({ t: pick(['cdealer', 'cstop']) });
+    else if (r < 0.098) c.send({ t: 'char', char: pick(['treant', 'dummy', ...CHARACTERS.map(q => q.id)]) });
+    return;
+  }
   const shooter = c.mode === 'dm' || c.mode === 'bomb';
   const [x, y, z] = c.pos;
   const nx = x + rnd(-0.15, 0.15), nz = z + rnd(-0.15, 0.15);
@@ -193,6 +211,7 @@ const anchorTimer = setInterval(() => { for (const a of anchors) anchorTick(a, b
 const gapTimer = setInterval(() => {
   const t = performance.now();
   for (const a of anchors) {
+    if (a.cards) continue;   // bàn bài không có snapshot
     const last = a.snapTimes[a.snapTimes.length - 1] || 0;
     if (!a.closed && t - last > 1000) fail(`bot trụ ${a.name} không nhận snapshot ${((t - last) / 1000).toFixed(1)} s`);
     a.snapTimes = a.snapTimes.slice(-5);
