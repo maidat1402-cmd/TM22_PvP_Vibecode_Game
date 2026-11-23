@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.15.1 (2026-11-24)
+## 0.15.1 (2026-11-24) · `686d586`
 
 - Xì dách giữ chỗ 60 giây. Sau 20 giây mất mạng, máy rút hoặc dằn thay đến khi người chơi quay lại.
 - Kết nối lại vẫn dùng được mã phiên đã lưu nếu đường truyền rớt trước khi nhận mã mới.
