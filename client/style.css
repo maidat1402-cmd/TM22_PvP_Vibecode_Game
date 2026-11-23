@@ -534,6 +534,16 @@ body.touch #tlShow kbd { display: none; }
 /* ================= Đánh bài (bàn tròn) ================= */
 #chud { position: fixed; inset: 0; pointer-events: none; z-index: 6; font-size: 14px; }
 #chud button, #chud .hcard, #chud input { pointer-events: auto; }
+#chud .c-rules { pointer-events: auto; width: min(440px, calc(100vw - 32px)); max-height: 90dvh; color: var(--text); }
+.c-rules::backdrop { background: rgba(10,8,25,.65); }
+.c-rules form { display: grid; gap: 14px; }
+.c-rules h2, #cRulesError { margin: 0; }
+.c-rules label { display: grid; gap: 5px; }
+.c-rules fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; border: 1px solid var(--line); border-radius: 8px; margin: 0; }
+.c-rules fieldset[hidden], #cRulesError:empty { display: none; }
+.c-rules input { width: 100%; min-width: 0; }
+#cRulesError { color: #ffb0b0; }
+.c-rules-actions { display: flex; justify-content: flex-end; gap: 8px; }
 #chud .c-top { position: absolute; top: 10px; left: 14px; color: var(--text); text-shadow: 0 2px 4px #000; }
 #chud .c-top b { font-size: 16px; }
 #cMsg { margin-top: 4px; font-size: 15px; font-weight: 700; color: #ffd166; }

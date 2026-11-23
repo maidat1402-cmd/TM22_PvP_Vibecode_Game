@@ -192,3 +192,56 @@ test('Nhà cái quắc đúng 28 điểm chung một lần cược cho từng gh
   assert.equal(player.result.delta, 100);
   assert.equal(second.result.delta, 200);
 });
+
+test('Chủ bàn Xì dách đặt vốn và mức cược cho cả người mới, kiểm tra mức hợp lệ', () => {
+  const { room, join } = makeTable('xidach');
+  const host = join(1);
+  const guest = join(2);
+  room.onMessage(guest.player.id, { t: 'cconfig', chips: 3300, bets: [75, 300] });
+  assert.equal(guest.log.at(-1).t, 'cno');
+  assert.equal(room.startChips, 1000);
+  room.onMessage(host.player.id, { t: 'cconfig', chips: 3300, bets: [75, 75] });
+  assert.equal(host.log.at(-1).t, 'cno');
+  room.onMessage(host.player.id, { t: 'cconfig', chips: 3300, bets: [4000] });
+  assert.equal(room.startChips, 1000);
+
+  room.onMessage(host.player.id, { t: 'cconfig', chips: 3300, bets: [300, 75, 125] });
+  assert.deepEqual(room.view(guest.player).rules, { startChips: 3300, bets: [75, 125, 300] });
+  assert.equal(guest.player.chips, 3300);
+  const newcomer = join(3).player;
+  assert.equal(newcomer.chips, 3300);
+  assert.equal(newcomer.bet, 75);
+  room.xdBetPhase();
+  room.onMessage(newcomer.id, { t: 'cbet', v: 125 });
+  assert.equal(newcomer.bet, 125);
+  room.onMessage(newcomer.id, { t: 'cbet', v: 100 });
+  assert.equal(newcomer.bet, 125);
+  newcomer.chips = 150;
+  room.onMessage(newcomer.id, { t: 'cbet', v: 300 });
+  assert.equal(newcomer.bet, 125);
+  room.onMessage(host.player.id, { t: 'cconfig', chips: 5000, bets: [100] });
+  assert.equal(room.startChips, 3300);
+
+  room.games = 1;
+  room.toLobby();
+  room.onMessage(host.player.id, { t: 'cconfig', chips: 2100, bets: [300] });
+  assert.equal(newcomer.chips, 150);
+  assert.equal(join(4).player.chips, 2100);
+  room.xdBetPhase();
+  assert.equal(newcomer.chips, 2100);
+  assert.equal(newcomer.bet, 300);
+});
+
+test('Tiến lên cấp vốn tùy chỉnh và giữ nguyên luật tính tiền của ván', () => {
+  const { room, join } = makeTable('tienlen');
+  const host = join(1).player;
+  room.onMessage(host.id, { t: 'cconfig', chips: 5, bets: [] });
+  const guest = join(2).player;
+  assert.equal(guest.chips, 5);
+  assert.deepEqual(room.view(guest).rules, { startChips: 5, bets: [] });
+  guest.hand = [0];
+  guest.played = true;
+  room.tlFinish(host);
+  assert.equal(guest.result.delta, -10);
+  assert.equal(guest.chips, 5);
+});

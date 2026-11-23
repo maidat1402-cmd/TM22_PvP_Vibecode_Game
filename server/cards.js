@@ -2,7 +2,7 @@
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
 import { CHARACTERS, getChar } from '../shared/characters.js';
-import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS } from '../shared/cards.js';
+import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
@@ -15,6 +15,8 @@ export class CardRoom {
     this.name = name;
     this.hub = hub;
     this.game = game === 'tienlen' ? 'tienlen' : 'xidach';
+    this.startChips = this.game === 'xidach' ? XD.startChips : TL.startChips;
+    this.bets = this.game === 'xidach' ? [...XD.bets] : [];
     this.players = new Map();          // id -> người ngồi bàn (cả bot)
     this.seatCount = this.game === 'tienlen' ? TL.seats : XD.seats;
     this.seats = Array(this.seatCount).fill(null);   // id người ngồi từng ghế
@@ -47,7 +49,7 @@ export class CardRoom {
   // ================= Người chơi =================
   add(client) {
     const p = { id: client.id, client, session: client.session, name: client.name, char: getChar(client.char).id, bot: false, seat: -1,
-      chips: this.game === 'xidach' ? XD.startChips : TL.startChips, hand: [], bet: 100, ready: false, lready: false };
+      chips: this.startChips, hand: [], bet: this.defaultBet(this.startChips), ready: false, lready: false };
     this.players.set(p.id, p);
     client.room = this;
     if (!this.hostId) this.hostId = p.id;
@@ -140,7 +142,7 @@ export class CardRoom {
     if (this.botDealer) used.add(this.botDealer.name.replace('Nhà cái ', ''));   // không trùng tên nhà cái máy
     const name = BOT_NAMES.find(n => !used.has(n)) || 'Máy ' + (nextBotId % 100);
     return { id: nextBotId++, ws: null, name, char: pick(CHARACTERS).id, bot: true, seat,
-      chips: this.game === 'xidach' ? XD.startChips : TL.startChips, hand: [], bet: 100, ready: true, think: 0 };
+      chips: this.startChips, hand: [], bet: this.defaultBet(this.startChips), ready: true, think: 0 };
   }
 
   // Đầu mỗi ván: người chờ được ngồi (bot nhường ghế), rồi lấp bot cho đủ bàn
@@ -227,6 +229,39 @@ export class CardRoom {
     this.deadline = Math.max(now() + seconds, this.turnPlayer()?.rejoinUntil || 0);
   }
 
+  defaultBet(chips, preferred = XD.bets[1]) {
+    if (this.bets.includes(preferred) && preferred <= chips) return preferred;
+    return this.bets[0] <= chips ? this.bets[0] : 0;
+  }
+
+  refillChips(p, min, label = 'Hết tiền') {
+    if (p.chips >= min) return;
+    p.chips = this.startChips;
+    this.send(p, { t: 'sys', msg: '💰 ' + label + ' — được cấp lại ' + this.startChips + ' xu' });
+  }
+
+  configure(p, m) {
+    const reject = msg => this.send(p, { t: 'cno', msg });
+    if (p.id !== this.hostId || this.phase !== 'lobby') return reject('Chỉ chủ phòng được đổi vốn và mức cược trong phòng chờ.');
+    const chips = m.chips;
+    if (!Number.isInteger(chips) || chips < 1 || chips > CARD_CONFIG.maxChips) return reject('Vốn phải là số nguyên từ 1 đến ' + CARD_CONFIG.maxChips + ' xu.');
+    if (this.game === 'xidach') {
+      const bets = m.bets;
+      if (!Array.isArray(bets) || !bets.length || bets.length > CARD_CONFIG.maxBets ||
+          new Set(bets).size !== bets.length || bets.some(bet => !Number.isInteger(bet) || bet < 1 || bet > chips)) {
+        return reject('Nhập từ 1 đến ' + CARD_CONFIG.maxBets + ' mức cược khác nhau, mỗi mức từ 1 xu đến mức vốn.');
+      }
+      this.bets = [...bets].sort((a, b) => a - b);
+    }
+    this.startChips = chips;
+    for (const q of this.players.values()) {
+      if (!this.games) q.chips = chips;
+      q.bet = this.defaultBet(q.chips, q.bet);
+    }
+    this.send(p, { t: 'cconfigok' });
+    this.sendState();
+  }
+
   // ================= Tin nhắn =================
   onMessage(id, m) {
     const p = this.players.get(id);
@@ -253,9 +288,11 @@ export class CardRoom {
         this.sys(this.stopAfter ? '⏸ Chủ phòng sẽ dừng sau ván này' : '▶ Chủ phòng cho chơi tiếp');
         this.sendState();
         return;
+      case 'cconfig': return this.configure(p, m);
       case 'cbet':
         if (this.game !== 'xidach' || this.phase !== 'bet' || p.seat < 0) return;
-        if (XD.bets.includes(+m.v)) p.bet = Math.min(+m.v, Math.max(XD.bets[0], p.chips));
+        if (!this.bets.includes(m.v) || m.v > p.chips) return this.send(p, { t: 'cno', msg: 'Mức cược không có trong bàn hoặc vượt số xu của bạn.' });
+        p.bet = m.v;
         this.sendState(); return;
       case 'cready':
         // phòng chờ: bật / tắt sẵn sàng
@@ -317,6 +354,7 @@ export class CardRoom {
     const v = {
       t: 'cs', game: this.game, phase: this.phase, left: Math.max(0, +(this.deadline - now()).toFixed(1)), turn: this.turn, msg: this.msg,
       you: viewer.seat, games: this.games, host: this.hostId, me: viewer.id, stopAfter: this.stopAfter,
+      rules: { startChips: this.startChips, bets: this.bets },
       block: this.phase === 'lobby' ? this.startBlock() : null, bots: this.botCount(), botWant: this.botTarget(this.seated().filter(q => !q.bot).length), canBot: this.canChangeBots(),
       seats: this.seats.map((id, i) => {
         const p = id == null ? null : this.players.get(id);
@@ -361,8 +399,8 @@ export class CardRoom {
     if (dp) Object.assign(this.dealer, { name: dp.name, char: dp.char });
     for (const p of this.players.values()) {
       Object.assign(p, { hand: [], done: false, result: null, ready: p.bot });
-      if (p.chips < XD.bets[0]) { p.chips = XD.startChips; if (!p.bot) this.send(p, { t: 'sys', msg: `💰 Hết tiền — được cấp lại ${XD.startChips} xu` }); }
-      p.bet = Math.min(p.bet || 100, p.chips);
+      this.refillChips(p, this.bets[0]);
+      p.bet = this.defaultBet(p.chips, p.bet);
     }
     this.msg = 'Đặt cược rồi bấm Sẵn sàng';
     this.sendState();
@@ -502,7 +540,7 @@ export class CardRoom {
     if (dp) {
       dp.chips += bank;
       dp.result = { r: Math.sign(bank), delta: bank, kind: xdKind(d), penalty: dealerPenalty ? bank : 0 };
-      if (dp.chips < 0) { dp.chips = XD.startChips; this.send(dp, { t: 'sys', msg: `💰 Nhà cái hết tiền — được cấp lại ${XD.startChips} xu` }); }
+      this.refillChips(dp, 0, 'Nhà cái hết tiền');
     }
     const dk = xdKind(d);
     this.msg = `Nhà cái: ${dk === 'normal' ? xdScore(d) + ' điểm' : XD_KIND[dk] + (dk === 'quac' ? ` (${xdScore(d)})` : '')}${dealerPenalty ? ' — đền cả bàn' : ''}`;
@@ -601,7 +639,7 @@ export class CardRoom {
     }
     w.chips += total;
     w.result = { r: 1, delta: total, rank: 1, instant: name };
-    for (const q of this.seated()) if (q.chips < 0) { q.chips = TL.startChips; if (!q.bot) this.send(q, { t: 'sys', msg: `💰 Hết tiền — được cấp lại ${TL.startChips} xu` }); }
+    for (const q of this.seated()) this.refillChips(q, 0);
     this.lastWinner = w.seat;
     this.msg = `🎉 ${w.name} tới trắng: ${name}!`;
     this.sys(`🎉 ${w.name} tới trắng (${name}), nhận ${total} xu`);
@@ -626,7 +664,7 @@ export class CardRoom {
     w.chips += total;
     w.result = { r: 1, delta: total, rank: 1 };
     rest.forEach((q, i) => { q.result.rank = i + 2; });
-    for (const q of this.seated()) if (q.chips < 0) { q.chips = TL.startChips; if (!q.bot) this.send(q, { t: 'sys', msg: `💰 Hết tiền — được cấp lại ${TL.startChips} xu` }); }
+    for (const q of this.seated()) this.refillChips(q, 0);
     this.lastWinner = w.seat;
     this.msg = `🏆 ${w.name} về nhất!`;
     this.sys(`🏆 ${w.name} thắng ván, nhận ${total} xu`);
