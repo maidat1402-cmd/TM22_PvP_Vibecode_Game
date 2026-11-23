@@ -1,6 +1,6 @@
 {
   "name": "chibi-clash",
-  "version": "0.11.7",
+  "version": "0.15.1",
   "description": "Game đối kháng 3D chibi góc nhìn thứ 3, multiplayer qua phòng (room)",
   "type": "module",
   "main": "server/index.js",

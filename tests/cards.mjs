@@ -161,8 +161,9 @@ const waitFor = async (c, fn, ms = 20000) => { const t0 = Date.now(); while (Dat
   ok(r.dealer.result && r.dealer.result.delta === -sum && r.dealer.chips === 1000 + r.dealer.result.delta, `nhà cái ${r.dealer.result?.delta >= 0 ? 'ăn' : 'chung'} ${Math.abs(r.dealer.result?.delta)} xu = tổng thua của cả bàn`);
   ok(await waitFor(A, s => s?.phase === 'lobby', 10000), 'hết ván: về phòng chờ như đã hẹn');
   ok(!B.st.seats[B.st.you].lready, 'về phòng chờ: phải bấm sẵn sàng lại');
-  // chủ phòng rời: khách thành chủ phòng, máy làm nhà cái
-  A.ws.close(); await sleep(400);
+  // Chủ phòng chủ động rời: chuyển quyền ngay. Mất mạng sẽ giữ chỗ.
+  A.send({ t: 'leave' }); await sleep(400);
+  A.ws.close();
   ok(B.st.host === B.st.me && !B.st.hostDealer && !B.st.dealer.human, 'chủ phòng rời: khách thành chủ phòng, máy làm nhà cái');
   B.send({ t: 'cstart' });
   ok(await waitFor(B, s => s?.phase === 'bet'), 'chủ phòng mới bắt đầu được');

@@ -694,6 +694,30 @@ function copy(text) {
 }
 
 // ---------- Kết nối ----------
+// Mỗi tab lưu một phiên bàn bài, chỉ gửi mã qua kết nối WebSocket.
+const CARD_SESSION_KEY = 'chibiclash.cardSession';
+const params = new URLSearchParams(location.search);
+let previousCardSession;
+let cardSession;
+let resumePending = false;
+try {
+  const saved = JSON.parse(sessionStorage.getItem(CARD_SESSION_KEY));
+  if (typeof saved?.room === 'string' && typeof saved?.session === 'string' &&
+      (!params.has('quick') || params.get('mode') === saved.mode) &&
+      (!params.has('room') || params.get('room') === saved.room)) previousCardSession = saved;
+} catch { /* trình duyệt có thể chặn lưu trữ */ }
+
+function rememberCardSession(room, mode) {
+  try {
+    if (room && cardSession) {
+      sessionStorage.setItem(CARD_SESSION_KEY, JSON.stringify({ room, mode, session: cardSession }));
+      return true;
+    }
+    sessionStorage.removeItem(CARD_SESSION_KEY);
+  } catch { /* trình duyệt có thể chặn lưu trữ */ }
+  return false;
+}
+
 // Số phiên bản ở menu và bảng tạm dừng
 for (const el of document.querySelectorAll('.ver-tag')) el.textContent = 'v' + VERSION;
 net.on('welcome', m => {
@@ -704,15 +728,23 @@ net.on('welcome', m => {
   }
   $('connState').textContent = '● Đã kết nối';
   $('connState').classList.add('ok');
+  cardSession = m.session;
+  if (previousCardSession && cardSession) {
+    resumePending = true;
+    net.send({ t: 'cresume', id: previousCardSession.room, session: previousCardSession.session });
+  } else sendHello();
+});
+net.on('cresumeno', () => {
+  resumePending = false;
+  rememberCardSession();
   sendHello();
 });
 // Link mời: ?room=ID vào thẳng phòng; ?quick vào phòng đầu tiên (hoặc tạo mới)
-const params = new URLSearchParams(location.search);
 let autoJoinDone = false;
 net.on('rooms', m => {
   renderRooms(m.list);
-  if (autoJoinDone || inGame) return;
-  const want = params.get('room');
+  if (resumePending || autoJoinDone || inGame) return;
+  const want = params.get('room') || previousCardSession?.room;
   if (want || params.has('quick')) {
     autoJoinDone = true;
     const qmode = params.get('mode') || 'brawl';
@@ -748,6 +780,8 @@ net.on('sj', m => {
 });
 // vào bàn bài
 net.on('cj', m => {
+  resumePending = false;
+  autoJoinDone = true;
   inGame = true;
   current = cards;
   shooter.setMenuMap(null);
@@ -756,6 +790,8 @@ net.on('cj', m => {
   game.suspended = true;     // dùng chung canvas với cảnh bàn bài
   $('menu').hidden = true;
   cards.enter(m);
+  if (rememberCardSession(m.room.id, m.room.game) && m.resumed) net.send({ t: 'cresumeack' });
+  if (m.resumed) game.hud.toast('Đã lấy lại chỗ ở bàn bài', 2000);
   afterJoin();
 });
 function afterJoin() {
@@ -873,6 +909,7 @@ $('resumeBtn').onclick = () => { $('pause').hidden = true; if (!touch.enabled &&
 $('leaveBtn').onclick = () => {
   $('pause').hidden = true;
   net.send({ t: 'leave' });
+  if (current === cards) rememberCardSession();
   if (current === shooter) shooter.leave(); else if (current === cards) cards.leave(); else game.leave();
   game.suspended = false;
   current = null;

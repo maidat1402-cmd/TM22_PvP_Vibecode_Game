@@ -3,7 +3,7 @@
 // (chia bài, đánh bài, lật bài) bằng cách so trạng thái mới với vị trí lá bài đang có.
 import * as THREE from 'three';
 import { getChar } from '/shared/characters.js';
-import { RANKS, SUITS, cardRank, cardSuit, isRed, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES } from '/shared/cards.js';
+import { RANKS, SUITS, cardRank, cardSuit, isRed, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG } from '/shared/cards.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
 import { $, esc } from '../ui.js';
@@ -63,7 +63,7 @@ export class CardGame {
     this.bindNet();
     addEventListener('resize', () => this.resize());
     addEventListener('keydown', e => {
-      if (!this.active) return;
+      if (!this.active || $('cRules').open) return;
       if (this.chatting) { if (e.key === 'Enter') this.sendChat(); else if (e.key === 'Escape') this.closeChat(); return; }
       if (e.key === 'Enter') { e.preventDefault(); this.openChat(); }
       else if (e.key === 'Escape') this.onUnlock?.();
@@ -123,7 +123,19 @@ export class CardGame {
       <div class="c-bottom"><div id="cInfo"></div><div id="cHand"></div><div id="cActs"></div></div>
       <div class="c-side"><span class="c-bots" title="Số máy (AI) chơi cùng"><button class="btn small" id="cBotSub" title="Bớt 1 máy">−</button><b id="cBotN">🤖 0</b><button class="btn small" id="cBotAdd" title="Thêm 1 máy">+</button></span>
         <button class="btn small" id="cStop" title="Chủ phòng: dừng sau ván này, về phòng chờ">⏸</button><button class="btn small" id="cMenu">☰</button><button class="btn small" id="cChatBtn">💬</button></div>
-      <div id="cChat"></div><input id="cChatIn" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden>`;
+      <div id="cChat"></div><input id="cChatIn" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden>
+      <dialog id="cRules" class="panel c-rules" aria-labelledby="cRulesTitle">
+        <form id="cRulesForm">
+          <h2 id="cRulesTitle">Cài đặt bàn</h2>
+          <label>Vốn ban đầu (xu)<input id="cRulesChips" required type="number" min="1" max="${CARD_CONFIG.maxChips}" inputmode="numeric"></label>
+          <fieldset id="cRulesBets"><legend>Mức cược (xu)</legend>
+            ${Array.from({ length: CARD_CONFIG.maxBets }, (_, i) =>
+              `<input type="number" min="1" max="${CARD_CONFIG.maxChips}" inputmode="numeric" placeholder="Mức ${i + 1}" aria-label="Mức cược ${i + 1}">`).join('')}
+          </fieldset>
+          <p id="cRulesError" role="alert"></p>
+          <div class="c-rules-actions"><button type="button" class="btn" id="cRulesCancel">Quay lại</button><button class="btn primary">Lưu</button></div>
+        </form>
+      </dialog>`;
     document.body.appendChild(el);
     this.ui = el;
     $('cMenu').onclick = () => this.onUnlock?.();
@@ -132,6 +144,22 @@ export class CardGame {
     $('cBotAdd').onclick = () => { sfx('ui'); this.net.send({ t: 'cbot', d: 1 }); };
     $('cStop').onclick = () => { sfx('ui'); this.net.send({ t: 'cstop' }); };
     $('cBotSub').onclick = () => { sfx('ui'); this.net.send({ t: 'cbot', d: -1 }); };
+    $('cRulesCancel').onclick = () => $('cRules').close();
+    $('cRulesForm').onsubmit = event => {
+      event.preventDefault();
+      $('cRulesError').textContent = '';
+      const chips = $('cRulesChips').valueAsNumber;
+      const bets = Array.from($('cRulesBets').querySelectorAll('input'), input => input.valueAsNumber).filter(Number.isFinite);
+      this.net.send({ t: 'cconfig', chips, bets });
+    };
+  }
+  openRules() {
+    const { startChips, bets } = this.st.rules;
+    $('cRulesError').textContent = '';
+    $('cRulesChips').value = startChips;
+    $('cRulesBets').hidden = this.game !== 'xidach';
+    Array.from($('cRulesBets').querySelectorAll('input')).forEach((input, i) => { input.value = bets[i] ?? ''; });
+    $('cRules').showModal();
   }
   openChat() { this.chatting = true; $('cChatIn').hidden = false; $('cChatIn').focus(); }
   closeChat() { this.chatting = false; $('cChatIn').hidden = true; $('cChatIn').value = ''; $('cChatIn').blur(); }
@@ -148,7 +176,14 @@ export class CardGame {
   bindNet() {
     const n = this.net;
     n.on('cs', m => { if (this.active) this.onState(m); });
-    n.on('cno', m => { if (this.active) { this.hud.toast(m.msg, 1600); sfx('error'); } });
+    n.on('cno', m => {
+      if (!this.active) return;
+      if ($('cRules').open) $('cRulesError').textContent = m.msg;
+      else this.hud.toast(m.msg, 1600);
+      sfx('error');
+    });
+    n.on('cconfigok', () => { if (this.active) $('cRules').close(); });
+    n.on('close', () => $('cRules').close());
     n.on('chat', m => { if (this.active) this.chatLine(m.name, m.msg); });
     n.on('sys', m => { if (this.active) this.chatLine('', m.msg, true); });
   }
@@ -166,6 +201,7 @@ export class CardGame {
   }
   leave() { this.active = false; this.clear(); this.ui.hidden = true; this.closeChat(); }
   clear() {
+    $('cRules').close();
     for (const c of this.cards.values()) {
       c.mesh.removeFromParent();
       c.mesh.material.dispose();
@@ -194,16 +230,20 @@ export class CardGame {
 
   // ---------- Bố trí ghế ----------
   // ghế của mình luôn ở dưới (gần camera); xì dách: nhà cái ở trên cùng
-  // mình làm nhà cái (xì dách): nhà cái ở dưới, 5 ghế chia đều phía trên
-  dealerAngle() { return this.st?.youDealer ? 0 : Math.PI; }
+  // Mình làm nhà cái: đặt ghế của mình ở dưới, các ghế còn lại quanh bàn.
+  dealerAngle() {
+    const n = this.st.seats.length;
+    return this.st.youDealer ? 0 : Math.ceil(n / 2) * (2 * Math.PI / (n + 1));
+  }
   seatAngle(seat) {
     const st = this.st, n = st.seats.length, you = st.you >= 0 ? st.you : 0, k = (seat - you + n) % n;
     if (this.game === 'xidach' && st.youDealer) {
       // các ghế có người dàn đều quanh phía trên bàn, đối diện nhà cái
       const occ = st.seats.map((q, i) => q ? i : -1).filter(i => i >= 0), idx = Math.max(0, occ.indexOf(seat));
-      return Math.PI + (idx - (occ.length - 1) / 2) * (Math.PI / 3);
+      const spacing = Math.min(Math.PI / 3, 2 * Math.PI / (occ.length + 1));
+      return Math.PI + (idx - (occ.length - 1) / 2) * spacing;
     }
-    if (this.game === 'xidach') return [0, 1, 2, -2, -1][k] * (Math.PI / 3) || 0;   // 0, ±60°, ±120°; nhà cái 180°
+    if (this.game === 'xidach') return (k >= Math.ceil(n / 2) ? k + 1 : k) * (2 * Math.PI / (n + 1));
     return k * (Math.PI * 2 / n);
   }
   dirOf(a) { return new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); }
@@ -341,6 +381,7 @@ export class CardGame {
   // ---------- Giao diện theo trạng thái ----------
   renderUi() {
     const s = this.st, me = s.seats[s.you];
+    this.ui.classList.toggle('c-crowded', this.game === 'xidach' && s.seats.filter(Boolean).length >= 6);
     $('cMsg').textContent = s.msg || '';
     $('cBotN').textContent = `🤖 ${s.botWant ?? s.bots} máy`;
     $('cBotN').title = s.canBot ? 'Số máy (AI) chơi cùng' : 'Số máy mới áp dụng từ ván sau';
@@ -356,6 +397,7 @@ export class CardGame {
       else if (this.game === 'xidach') {
         if (s.phase === 'bet') st = `Cược ${p.bet}${p.ready ? ' ✔' : ''}`;
         else if (p.result) st = p.result.r > 0 ? `+${p.result.delta}` : p.result.r < 0 ? `${p.result.delta}` : 'Hoà';
+        else if (p.opened) st = `Đã so với ${p.opened.dealerScore}đ · ${p.opened.delta > 0 ? '+' : ''}${p.opened.delta}`;
         else if (p.kind === 'quac') st = 'Quắc';
         else if (p.done) st = p.kind && p.kind !== 'normal' ? XD_KIND[p.kind] : 'Dằn';
         else st = `Cược ${p.bet}`;
@@ -364,6 +406,7 @@ export class CardGame {
         if (p.result) st = p.result.r > 0 ? `🏆 ${p.result.instant ? p.result.instant + ' ' : ''}+${p.result.delta}` : `Hạng ${p.result.rank} · ${p.result.delta}${p.result.burn ? ' (cháy)' : ''}${p.result.heo ? ` · thối ${p.result.heo} heo` : ''}`;
         else st = (p.passed ? 'Bỏ lượt · ' : '') + `🂠 ${p.n}`;
       }
+      if (p.offline) st += ' · Mất kết nối';
       if (i === s.you) return;   // bảng tên của mình: thông tin hiện ở khu vực dưới cùng
       const cls = (i === s.turn ? ' turn' : '') + (p.result ? (p.result.r > 0 ? ' win' : p.result.r < 0 ? ' lose' : '') : '') + (i === s.you ? ' me' : '');
       plates.push(`<div class="cplate${cls}${lobby && p.lready ? ' win' : ''}" data-seat="${i}"><b>${p.id === s.host ? '👑 ' : ''}${esc(p.name)}${p.bot ? ' 🤖' : ''}</b><small>💰 ${p.chips}</small><i>${esc(st)}</i></div>`);
@@ -372,6 +415,7 @@ export class CardGame {
       const d = s.dealer;
       let st = d.result ? (d.result.delta > 0 ? `+${d.result.delta}` : d.result.delta < 0 ? `${d.result.delta}` : 'Hoà') + ' · ' : '';
       st += d.cards.length ? (d.kind && d.kind !== 'normal' ? XD_KIND[d.kind] + ' · ' : '') + `${d.score}đ` : lobby ? (d.human ? 'Chủ phòng' : 'Máy') : `🂠 ${d.n}`;
+      if (d.offline) st += ' · Mất kết nối';
       const cls = (s.phase === 'dealer' ? ' turn' : '') + (d.result ? (d.result.r > 0 ? ' win' : d.result.r < 0 ? ' lose' : '') : '');
       plates.push(`<div class="cplate dealer${cls}" data-seat="dealer"><b>🎩 ${esc(d.name)}${d.human ? '' : ' 🤖'}</b>${d.human ? `<small>💰 ${d.chips}</small>` : ''}<i>${esc(st)}</i></div>`);
     }
@@ -381,11 +425,14 @@ export class CardGame {
     if (lobby) {
       // phòng chờ: người chơi bấm Sẵn sàng, chủ phòng bấm Bắt đầu (và chọn ai làm nhà cái)
       const sd = s.youDealer ? s.dealer : null;
+      const rules = s.rules;
+      info.push('Vốn bàn ' + rules.startChips + ' xu' + (rules.bets.length ? ' · Cược ' + rules.bets.join(' / ') + ' xu' : ''));
       if (me) info.push(`💰 ${me.chips} xu`);
       if (sd) info.push(`🎩 Bạn làm nhà cái · 💰 ${sd.chips} xu`);
       if (isHost) {
         info.push(s.block ? `⚠ ${esc(s.block)}` : 'Mọi người đã sẵn sàng');
         acts.push(`<button class="btn primary" data-a="start"${s.block ? ` disabled title="${esc(s.block)}"` : ''}>▶ Bắt đầu</button>`);
+        acts.push('<button class="btn" data-a="rules">Cài đặt bàn</button>');
         if (this.game === 'xidach') acts.push(`<button class="btn${s.hostDealer ? ' on' : ''}" data-a="dealer">${s.hostDealer ? '🤖 Để máy làm nhà cái' : '🎩 Mình làm nhà cái'}</button>`);
       } else if (me) {
         info.push(me.lready ? 'Chờ chủ phòng bắt đầu…' : 'Bấm Sẵn sàng khi muốn chơi');
@@ -400,24 +447,38 @@ export class CardGame {
       else if (s.phase === 'play') info.push('Người chơi đang rút bài…');
       else if (s.phase === 'dealer' && !d.auto) {
         acts.push(`<button class="btn primary" data-a="hit"${d.n >= XD.maxCards || d.score >= 21 ? ' disabled' : ''}>🂠 Rút bài</button>`);
-        acts.push(`<button class="btn" data-a="stand"${d.score < XD.dealerMin ? ` disabled title="Chưa đủ ${XD.dealerMin} điểm"` : ''}>✋ Dằn</button>`);
-        if (d.score < XD.dealerMin) info.push(`Nhà cái cần ít nhất ${XD.dealerMin} điểm mới được dằn`);
+        const closed = s.seats.filter(p => p?.n && !p.opened);
+        if (closed.length) {
+          const options = closed.map(p => `<option value="${p.seat}">${esc(p.name)}</option>`).join('');
+          acts.push(`<select id="cOpenSeat" aria-label="Người chơi cần mở bài"${d.canOpen ? '' : ' disabled'}>${options}</select>`);
+          acts.push(`<button class="btn" data-a="open"${d.canOpen ? '' : ' disabled'}>Mở bài</button>`);
+        }
+        acts.push(`<button class="btn" data-a="stand"${d.canOpen ? '' : ' disabled'}>Mở hết</button>`);
+        if (!d.canOpen) info.push(`Nhà cái cần ít nhất ${XD.dealerMin} điểm để mở bài`);
       } else if (s.phase === 'dealer') info.push('Máy đang đánh thay nhà cái…');
-      if (d.result) info.push(d.result.delta > 0 ? `🎉 Nhà cái ăn ${d.result.delta} xu` : d.result.delta < 0 ? `Nhà cái chung ${-d.result.delta} xu` : 'Hoà cả bàn');
+      if (d.result) {
+        info.push(d.result.delta > 0 ? `🎉 Nhà cái ăn ${d.result.delta} xu` : d.result.delta < 0 ? `Nhà cái chung ${-d.result.delta} xu` : 'Hoà cả bàn');
+      }
     } else if (me) info.push(`💰 ${me.chips} xu${this.game === 'xidach' && s.phase !== 'result' ? ` · cược ${me.bet}` : ''}`);
     if (lobby || s.youDealer) { /* đã xử lý ở trên */ }
     else if (!me) info.push('Bạn đang xem — sẽ vào bàn ở ván sau');
     else if (this.game === 'xidach') {
       if (me.cards.length) info.push(`<b>${me.score} điểm</b>${me.kind && me.kind !== 'normal' ? ' · ' + XD_KIND[me.kind] : ''}`);
       if (s.phase === 'bet') {
-        for (const b of XD.bets) acts.push(`<button class="btn small${me.bet === b ? ' on' : ''}" data-a="bet" data-v="${b}">Cược ${b}</button>`);
+        for (const b of s.rules.bets) acts.push(`<button class="btn small${me.bet === b ? ' on' : ''}" data-a="bet" data-v="${b}"${b > me.chips ? ' disabled' : ''}>Cược ${b}</button>`);
         acts.push(`<button class="btn primary" data-a="ready"${me.ready ? ' disabled' : ''}>${me.ready ? 'Đã sẵn sàng' : 'Sẵn sàng ▶'}</button>`);
       } else if (s.phase === 'play' && s.turn === s.you) {
-        acts.push(`<button class="btn primary" data-a="hit"${me.n >= XD.maxCards || me.score >= 21 ? ' disabled' : ''}>🂠 Rút bài</button>`);
+        acts.push(`<button class="btn primary" data-a="hit"${me.n >= XD.maxCards || me.score === 21 ? ' disabled' : ''}>🂠 Rút bài</button>`);
         acts.push(`<button class="btn" data-a="stand"${me.score < XD.minStand ? ' disabled title="Chưa đủ 16 điểm"' : ''}>✋ Dằn</button>`);
         if (me.score < XD.minStand) info.push(`Cần ít nhất ${XD.minStand} điểm mới được dằn`);
-      } else if (s.phase === 'play' || s.phase === 'dealer') info.push(me.done ? 'Chờ nhà cái…' : 'Chờ tới lượt…');
-      if (me.result) info.push(me.result.r > 0 ? `🎉 Thắng ${me.result.delta} xu` : me.result.r < 0 ? `Thua ${-me.result.delta} xu` : 'Hoà');
+        if (me.score > 21) info.push('Bài vẫn úp. Bạn có thể rút tiếp hoặc dằn.');
+      } else if (me.opened && s.phase === 'dealer') {
+        info.push(`Đã so với nhà cái ${me.opened.dealerScore} điểm · ${me.opened.delta > 0 ? '+' : ''}${me.opened.delta} xu`);
+      } else if (s.phase === 'play' || s.phase === 'dealer') info.push(me.done || s.phase === 'dealer' ? 'Chờ nhà cái…' : 'Chờ tới lượt…');
+      if (me.result) {
+        info.push(me.result.r > 0 ? `🎉 Thắng ${me.result.delta} xu` : me.result.r < 0 ? `Thua ${-me.result.delta} xu` : 'Hoà');
+        if (me.result.penalty) info.push(`Đền bài: ${me.result.penalty > 0 ? '+' : ''}${me.result.penalty} xu`);
+      }
     } else {
       const hand = me.cards;
       const selArr = [...this.sel], combo = selArr.length ? tlCombo(selArr) : null;
@@ -447,11 +508,13 @@ export class CardGame {
     const s = this.st;
     sfx('ui');
     switch (a) {
+      case 'rules': this.openRules(); break;
       case 'bet': this.net.send({ t: 'cbet', v }); break;
       case 'ready': this.net.send({ t: 'cready' }); break;
       case 'start': this.net.send({ t: 'cstart' }); break;
       case 'dealer': this.net.send({ t: 'cdealer' }); break;
       case 'hit': this.net.send({ t: 'chit' }); break;
+      case 'open': this.net.send({ t: 'copen', seat: Number($('cOpenSeat').value) }); break;
       case 'stand': this.net.send({ t: 'cstand' }); break;
       case 'play': this.net.send({ t: 'cplay', cards: [...this.sel] }); this.sel.clear(); break;
       case 'pass': this.net.send({ t: 'cpass' }); this.sel.clear(); break;
@@ -530,7 +593,8 @@ export class CardGame {
         v.copy(a.model.root.position); v.y += 2.6;
         v.project(this.camera);
         // không để bảng tên đè lên đồng hồ / tràn khỏi màn hình
-        const px = Math.max(70, Math.min(w - 70, (v.x + 1) / 2 * w)), py = Math.max(118, (1 - v.y) / 2 * h);
+        const margin = this.ui.classList.contains('c-crowded') ? 44 : 70;
+        const px = Math.max(margin, Math.min(w - margin, (v.x + 1) / 2 * w)), py = Math.max(118, (1 - v.y) / 2 * h);
         el.style.transform = `translate(-50%, -100%) translate(${px.toFixed(0)}px, ${py.toFixed(0)}px)`;
       }
     } else this.turnRing.visible = false;

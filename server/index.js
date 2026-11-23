@@ -74,7 +74,7 @@ const server = http.createServer(serveStatic);
 // ---------- Hub: lobby + phòng ----------
 class Hub {
   constructor() {
-    this.clients = new Map(); // id -> client
+    this.clients = new Set(); // các kết nối đang mở
     this.rooms = new Map();
     this.nextId = 1;
   }
@@ -88,11 +88,12 @@ class Hub {
     if (c.room) { const r = c.room; c.room = null; r.remove(c.id); }
   }
   onConnection(ws) {
-    const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null };
-    this.clients.set(c.id, c);
+    const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null, session: randomUUID() };
+    this.clients.add(c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
-    send({ t: 'welcome', id: c.id, v: VERSION });
+    send({ t: 'welcome', id: c.id, v: VERSION, session: c.session });
     const onMsg = raw => {
+      if (ws.readyState !== 1) return;
       let m;
       // bỏ khoá toString/valueOf: {"toString":1} làm String()/|0/tra bảng ném lỗi ở mọi chỗ xử lý gói tin
       try { m = JSON.parse(raw, (k, v) => (k === 'toString' || k === 'valueOf' ? undefined : v)); } catch { return; }
@@ -128,6 +129,12 @@ class Hub {
           r.add(c);
           return;
         }
+        case 'cresume': {
+          if (c.room) return;
+          const room = typeof m.id === 'string' && m.id.length === 36 ? this.rooms.get(m.id) : null;
+          if (room instanceof CardRoom && typeof m.session === 'string' && m.session.length === 36 && room.resume(c, m.session)) return;
+          return send({ t: 'cresumeno' });
+        }
         case 'leave':
           this.leaveRoom(c);
           return send({ t: 'rooms', list: this.roomList() });
@@ -139,7 +146,12 @@ class Hub {
     ws.on('message', raw => {
       try { onMsg(raw); } catch (e) { if (!c.errLogged) { c.errLogged = true; console.error('[msg]', e); } }  // chỉ ghi 1 lần/kết nối, tránh spam log
     });
-    ws.on('close', () => { this.leaveRoom(c); this.clients.delete(c.id); });
+    ws.on('close', () => {
+      this.clients.delete(c);
+      if (c.room instanceof CardRoom) c.room.disconnect(c);
+      else this.leaveRoom(c);
+      c.room = null;
+    });
     ws.on('error', () => {});
     // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
     // Đồng thời đo RTT (giây) từ ping/pong của WebSocket: phòng bắn súng dùng để bù trễ khi kiểm tra trúng đạn.
@@ -168,7 +180,7 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
 wss.on('connection', ws => hub.onConnection(ws));
 wss.on('error', () => {});   // lỗi cổng đã do server.on('error') báo; không có listener thì process chết trước khi in thông báo
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
-// Không trả lời ping trong 2 lượt (~10 giây) thì cắt, người chơi rời phòng ngay.
+// Không trả lời ping trong 2 lượt (~10 giây) thì cắt. Bàn bài giữ chỗ cho người mất kết nối.
 function sendPing(ws) {
   ws.pingAt = performance.now();
   try { ws.ping(); } catch { /* bỏ qua */ }

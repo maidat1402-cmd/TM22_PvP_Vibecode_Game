@@ -9,6 +9,7 @@
 // bot "ma" bị server cắt sau ~10 s, và cuối bài không còn phòng/người chơi nào sót lại.
 import WebSocket from 'ws';
 import { CHARACTERS } from '../shared/characters.js';
+import { CARD_GAMES, CARD_REJOIN_SECONDS } from '../shared/cards.js';
 import { WEAPON_LIST, NADE_LIST, BUY_MENU } from '../shared/weapons.js';
 
 const PORT = +process.argv[2] || 3123;
@@ -24,11 +25,11 @@ const fail = msg => { fails.push(msg); console.log('  ✗ ' + msg); };
 const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple'], ['xidach', ''], ['tienlen', '']];
 const BUY_ITEMS = BUY_MENU.flatMap(c => c.items);
 const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', 'tready', 'tstart', 'awk', 'hold', 'pfill',
-  'cbet', 'cready', 'cbot', 'chit', 'cstand', 'cplay', 'cpass', 'cstart', 'cdealer', 'cstop',
+  'cbet', 'cready', 'cbot', 'chit', 'cstand', 'cplay', 'cpass', 'cstart', 'cdealer', 'cstop', 'cconfig', 'copen', 'cresume', 'cresumeack',
   'fire', 'throw', 'drop', 'pickup', 'reload', 'switch', 'buy', 'use', 'loadout', 'team',
   'hello', 'list', 'create', 'join', 'leave', 'ping', '__proto__', 'constructor', 'toString', ''];
 const FIELDS = ['p', 'd', 'a', 'r', 'f', 'sk', 'cs', 'seed', 'tg', 'team', 'on', 'msg', 'char', 'k', 'o', 'v',
-  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards'];
+  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards', 'session', 'chips', 'bets', 'seat'];
 const BIG = 'x'.repeat(3000);
 const JUNK = [undefined, null, true, false, 0, -1, 1, 3, 99, -99999, 1e308, -1e308, 2 ** 53, 0.5, '', 'NaN', 'Infinity',
   '__proto__', 'constructor', 'toString', 'hasOwnProperty', BIG, [], [null], [1], [1, 2], ['a', 'b', 'c'],
@@ -239,8 +240,14 @@ for (const a of anchors) { a.stopping = true; a.ws.close(); }
 ghost.ws.terminate();
 await sleep(1500);
 try {
-  const i = await info();
+  let i = await info();
   if (i.online !== 0) fail(`còn ${i.online} kết nối sau khi mọi bot đã thoát`);
+  const cardRooms = i.rooms.filter(room => Object.hasOwn(CARD_GAMES, room.mode));
+  if (cardRooms.length === i.rooms.length && cardRooms.length) {
+    console.log(`  Chờ tối đa ${CARD_REJOIN_SECONDS} s để ${cardRooms.length} bàn bài hết hạn giữ chỗ`);
+    const deadline = performance.now() + CARD_REJOIN_SECONDS * 1000;
+    while (i.rooms.length && performance.now() < deadline) { await sleep(1000); i = await info(); }
+  }
   if (i.rooms.length) fail(`còn ${i.rooms.length} phòng sót lại: ${JSON.stringify(i.rooms).slice(0, 200)}`);
 } catch { fail('server không trả lời sau bài test (đã chết?)'); }
 

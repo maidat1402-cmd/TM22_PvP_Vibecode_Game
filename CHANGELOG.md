@@ -2,6 +2,33 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.15.1 (2026-11-24) · `686d586`
+
+- Xì dách giữ chỗ 60 giây. Sau 20 giây mất mạng, máy rút hoặc dằn thay đến khi người chơi quay lại.
+- Kết nối lại vẫn dùng được mã phiên đã lưu nếu đường truyền rớt trước khi nhận mã mới.
+- Nhà cái quắc từ 28 điểm so bài bình thường. Khoản đền chỉ áp dụng giữa các ghế cược.
+
+## 0.15.0 (2026-11-23) · `02330d4`
+
+- Nhà cái Xì dách có thể mở từng ghế, chốt kết quả theo điểm lúc mở rồi rút thêm trước khi so với ghế khác.
+
+## 0.14.1 (2026-11-23) · `2e265e1`
+
+- Sau khi khôi phục phiên, chủ động rời bàn sẽ về sảnh. Tải lại tab từ đường dẫn vào nhanh cũng thử nhận lại ghế.
+
+## 0.14.0 (2026-11-23) · `ea5b1b6`
+
+- Chủ phòng tùy chỉnh vốn ban đầu trong hai chế độ bài và đặt tối đa năm mức cược trong Xì dách. Người mới vào bàn nhận vốn và mức cược theo cấu hình.
+
+## 0.13.0 (2026-11-23) · `055a36e`
+
+- Xì dách có tám ghế cược và một nhà cái. Người chơi quắc có thể giữ lượt và rút tiếp khi còn dưới 5 lá.
+- Khi rút từ 28 điểm trở lên, người quắc đền mỗi ghế cược khác một lần mức cược của ghế đó. Bài quắc và khoản đền chỉ lộ khi so bài.
+
+## 0.12.0 (2026-11-23) · `5380bbf`
+
+- Bàn bài giữ ghế, bài, xu và vai trò trong 60 giây khi mất kết nối. Người chơi có thể lấy lại chỗ trong cùng tab.
+
 ## 0.11.7 (2026-11-23) · `0400b8c`
 
 - Lướt né của Kaze dị biến cấp miễn sát thương theo đúng hồi chiêu trên màn hình.

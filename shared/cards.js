@@ -10,6 +10,8 @@ export const cardSuit = id => id & 3;
 export const cardLabel = id => RANKS[cardRank(id)] + SUITS[cardSuit(id)];
 export const isRed = id => cardSuit(id) >= 2;
 export const CARD_GAMES = { xidach: 'Xì dách', tienlen: 'Tiến lên' };
+export const CARD_REJOIN_SECONDS = 60;
+export const CARD_CONFIG = { maxChips: 1_000_000, maxBets: 5 };
 
 // Bộ bài đã xáo (rng: hàm trả 0..1)
 export function newDeck(rng = Math.random) {
@@ -22,7 +24,7 @@ export function newDeck(rng = Math.random) {
 // 2..10 theo số, J Q K = 10, A = 1, 10 hoặc 11 (tự chọn cách tính tốt nhất không quá 21).
 // Bài đặc biệt (chỉ tính với 2 lá đầu): Xì bàng (2 lá A) > Xì dách (A + lá 10 điểm). Ngũ linh: 5 lá không quá 21.
 // Quắc: quá 21. Người chơi phải đủ 16 điểm mới được dằn (dừng); nhà cái rút tới khi đủ 15.
-export const XD = { minStand: 16, dealerMin: 15, maxCards: 5, bets: [50, 100, 200], startChips: 1000 };
+export const XD = { seats: 8, minStand: 16, dealerMin: 15, maxCards: 5, penaltyScore: 28, offlineTakeover: 20, bets: [50, 100, 200], startChips: 1000 };
 export const XD_KIND = { xibang: 'Xì bàng', xidach: 'Xì dách', ngulinh: 'Ngũ linh', quac: 'Quắc', normal: '' };
 export const XD_PAY = { xibang: 3, xidach: 2, ngulinh: 2, normal: 1 };   // hệ số tiền thắng theo bài của người thắng
 

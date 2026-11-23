@@ -533,7 +533,18 @@ body.touch #tlShow kbd { display: none; }
 
 /* ================= Đánh bài (bàn tròn) ================= */
 #chud { position: fixed; inset: 0; pointer-events: none; z-index: 6; font-size: 14px; }
-#chud button, #chud .hcard, #chud input { pointer-events: auto; }
+#chud button, #chud .hcard, #chud input, #chud select { pointer-events: auto; }
+#cOpenSeat { max-width: min(180px, 42vw); }
+#chud .c-rules { pointer-events: auto; width: min(440px, calc(100vw - 32px)); max-height: 90dvh; color: var(--text); }
+.c-rules::backdrop { background: rgba(10,8,25,.65); }
+.c-rules form { display: grid; gap: 14px; }
+.c-rules h2, #cRulesError { margin: 0; }
+.c-rules label { display: grid; gap: 5px; }
+.c-rules fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; border: 1px solid var(--line); border-radius: 8px; margin: 0; }
+.c-rules fieldset[hidden], #cRulesError:empty { display: none; }
+.c-rules input { width: 100%; min-width: 0; }
+#cRulesError { color: #ffb0b0; }
+.c-rules-actions { display: flex; justify-content: flex-end; gap: 8px; }
 #chud .c-top { position: absolute; top: 10px; left: 14px; color: var(--text); text-shadow: 0 2px 4px #000; }
 #chud .c-top b { font-size: 16px; }
 #cMsg { margin-top: 4px; font-size: 15px; font-weight: 700; color: #ffd166; }
@@ -549,6 +560,12 @@ body.touch #tlShow kbd { display: none; }
 .cplate.win i { color: #7dff9b; font-weight: 800; } .cplate.lose i { color: #ff8a8a; }
 .cplate.dealer { border-color: rgba(255,209,102,.6); }
 .cplate.me { opacity: .85; }
+.c-crowded .cplate { max-width: 116px; padding-inline: 5px; }
+.c-crowded .cplate > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  .c-crowded .cplate { max-width: 82px; font-size: 10px; }
+  .c-crowded .cplate b { font-size: 11px; }
+}
 #chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px; }
 #cInfo { color: #fff; text-shadow: 0 2px 3px #000; text-align: center; min-height: 18px; }
 #cHand { display: flex; justify-content: center; max-width: 100%; padding-top: 14px; }
