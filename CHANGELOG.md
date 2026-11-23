@@ -2,7 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.14.0 (2026-11-23)
+## 0.14.1 (2026-11-23)
+
+- Sau khi khôi phục phiên, chủ động rời bàn sẽ về sảnh. Tải lại tab từ đường dẫn vào nhanh cũng thử nhận lại ghế.
+
+## 0.14.0 (2026-11-23) · `ea5b1b6`
 
 - Chủ phòng tùy chỉnh vốn ban đầu trong hai chế độ bài và đặt tối đa năm mức cược trong Xì dách. Người mới vào bàn nhận vốn và mức cược theo cấu hình.
 

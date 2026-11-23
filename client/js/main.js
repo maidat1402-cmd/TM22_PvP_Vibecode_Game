@@ -700,15 +700,17 @@ const CARD_SESSION_KEY = 'chibiclash.cardSession';
 const params = new URLSearchParams(location.search);
 let previousCardSession;
 let cardSession;
+let resumePending = false;
 try {
   const saved = JSON.parse(sessionStorage.getItem(CARD_SESSION_KEY));
   if (typeof saved?.room === 'string' && typeof saved?.session === 'string' &&
-      !params.has('quick') && (!params.has('room') || params.get('room') === saved.room)) previousCardSession = saved;
+      (!params.has('quick') || params.get('mode') === saved.mode) &&
+      (!params.has('room') || params.get('room') === saved.room)) previousCardSession = saved;
 } catch { /* trình duyệt có thể chặn lưu trữ */ }
 
-function rememberCardSession(room) {
+function rememberCardSession(room, mode) {
   try {
-    if (room && cardSession) sessionStorage.setItem(CARD_SESSION_KEY, JSON.stringify({ room, session: cardSession }));
+    if (room && cardSession) sessionStorage.setItem(CARD_SESSION_KEY, JSON.stringify({ room, mode, session: cardSession }));
     else sessionStorage.removeItem(CARD_SESSION_KEY);
   } catch { /* trình duyệt có thể chặn lưu trữ */ }
 }
@@ -725,15 +727,20 @@ net.on('welcome', m => {
   $('connState').classList.add('ok');
   cardSession = m.session;
   if (previousCardSession && cardSession) {
+    resumePending = true;
     net.send({ t: 'cresume', id: previousCardSession.room, session: previousCardSession.session });
   } else sendHello();
 });
-net.on('cresumeno', () => { rememberCardSession(); sendHello(); });
+net.on('cresumeno', () => {
+  resumePending = false;
+  rememberCardSession();
+  sendHello();
+});
 // Link mời: ?room=ID vào thẳng phòng; ?quick vào phòng đầu tiên (hoặc tạo mới)
 let autoJoinDone = false;
 net.on('rooms', m => {
   renderRooms(m.list);
-  if (autoJoinDone || inGame) return;
+  if (resumePending || autoJoinDone || inGame) return;
   const want = params.get('room') || previousCardSession?.room;
   if (want || params.has('quick')) {
     autoJoinDone = true;
@@ -770,6 +777,8 @@ net.on('sj', m => {
 });
 // vào bàn bài
 net.on('cj', m => {
+  resumePending = false;
+  autoJoinDone = true;
   inGame = true;
   current = cards;
   shooter.setMenuMap(null);
@@ -778,7 +787,7 @@ net.on('cj', m => {
   game.suspended = true;     // dùng chung canvas với cảnh bàn bài
   $('menu').hidden = true;
   cards.enter(m);
-  rememberCardSession(m.room.id);
+  rememberCardSession(m.room.id, m.room.game);
   if (m.resumed) game.hud.toast('Đã lấy lại chỗ ở bàn bài', 2000);
   afterJoin();
 });
