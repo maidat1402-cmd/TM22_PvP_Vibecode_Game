@@ -107,10 +107,16 @@ export function sfx(name, dist = 0) {
 // Âm thanh theo loại hiệu ứng chiêu
 export function skillSound(skill) {
   const k = skill.fx.kind;
-  if (skill.type === 'melee') return skill.fx.kind === 'impact' ? 'punch' : 'swing';
+  if (skill.bigCharge) return 'charge';   // tuyệt kỹ dị biến: tiếng tụ lực
+  if (skill.type === 'melee') return k === 'impact' || k === 'quakePunch' ? 'punch' : 'swing';
+  if (k === 'kiFist') return 'punch';
+  if (k === 'spearRod' || k === 'pillarThrow') return 'throw';
+  if (skill.type === 'wall') return 'wind';
+  if (/winter|tomb/i.test(k)) return 'ice';
   if (k === 'beam' || /bolt|lightning|thunder/i.test(k)) return 'beam';
-  if (/rock|quake|meteor/i.test(k)) return k === 'rock' ? 'throw' : k === 'rockRoll' ? 'dash' : 'blast';
-  if (/thorn|vine|bloom|petal|mist|seed|tree|stealth|shadow/i.test(k)) return 'wind';
+  if (/rock|quake|meteor|stone/i.test(k)) return k === 'rock' ? 'throw' : k === 'rockRoll' ? 'dash' : 'blast';
+  if (/thorn|vine|bloom|petal|mist|seed|tree|stealth|shadow|flower/i.test(k)) return 'wind';
+  if (k === 'flurry') return 'dash';
   if (k === 'stoneSkin') return 'charge';
   if (/fire|flame|phoenix|crescent/i.test(k)) return 'fire';
   if (/ice|frost|icicle/i.test(k)) return 'ice';

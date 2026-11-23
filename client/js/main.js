@@ -1,6 +1,7 @@
 // Khởi động: menu, chọn nhân vật (preview 3D), danh sách phòng, cài đặt.
 import * as THREE from 'three';
-import { CHARACTERS, getChar, skillLifetime } from '/shared/characters.js';
+import { CHARACTERS, getChar, charSkills, skillLifetime } from '/shared/characters.js';
+import { VERSION } from '/shared/version.js';
 import { FX } from './effects.js';
 import { Net } from './net.js';
 import { Game } from './game.js';
@@ -75,7 +76,8 @@ const pvCaster = {
   hand: () => { pvModel.rig.handR.getWorldPosition(pvHand); return pvHand; },
 };
 // Trạng thái diễn chiêu: lần lượt từng chiêu, bấm vào dòng chiêu để xem chiêu đó
-const demo = { idx: -1, t: 0, dur: 0, wait: 1.2, effect: null, dash: null, pinned: false };
+// idx 0..5: chiêu thường, 6..11: chiêu dị biến (mô hình đổi sang dạng biến hình)
+const demo = { idx: -1, t: 0, dur: 0, wait: 1.2, effect: null, dash: null, pinned: false, aw: false };
 const pvCamPos = new THREE.Vector3(0, 1.35, 5.2), pvCamLook = new THREE.Vector3(0, 0.95, 0);
 const pvCamWant = pvCamPos.clone(), pvLookWant = pvCamLook.clone();
 
@@ -92,17 +94,37 @@ function skillReach(s) {
     case 'leap': return Math.min(s.range, 10) + s.radius * 0.5;
     case 'blink': return s.dist + s.radius;
     case 'buff': return 2;
+    case 'wall': return s.offset + 2;
+    case 'smite': return 10;
+    case 'multiblink': return 9;
+    case 'pillar': return 9;
+    case 'decoy': return 9;
+    case 'icewall': case 'turret': return s.offset + 3;
+    case 'timezone': return s.radius;
+    case 'pet': return s.offset + 4;
+    case 'quake': return 14;
     default: return s.range || 3;
   }
 }
 
 function setPreview(id) {
-  if (pvModel) pvModel.dispose();
   pvChar = getChar(id);
-  pvModel = buildChibi(pvChar.look);
-  pvScene.add(pvModel.root);
+  setPvForm(false);
   stopDemo();
   demo.idx = -1; demo.wait = 1.0; demo.pinned = false;
+}
+
+// đổi mô hình xem trước giữa dạng thường / dạng dị biến
+function setPvForm(aw) {
+  if (pvModel && demo.aw === aw && pvModel.char === pvChar) return;
+  const pos = pvModel ? pvModel.root.position.clone() : null;
+  if (pvModel) pvModel.dispose();
+  const A = pvChar.awaken;
+  pvModel = buildChibi(aw ? { ...pvChar.look, ...A.look, form: A.form, formColor: A.color, formCore: A.core } : pvChar.look);
+  pvModel.char = pvChar;
+  if (pos) pvModel.root.position.copy(pos);
+  pvScene.add(pvModel.root);
+  demo.aw = aw;
 }
 
 function stopDemo() {
@@ -115,8 +137,14 @@ function stopDemo() {
 }
 
 function playSkill(i) {
-  const s = pvChar.skills[i];
+  const aw = i >= 6;
+  const s = charSkills(pvChar, aw)[i % 6];
   stopDemo();
+  if (aw !== demo.aw) {
+    setPvForm(aw);
+    // lần đầu chuyển sang chiêu dị biến: diễn cảnh biến hình
+    if (aw) pvFx.awakenBurst(() => pvModel.root.position, pvChar.awaken.color, pvChar.awaken.core, 0.8);
+  }
   demo.idx = i;
   demo.t = 0;
   demo.dur = Math.min(4.5, skillLifetime(s) + (s.type === 'rain' ? 1.2 : 0.9));
@@ -130,21 +158,32 @@ function playSkill(i) {
   const d = new THREE.Vector3(1, s.type === 'projectile' && s.steer ? 0.05 : 0, 0).normalize();
   // điểm đích giả lập như server sẽ tính
   let tg = null;
-  if (s.type === 'trap' || s.type === 'summon') tg = [PV_HOME.x + s.offset, 0];
+  if (s.type === 'trap' || s.type === 'summon' || s.type === 'wall') tg = [PV_HOME.x + s.offset, 0];
   if (s.type === 'leap') tg = [PV_HOME.x + Math.min(s.range, 9), 0];
-  demo.effect = pvFx.castSkill({ skill: s, p: m.root.position.clone(), d, h, seed: 12345 + i, tg, caster: pvCaster });
+  if (s.type === 'pillar') tg = [PV_HOME.x + 7, 0];
+  if (s.type === 'icewall' || s.type === 'turret') { tg = [PV_HOME.x + s.offset, 0]; demo.dur = Math.max(demo.dur, s.delay + 2.8); }
+  if (s.type === 'decoy') demo.dur = Math.max(demo.dur, 2);
+  if (s.type === 'timezone') demo.dur = Math.min(4.5, s.delay + 3);
+  if (s.type === 'pillar') demo.dur = Math.max(demo.dur, s.delay + 2.8);
+  if (s.type === 'quake') demo.dur = Math.max(demo.dur, s.delay + 1);
+  // preview: các hiệu ứng cần server (cột đá...) tự dựng bản giả
+  demo.effect = pvFx.castSkill({ skill: s, p: m.root.position.clone(), d, h, seed: 12345 + i, tg, caster: pvCaster, preview: true });
   if (s.type === 'dash') demo.dash = { h, v: s.dist / s.dur, delay: s.delay, dur: s.dur };
-  demo.leap = s.type === 'leap' ? { from: PV_HOME.clone(), to: new THREE.Vector3(tg[0], 0, 0), delay: s.delay, dur: s.dur } : null;
+  demo.leap = s.type === 'leap' ? { from: PV_HOME.clone(), to: new THREE.Vector3(tg[0], 0, 0), delay: s.delay, dur: s.dur, h: s.height || 5 } : null;
+  // sét giáng (smite) / lướt chém (multiblink): diễn trên vài điểm giả lập phía trước
+  demo.smite = s.type === 'smite' ? { at: s.delay, done: false, s } : null;
+  demo.multi = s.type === 'multiblink' ? { s, n: 0 } : null;
+  if (demo.multi || demo.smite) demo.dur = Math.max(demo.dur, s.delay + (s.strikes || 1) * (s.interval || 0.3) + 1);
   demo.blink = s.type === 'blink' ? { at: s.delay, to: new THREE.Vector3(PV_HOME.x + s.dist, 0, 0), done: false, s } : null;
   demo.tele = s.teleport ? { at: s.delay + Math.min(s.range, 12) / s.speed, to: new THREE.Vector3(PV_HOME.x + Math.min(s.range, 12) - 1.2, 0, 0), done: false, s } : null;
   demo.stealth = !!s.stealth;
   // góc máy như trong trận: sau lưng chếch bên nhân vật, nhìn theo hướng ra chiêu
   demo.reach = Math.min(skillReach(s), 12);
   demo.high = s.type === 'rain';
-  $('pvSkill').innerHTML = `${[...s.combo].map(k => `<kbd>${k}</kbd>`).join('')} ${s.combo.length === 3 ? '★ ' : ''}${esc(s.name)}`;
+  $('pvSkill').innerHTML = `${aw ? '⚡ ' : ''}${[...s.combo].map(k => `<kbd>${k}</kbd>`).join('')} ${s.combo.length === 3 ? '★ ' : ''}${esc(s.name)}`;
   $('pvSkill').style.color = hex(s.fx.color);
   $('pvSkill').classList.add('on');
-  document.querySelectorAll('#skillList .skill-row').forEach((el, k) => el.classList.toggle('playing', k === i));
+  document.querySelectorAll('#skillList .skill-row').forEach(el => el.classList.toggle('playing', +el.dataset.i === i));
 }
 
 function updateDemo(dt) {
@@ -164,7 +203,21 @@ function updateDemo(dt) {
   if (lp && demo.t >= lp.delay) {
     const k = Math.min(1, (demo.t - lp.delay) / lp.dur);
     m.root.position.lerpVectors(lp.from, lp.to, k);
-    m.root.position.y = Math.sin(Math.PI * k) * 5;
+    m.root.position.y = Math.sin(Math.PI * k) * Math.min(lp.h, 8);
+  }
+  const sm = demo.smite;
+  if (sm && !sm.done && demo.t >= sm.at) {
+    sm.done = true;
+    for (const x of [4, 7, 10]) pvFx.judgement(new THREE.Vector3(PV_HOME.x + x, 1, (x - 7) * 0.8), sm.s.fx.color, x === 4);
+  }
+  const mb = demo.multi;
+  if (mb && mb.n < mb.s.strikes && demo.t >= mb.s.delay + mb.n * mb.s.interval) {
+    // lướt chém luân phiên giữa 2 điểm giả lập
+    const to = new THREE.Vector3(PV_HOME.x + (mb.n % 2 ? 9 : 5), 0, mb.n % 2 ? -1.2 : 1.2);
+    pvFx.blinkFx(m.root.position.clone(), to, mb.s.fx.color, mb.s.fx.core);
+    m.root.position.copy(to);
+    pvFx.hitSpark(to.clone().setY(1).add(new THREE.Vector3(1, 0, 0)), mb.s.fx.color, true);
+    mb.n++;
   }
   // dịch chuyển: tới nơi thì gây sát thương quanh mình
   for (const b of [demo.blink, demo.tele]) {
@@ -183,7 +236,7 @@ function updateDemo(dt) {
   pvLookWant.set(base.x + 3 + r * 0.3, (demo.high ? 3 : 1.2) + base.y * 0.7, base.z);
   if (demo.t >= demo.dur) {
     if (demo.pinned) { demo.pinned = false; }
-    playSkill((demo.idx + 1) % pvChar.skills.length);
+    playSkill((demo.idx + 1) % 12);
   }
 }
 
@@ -269,9 +322,13 @@ function pickChar(id, silent) {
   saveSettings();
   for (const el of document.querySelectorAll('#charList .char-card')) el.classList.toggle('sel', el.dataset.id === c.id);
   $('charInfo').innerHTML = `<b>${esc(c.name)}</b> — ${esc(c.title)}<br>${esc(c.desc)}`;
-  $('skillList').innerHTML = c.skills.map((s, i) => `<div class="skill-row${s.combo.length === 3 ? ' ult' : ''}" style="--c:${hex(s.fx.color)}" data-i="${i}" title="Bấm để xem chiêu">
+  const row = (s, i) => `<div class="skill-row${s.combo.length === 3 ? ' ult' : ''}${i >= 6 ? ' aw' : ''}" style="--c:${hex(s.fx.color)}" data-i="${i}" title="Bấm để xem chiêu">
       <span>${[...s.combo].map(k => `<kbd>${k}</kbd>`).join('')}</span><span>${esc(s.name)} <span class="play">▶</span></span>
-      <span class="cost">${s.mana ? s.mana + ' MP' : 'Miễn phí'}</span></div>`).join('');
+      <span class="cost">${s.mana ? s.mana + ' MP' : 'Miễn phí'}</span></div>`;
+  const A = c.awaken;
+  $('skillList').innerHTML = c.skills.map((s, i) => row(s, i)).join('')
+    + `<div class="aw-head" style="--c:${hex(A.color)}"><b>⚡ Dị biến: ${esc(A.name)}</b> <kbd>L</kbd><kbd>L</kbd> khi thanh dị biến đầy · ${esc(A.desc)}</div>`
+    + A.skills.map((s, i) => row(s, i + 6)).join('');
   for (const el of document.querySelectorAll('#skillList .skill-row')) {
     el.onclick = () => { demo.pinned = true; playSkill(+el.dataset.i); };
   }
@@ -291,7 +348,7 @@ function renderRooms(list) {
   for (const r of list) {
     const d = document.createElement('div');
     d.className = 'room';
-    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
+    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử' }[r.mode || 'brawl']
       + (r.mode === 'team' ? (r.phase === 'lobby' ? ' · đang chờ' : ' · đang đấu') : '');
     d.innerHTML = `<div><b>${esc(r.name)}</b><span class="mtag ${r.mode}">${tag}</span><small>${r.mapName ? esc(r.mapName) + ' · ' : ''}${r.count} người chơi · không giới hạn</small></div>`;
     const b = document.createElement('button');
@@ -332,7 +389,14 @@ function copy(text) {
 }
 
 // ---------- Kết nối ----------
-net.on('welcome', () => {
+// Số phiên bản ở menu và bảng tạm dừng
+for (const el of document.querySelectorAll('.ver-tag')) el.textContent = 'v' + VERSION;
+net.on('welcome', m => {
+  // Trình duyệt còn giữ bản cũ (server đã cập nhật): nhắc tải lại trang
+  if (m.v && m.v !== VERSION) {
+    for (const el of document.querySelectorAll('.ver-tag')) { el.textContent = `v${VERSION} ≠ server v${m.v}`; el.classList.add('bad'); }
+    game.hud.toast(`Server đã cập nhật lên v${m.v}, hãy tải lại trang (F5)`, 6000);
+  }
   $('connState').textContent = '● Đã kết nối';
   $('connState').classList.add('ok');
   sendHello();
@@ -349,7 +413,7 @@ net.on('rooms', m => {
     const qmode = params.get('mode') || 'brawl';
     const r = m.list.find(x => x.id === want) || (params.has('quick') ? m.list.find(x => (x.mode || 'brawl') === qmode && (!params.get('map') || x.map === params.get('map'))) : null);
     if (r) net.send({ t: 'join', id: r.id, char: settings.char });
-    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (qmode === 'brawl' || qmode === 'team' ? 'shrine' : 'lantern') });
+    else if (params.has('quick')) net.send({ t: 'create', name: '', char: settings.char, mode: qmode, map: params.get('map') || (['brawl', 'team', 'practice'].includes(qmode) ? 'shrine' : 'lantern') });
     else game.hud.toast('Phòng trong link mời không còn tồn tại', 2500);
   }
 });
@@ -399,7 +463,7 @@ $('createBtn').onclick = () => {
   const map = document.querySelector('input[name=map]:checked')?.value || 'lantern';
   const arena = document.querySelector('input[name=arena]:checked')?.value || 'shrine';
   settings.mode = mode; settings.map = map; settings.arena = arena; saveSettings();
-  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: mode === 'brawl' || mode === 'team' ? arena : map });
+  net.send({ t: 'create', name: $('roomNameInput').value.trim(), char: settings.char, mode, map: ['brawl', 'team', 'practice'].includes(mode) ? arena : map });
 };
 for (const r of document.querySelectorAll('input[name=mode]')) {
   r.checked = r.value === settings.mode;
@@ -407,7 +471,7 @@ for (const r of document.querySelectorAll('input[name=mode]')) {
 }
 // chỉ hiện ô chọn map của chế độ đang chọn
 function showMapPick(mode) {
-  const brawlLike = mode === 'brawl' || mode === 'team';
+  const brawlLike = mode === 'brawl' || mode === 'team' || mode === 'practice';
   $('mapPick').classList.toggle('off', brawlLike);
   $('arenaPick').classList.toggle('off', !brawlLike);
 }
@@ -437,6 +501,8 @@ $('leaveBtn').onclick = () => {
   $('clickToPlay').hidden = true;
   loadServerInfo();
 };
+// đấu tập: nạp đầy thanh dị biến rồi quay lại trận
+$('fillAwkBtn').onclick = () => { game.net.send({ t: 'pfill' }); sfx('ui'); $('resumeBtn').click(); };
 $('inviteBtn').onclick = () => copy(`${window.__inviteUrl || location.origin}/?room=${current === shooter ? shooter.roomId : game.roomId}`);
 $('switchTeamBtn').onclick = () => { shooter.switchTeam(); $('pause').hidden = true; };
 $('fullscreenBtn').onclick = () => {

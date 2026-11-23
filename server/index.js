@@ -9,6 +9,7 @@ import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
 import { getChar } from '../shared/characters.js';
+import { VERSION } from '../shared/version.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -25,7 +26,7 @@ const HOST = String(arg('host', process.env.HOST || '0.0.0.0'));
 const USE_UPNP = !!arg('upnp', false);
 const USE_TUNNEL = !!arg('tunnel', false);
 
-const publicInfo = { port: PORT, lan: [], publicUrl: null, note: null };
+const publicInfo = { version: VERSION, port: PORT, lan: [], publicUrl: null, note: null };
 
 // ---------- HTTP tĩnh ----------
 const MIME = {
@@ -84,7 +85,7 @@ class Hub {
     const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null };
     this.clients.set(c.id, c);
     const send = m => ws.readyState === 1 && ws.send(JSON.stringify(m));
-    send({ t: 'welcome', id: c.id });
+    send({ t: 'welcome', id: c.id, v: VERSION });
     const onMsg = raw => {
       let m;
       // bỏ khoá toString/valueOf: {"toString":1} làm String()/|0/tra bảng ném lỗi ở mọi chỗ xử lý gói tin
@@ -100,8 +101,9 @@ class Hub {
         case 'create': {
           this.leaveRoom(c);
           const name = String(m.name || '').replace(/[<>]/g, '').slice(0, 24).trim() || `Phòng của ${c.name}`;
-          const mode = ['bomb', 'dm', 'team'].includes(m.mode) ? m.mode : 'brawl';
-          const r = mode === 'brawl' || mode === 'team' ? new Room(name, this, String(m.map || ''), mode === 'team')
+          const mode = ['bomb', 'dm', 'team', 'practice'].includes(m.mode) ? m.mode : 'brawl';
+          // đấu tập: phòng đối kháng có bia tập + võ sĩ máy (chơi một mình vẫn tích được thanh dị biến)
+          const r = mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(name, this, String(m.map || ''), mode === 'team', mode === 'practice')
             : new ShooterRoom(name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
           if (m.char) c.char = getChar(m.char).id;
@@ -184,7 +186,7 @@ function lanAddresses() {
 server.listen(PORT, HOST, async () => {
   const lan = HOST === '0.0.0.0' ? lanAddresses() : [];
   publicInfo.lan = lan.map(ip => `http://${ip}:${PORT}`);
-  console.log('\n=== CHIBI CLASH SERVER ===');
+  console.log(`\n=== CHIBI CLASH SERVER v${VERSION} ===`);
   console.log(`  Máy này     : http://localhost:${PORT}`);
   for (const u of publicInfo.lan) console.log(`  Mạng nội bộ : ${u}`);
   if (HOST !== '0.0.0.0') console.log('  (Chỉ chạy local. Dùng --host 0.0.0.0 để cho máy khác trong LAN vào)');

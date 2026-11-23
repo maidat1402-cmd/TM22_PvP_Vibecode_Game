@@ -101,6 +101,8 @@ input:focus { border-color: var(--accent); }
 .server-info code { background: rgba(0,0,0,.3); padding: 2px 8px; border-radius: 6px; color: #bfe9ff; font-size: 13px; user-select: text; }
 .menu-foot { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
 .conn { margin-left: auto; font-size: 12px; color: var(--muted); }
+.ver-tag { font-size: 11px; color: var(--muted); opacity: 0.8; font-variant-numeric: tabular-nums; }
+.ver-tag.bad { color: #ff8a8a; opacity: 1; }
 .conn.ok { color: var(--hp); }
 
 /* ============ HUD ============ */
@@ -144,6 +146,20 @@ input:focus { border-color: var(--accent); }
 #mpFill { background: linear-gradient(180deg, #7dd3fc, #0ea5e9); }
 .bar span { position: absolute; inset: 0; text-align: center; font-size: 12px; font-weight: 800; line-height: 17px; text-shadow: 0 1px 2px #000; }
 .bar.mp span { line-height: 11px; font-size: 10px; }
+/* thanh dị biến */
+.bar.awk { height: 12px; --c: #ffd166; }
+.bar.awk span { line-height: 9px; font-size: 9px; letter-spacing: .3px; }
+#awkFill { background: linear-gradient(90deg, #ffb703, #ffe066); }
+.bar.awk.full { border-color: #ffe066; animation: awFull .5s infinite alternate; }
+.bar.awk.full #awkFill { background: linear-gradient(90deg, #ffe066, #fff3b0, #ffe066); }
+.bar.awk.on { border-color: var(--c); box-shadow: 0 0 10px var(--c); }
+.bar.awk.on #awkFill { background: linear-gradient(90deg, var(--c), #fff); transition: none; }
+.bar.awk.tired { opacity: .6; }
+@keyframes awFull { to { box-shadow: 0 0 14px #ffd166; filter: brightness(1.25); } }
+#portrait.aw #portraitName { font-size: 10px; white-space: nowrap; color: #ffe066; }
+#portrait.aw { border-color: var(--c); box-shadow: 0 0 18px var(--c), 0 4px 16px rgba(0,0,0,.4); animation: awFull .6s infinite alternate; }
+.slot.aw { border-color: color-mix(in srgb, var(--c) 60%, #ffe066); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 50%, transparent); }
+.slot.aw::after { content: '⚡'; position: absolute; right: 3px; top: 1px; font-size: 10px; }
 
 #skillbar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
 .slot {
@@ -166,7 +182,7 @@ input:focus { border-color: var(--accent); }
 @keyframes fire { 0% { transform: scale(1.15); filter: brightness(2); } }
 .slot.deny { animation: deny .3s; }
 @keyframes deny { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-@media (max-width: 1100px) { .slot { width: 66px; } .slot.util { width: 56px; } .bars { width: 180px; } }
+@media (max-width: 1400px) { .slot { width: 68px; } .slot.util { width: 56px; } .bars { width: 180px; } }
 
 #chat { position: absolute; left: 16px; bottom: 112px; width: 340px; pointer-events: auto; }
 #chatlog { max-height: 160px; overflow-y: auto; font-size: 14px; text-shadow: 0 1px 3px #000; }
@@ -183,6 +199,11 @@ input:focus { border-color: var(--accent); }
 .plate .pb { width: 70px; height: 7px; margin: 1px auto 0; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.7); border-radius: 4px; overflow: hidden; }
 .plate .pb i { display: block; height: 100%; background: #f87171; transition: width .15s; }
 .plate.me .pb i { background: var(--hp); }
+.plate .pa { width: 70px; height: 3px; margin: 1px auto 0; background: rgba(0,0,0,.5); border-radius: 2px; overflow: hidden; }
+.plate .pa i { display: block; height: 100%; width: 0; background: #ffd166; transition: width .2s; }
+.plate.awfull .pa i { background: #fff3b0; box-shadow: 0 0 6px #ffd166; }
+.plate.awfull .pn::after, .plate.awon .pn::after { content: ' ⚡'; color: #ffd166; }
+.plate.awon .pa i { background: linear-gradient(90deg, #ffd166, #fff); }
 .plate.target .pn::before { content: '▼ '; color: #ff5d8f; }
 .plate.target .pn { color: #ffb3c9; }
 .dnum { position: absolute; font-weight: 800; font-size: 22px; transform: translate(-50%,-50%); animation: dnum .9s forwards; text-shadow: 0 2px 0 #000, 0 0 6px #000; }
@@ -353,6 +374,9 @@ tr.me td { color: var(--accent2); }
 [data-layout="brawl"] [data-id="dash"] { right: 206px; bottom: 92px; }
 [data-layout="brawl"] [data-id="heal"] { right: 18px; bottom: 196px; width: 52px; height: 52px; }
 [data-layout="brawl"] [data-id="charge"] { right: 78px; bottom: 218px; width: 52px; height: 52px; }
+[data-layout="brawl"] [data-id="awk"] { right: 16px; bottom: 258px; width: 56px; height: 56px; }
+.tbtn.awk { --c: #ffd166; }
+.tbtn.awk.active { animation: awFull .5s infinite alternate; }
 [data-layout="brawl"] .tbtn span { font-size: 11px; }
 [data-layout="brawl"] .tbtn.big span, [data-layout="brawl"] .tbtn.ult span { font-size: 20px; }
 /* bố cục bắn súng */
@@ -400,6 +424,11 @@ body.touch #clickToPlay { display: none !important; }
 
 /* ===== Đấu đội ===== */
 .room .mtag.team { background: rgba(155,93,229,.4); }
+.room .mtag.practice { background: rgba(82,183,136,.4); }
+/* sương đêm (dị biến Kage): rìa màn hình tối đen, chỉ thấy rõ ở giữa */
+#darkfog { position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, rgba(13,6,24,0) 18%, rgba(13,6,24,.75) 48%, rgba(8,3,16,.96) 75%); animation: darkIn .5s ease-out; }
+@keyframes darkIn { from { opacity: 0; } to { opacity: 1; } }
 #teamLobby { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 18; pointer-events: none; }
 #teamLobby .tl-box { pointer-events: auto; width: min(640px, 100%); max-height: 90vh; overflow-y: auto; }
 .tl-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
@@ -455,3 +484,7 @@ body.touch #tlShow kbd { display: none; }
 .skill-row:hover { background: rgba(255,255,255,.1); }
 .skill-row.playing { background: color-mix(in srgb, var(--c) 30%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
 .skill-row .play { font-size: 11px; color: var(--muted); }
+.aw-head { margin: 8px 0 4px; padding: 6px 8px; border-radius: 10px; font-size: 12px; color: var(--muted); line-height: 1.35;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 28%, transparent), transparent); border-left: 3px solid var(--c); }
+.aw-head b { color: #ffe066; font-size: 13px; }
+.skill-row.aw { border-left: 2px solid color-mix(in srgb, var(--c) 70%, #ffe066); }

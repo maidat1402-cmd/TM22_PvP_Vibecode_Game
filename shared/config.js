@@ -47,6 +47,20 @@ export const GAME = {
   bodyHeight: 1.6,
 };
 
+// Dị biến: thanh tích khi gây sát thương, đầy thì bấm L L để biến hình (bộ chiêu ở shared/characters.js → awaken)
+export const AWAKEN = {
+  max: 100,              // điểm cần để đầy thanh
+  gain: 1,               // điểm nhận được cho mỗi 1 sát thương gây ra (không tính lúc đang dị biến)
+  dur: 17,               // giây dị biến
+  transform: 0.8,        // giây biến hình: bất tử, đứng yên
+  tired: 2,              // giây kiệt sức sau khi hết dị biến
+  tiredSlow: 0.8,        // tốc chạy lúc kiệt sức
+  deathKeep: 0.5,        // chết thì giữ lại tỉ lệ này của thanh
+  speedMul: 1.15,        // tốc chạy khi dị biến (nhân vật có thể ghi đè bằng awaken.passive.speed)
+  manaRegenMul: 2,       // hồi mana nhanh gấp đôi
+  shock: { radius: 5, dmg: 6, kb: 12, kbUp: 6 },   // sóng xung kích lúc biến hình
+};
+
 export const MOVE = {
   walk: 7,
   sprint: 11.5,
@@ -115,10 +129,14 @@ export function rainPoints(skill, seed) {
 // arena.obstacles: trụ [x, z, bán kính, cao]; arena.boxes: hộp thẳng trục [x, z, nửa rộng X, nửa rộng Z, cao]
 
 // Đạn có chạm đất / chướng ngại vật / ra khỏi đấu trường không
-// dyn: chướng ngại vật tạm thời [{ x, z, r, h }] (cây thần, cột đá...)
-export function hitsObstacle(x, y, z, r = 0, arena = ARENA, dyn = null) {
+// dyn: chướng ngại vật tạm thời [{ x, z, r, h, pass?, passTeam?, noBody? }] (cây thần, cột đá, tường gió...)
+// owner/team: chủ viên đạn — tường gió (pass) cho đạn của chủ tường và đồng đội bay xuyên
+export function hitsObstacle(x, y, z, r = 0, arena = ARENA, dyn = null, owner = null, team = null) {
   if (y <= 0.05) return true;
-  if (dyn) for (const o of dyn) if (y < o.h && Math.hypot(x - o.x, z - o.z) < o.r + r * 0.5) return true;
+  if (dyn) for (const o of dyn) {
+    if (o.pass != null && (o.pass === owner || (team && o.passTeam === team))) continue;
+    if (y < o.h && Math.hypot(x - o.x, z - o.z) < o.r + r * 0.5) return true;
+  }
   for (const [ox, oz, or, oh] of arena.obstacles) {
     if (y < oh && Math.hypot(x - ox, z - oz) < or + r * 0.5) return true;
   }
@@ -144,6 +162,7 @@ export function arenaGround(arena, x, z, y, br) {
 // Đẩy nhân vật ra khỏi chướng ngại vật tạm thời (dạng trụ)
 export function dynCollide(dyn, p, br) {
   for (const o of dyn) {
+    if (o.noBody) continue;   // tường gió: chỉ chặn đạn, người đi xuyên qua được
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
     if (d < o.r + br && p.y < o.h - 0.3) { const s = (o.r + br) / (d || 1); p.x = o.x + dx * s; p.z = o.z + dz * s; }
   }
