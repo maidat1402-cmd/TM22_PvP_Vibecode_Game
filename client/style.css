@@ -549,6 +549,12 @@ body.touch #tlShow kbd { display: none; }
 .cplate.win i { color: #7dff9b; font-weight: 800; } .cplate.lose i { color: #ff8a8a; }
 .cplate.dealer { border-color: rgba(255,209,102,.6); }
 .cplate.me { opacity: .85; }
+.c-crowded .cplate { max-width: 116px; padding-inline: 5px; }
+.c-crowded .cplate > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  .c-crowded .cplate { max-width: 82px; font-size: 10px; }
+  .c-crowded .cplate b { font-size: 11px; }
+}
 #chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px; }
 #cInfo { color: #fff; text-shadow: 0 2px 3px #000; text-align: center; min-height: 18px; }
 #cHand { display: flex; justify-content: center; max-width: 100%; padding-top: 14px; }

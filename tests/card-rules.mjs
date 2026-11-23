@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CardRoom } from '../server/cards.js';
-import { tlCombo } from '../shared/cards.js';
+import { XD, tlCombo, xdScore } from '../shared/cards.js';
 
 function makeTable(game) {
   const room = new CardRoom('kiem-thu', 'Kiểm thử', { roomsChanged() {} }, game);
@@ -122,4 +122,73 @@ test('Hết hạn ở Xì dách thì chuyển chủ và để máy tiếp quản
   assert.equal(room.hostId, next.id);
   assert.equal(room.dealer.pid, 0);
   assert.deepEqual(room.dealer.hand, [16, 20]);
+});
+
+test('Xì dách có tám ghế cược và vẫn đủ bài cho nhà cái', () => {
+  const { room, join } = makeTable('xidach');
+  for (let id = 1; id <= 9; id++) join(id);
+  assert.equal(room.seated().length, 8);
+  assert.equal(room.players.get(9).seat, -1);
+  room.setHostDealer(true);
+  assert.equal(room.seated().length, 8);
+  assert.equal(room.dealer.pid, 1);
+  assert.ok((room.seatCount + 1) * XD.maxCards <= 52);
+});
+
+test('Quắc vẫn giữ lượt, giữ kín bài và chỉ tính tiền đền lúc so bài', () => {
+  const { room, join } = makeTable('xidach');
+  const { player: one } = join(1);
+  const { player: two } = join(2);
+  const { player: three } = join(3);
+  Object.assign(one, { hand: [28, 24], bet: 50 });
+  Object.assign(two, { hand: [25, 30], bet: 100 });
+  Object.assign(three, { hand: [16, 17], bet: 200 });
+  room.xdPlayers = [one, two, three];
+  room.dealer.hand = [26, 31];
+  room.deck = [0, 20];
+  room.phase = 'play';
+  room.turn = one.seat;
+
+  room.onMessage(one.id, { t: 'chit' });   // 27 điểm
+  assert.equal(room.turn, one.seat);
+  assert.equal(xdScore(one.hand), 27);
+  room.onMessage(one.id, { t: 'chit' });   // 30 điểm
+  assert.equal(room.turn, one.seat);
+  assert.equal(xdScore(one.hand), 30);
+  assert.equal(one.chips, 1000);
+  assert.equal(two.chips, 1000);
+  room.onMessage(one.id, { t: 'cstand' });
+  assert.equal(room.turn, Math.min(two.seat, three.seat));
+  assert.deepEqual(room.view(two).seats[one.seat].cards, []);
+  assert.equal(room.view(two).seats[one.seat].kind, undefined);
+  assert.equal(room.view(two).seats[one.seat].n, 4);
+
+  room.xdSettle();
+  assert.equal(one.result.penalty, -300);
+  assert.equal(two.result.penalty, 100);
+  assert.equal(three.result.penalty, 200);
+  assert.equal(one.chips, 650);
+  assert.equal(two.chips, 1100);
+  assert.equal(three.chips, 1000);
+  assert.deepEqual(room.view(two).seats[one.seat].cards, one.hand);
+});
+
+test('Nhà cái quắc đúng 28 điểm chung một lần cược cho từng ghế', () => {
+  const { room, join } = makeTable('xidach');
+  const dealer = join(1).player;
+  const player = join(2).player;
+  const second = join(3).player;
+  room.setHostDealer(true);
+  Object.assign(player, { hand: [44, 31], bet: 100 });
+  Object.assign(second, { hand: [0, 4], bet: 200 });
+  room.xdPlayers = [player, second];
+  room.dealer.hand = [28, 29];
+  room.deck = [20];
+  room.phase = 'dealer';
+  room.onMessage(dealer.id, { t: 'chit' });
+  assert.equal(room.phase, 'result');
+  assert.equal(xdScore(room.dealer.hand), 28);
+  assert.equal(dealer.result.delta, -300);
+  assert.equal(player.result.delta, 100);
+  assert.equal(second.result.delta, 200);
 });

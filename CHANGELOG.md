@@ -2,7 +2,12 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.12.0 (2026-11-23)
+## 0.13.0 (2026-11-23)
+
+- Xì dách có tám ghế cược và một nhà cái. Người chơi quắc có thể giữ lượt và rút tiếp khi còn dưới 5 lá.
+- Khi rút từ 28 điểm trở lên, người quắc đền mỗi ghế cược khác một lần mức cược của ghế đó. Bài quắc và khoản đền chỉ lộ khi so bài.
+
+## 0.12.0 (2026-11-23) · `5380bbf`
 
 - Bàn bài giữ ghế, bài, xu và vai trò trong 60 giây khi mất kết nối. Người chơi có thể lấy lại chỗ trong cùng tab.
 
