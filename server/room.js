@@ -2,7 +2,7 @@
 import { startLoop } from './loop.js';
 import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, rainPoints, hitsObstacle, arenaGround, arenaCollide, dynCollide } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
-import { CHARACTERS, getChar, charMaxHp, charSkills, skillLifetime, holdSkill } from '../shared/characters.js';
+import { CHARACTERS, getChar, playableChar, charMaxHp, charSkills, skillLifetime, holdSkill } from '../shared/characters.js';
 import { initSteer, steerStep, validAim } from '../shared/steer.js';
 
 const BODY_R = GAME.bodyRadius;
@@ -603,7 +603,7 @@ export class Room {
         break;
       }
       case 'char': {
-        const c = getChar(m.char);
+        const c = playableChar(m.char);
         // đổi nhân vật: mất dị biến và thanh dị biến
         this.endAwaken(p, true);
         p.awk = 0;

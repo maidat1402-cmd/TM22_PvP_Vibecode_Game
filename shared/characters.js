@@ -680,6 +680,12 @@ export function getChar(id) {
   return CHAR_BY_ID[id] || CHARACTERS[0];
 }
 
+// Nhân vật người chơi được chọn: id vật triệu hồi (treant) từ gói tin không được nhận
+export function playableChar(id) {
+  const c = getChar(id);
+  return c.summon ? CHARACTERS[0] : c;
+}
+
 // Máu tối đa của nhân vật
 export function charMaxHp(c) {
   return (typeof c === 'string' ? getChar(c) : c)?.hp || 150;

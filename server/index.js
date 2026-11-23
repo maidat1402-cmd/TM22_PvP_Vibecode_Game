@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
-import { getChar } from '../shared/characters.js';
+import { playableChar } from '../shared/characters.js';
 import { VERSION } from '../shared/version.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -95,7 +95,7 @@ class Hub {
         case 'ping': return send({ t: 'pong', c: m.c });
         case 'hello':
           c.name = String(m.name || 'Player').replace(/[<>]/g, '').slice(0, 16).trim() || 'Player';
-          c.char = getChar(m.char).id;
+          c.char = playableChar(m.char).id;
           return send({ t: 'rooms', list: this.roomList() });
         case 'list': return send({ t: 'rooms', list: this.roomList() });
         case 'create': {
@@ -106,7 +106,7 @@ class Hub {
           const r = mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(name, this, String(m.map || ''), mode === 'team', mode === 'practice')
             : new ShooterRoom(name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);
-          if (m.char) c.char = getChar(m.char).id;
+          if (m.char) c.char = playableChar(m.char).id;
           r.add(c);
           return;
         }
@@ -115,7 +115,7 @@ class Hub {
           if (!r) return send({ t: 'err', msg: 'Phòng không tồn tại nữa.' });
           if (c.room === r) return;   // đang một mình trong phòng: rời trước sẽ huỷ phòng rồi vào lại phòng đã chết
           this.leaveRoom(c);
-          if (m.char) c.char = getChar(m.char).id;
+          if (m.char) c.char = playableChar(m.char).id;
           r.add(c);
           return;
         }
