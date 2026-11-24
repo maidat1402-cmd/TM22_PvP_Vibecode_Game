@@ -320,8 +320,29 @@ tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 - Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).
 - Số phiên bản hiện ở góc dưới menu và trong bảng tạm dừng (Esc). Lịch sử thay đổi theo từng phiên bản ở [CHANGELOG.md](CHANGELOG.md). Nếu thấy dòng chữ đỏ `vX ≠ server vY` thì trình duyệt đang chạy bản cũ: tải lại trang.
 
+## Chẩn đoán kết nối
+
+Đối kháng và bắn súng mô phỏng ở 30 Hz. Mỗi client nhận snapshot ở 30 Hz khi ổn định. Server bỏ qua snapshot mới nếu hàng đợi WebSocket vượt ngưỡng hoặc client còn quá nhiều snapshot chưa xác nhận. Khi tình trạng này lặp lại, server giới hạn kết nối đó ở khoảng 20 Hz và thử trở lại 30 Hz sau 3 giây thông thoáng. Nếu đường truyền yếu hơn, nhịp nhận thực tế có thể thấp hơn 20 Hz. Client mới xác nhận định kỳ các snapshot đã nhận để phát hiện hàng đợi nằm sau WebSocket của Node. Các sự kiện riêng như trúng đạn, hạ gục và kết quả trận vẫn gửi bình thường.
+
+Server ghi từng dòng JSON vào thư mục **logs/**. Đổi thư mục bằng `--log-dir <đường-dẫn>` hoặc tắt ghi tệp bằng `--no-log`. Một phiên giữ tối đa ba tệp luân phiên 4 MiB. Log ghi lỗi, mã ngắt kết nối tổng hợp, CPU, RAM, độ trễ event loop, lưu lượng socket và số snapshot bị chặn bởi hàng đợi hoặc cửa sổ xác nhận. Log không ghi nội dung chat, mã phiên hay gói tin thô.
+
+### Đo riêng localhost, LAN và tunnel
+
+Chạy server thử trên một cổng riêng. Giữ cửa sổ server mở và chạy lệnh đo từ cửa sổ khác. Dùng Node.js từ 18 trở lên và gửi bot tới server của bạn.
+
+```powershell
+npm start -- --host 0.0.0.0 --port 3123
+node tests/network-bench.mjs http://127.0.0.1:3123 --bots 48 --room-size 8 --seconds 45 --mode dm --shared-clock
+```
+
+Đổi URL sang địa chỉ LAN hoặc URL Quick Tunnel/tunnel có tên. Dùng cùng số bot, kích thước phòng, thời lượng và chế độ qua mọi lượt. Có thể chạy bot từ máy khác. Thêm `--reference-url <URL> --reference-bots 8` để so hai đường tới **cùng server** trong cùng lượt. Bài đo cho bot di chuyển để gây tải snapshot. Đọc ping p95, nhịp nhận và tuổi snapshot cùng log máy chủ. Chỉ dùng `--shared-clock` khi bot và server cùng máy hoặc dùng đồng hồ đã đồng bộ đủ chính xác. Khi bỏ cờ này, script báo phần tuổi snapshot tăng so với mẫu nhanh nhất của từng bot.
+
+- A/B điều tiết bằng cách chạy server lần lượt với cấu hình mặc định và `--snapshot-policy legacy`. Chế độ đối chứng gửi toàn bộ snapshot 30 Hz và chỉ nên dùng trên server thử.
+- A/B nén bằng cấu hình mặc định và `--compression off`. Đo song song `wsOutMbps` trong log. Đây là lưu lượng WebSocket tại Node. Để đo upload thực tế qua tunnel, lấy chênh lệch `SentBytes` của card mạng Windows bằng `Get-NetAdapterStatistics` trước/sau khoảng đo, hoặc dùng bộ đếm TX của card mạng trên máy chủ.
+- Nếu rớt kết nối, giữ lại `connectFailures` và `closeCodes` từ bài đo, cùng tệp log server và log `cloudflared` của lượt tương ứng.
+
 ## Ghi chú kỹ thuật
 
-- Server tick 30 Hz (vòng lặp bù lệch timer Windows), gửi snapshot 30 Hz; client gửi vị trí 30 Hz, người chơi khác được nội suy trễ 70 ms. Gói tin WebSocket được nén (permessage-deflate). Chỉnh trong `NET` ở `shared/config.js`.
+- Server tick 30 Hz (vòng lặp bù lệch timer Windows), gửi snapshot 30 Hz khi ổn định, điều tiết theo từng kết nối khi nghẽn; client gửi vị trí 30 Hz, người chơi khác được nội suy trễ 70 ms. Gói tin WebSocket được nén (permessage-deflate). Chỉnh trong `NET` ở `shared/config.js`.
 - Chiêu thức được hiển thị ngay khi bấm (dự đoán phía client), server xác nhận và tính trúng/sát thương.
 - Cài đặt đồ hoạ (Thấp/Trung bình/Cao, bloom) trong menu Cài đặt — chọn "Thấp" cho máy yếu.

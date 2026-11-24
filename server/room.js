@@ -1,5 +1,6 @@
 // Một phòng đấu: lưu người chơi, mô phỏng chiêu thức, tính sát thương (server-authoritative).
 import { startLoop } from './loop.js';
+import { sendSnapshot } from './snapshots.js';
 import { NET, Ticker, GAME, MOVE, TEAM, AWAKEN, dashCooldown, rainPoints, hitsObstacle, arenaGround, arenaCollide, dynCollide } from '../shared/config.js';
 import { getArena } from '../shared/arenas.js';
 import { CHARACTERS, getChar, playableChar, charMaxHp, charSkills, skillLifetime, holdSkill } from '../shared/characters.js';
@@ -65,7 +66,7 @@ export class Room {
     this.zones = [];          // vùng trên sàn { id, k: 'fire'|'ice'|'slow', owner, side, x, y, z, r, until, mul }
     this.lastTick = now();
     this.snapT = new Ticker(NET.snapRate);
-    this.stopLoop = startLoop(NET.tickRate, () => this.tick());
+    this.stopLoop = startLoop(NET.tickRate, () => this.tick(), { room: this.id });
     if (this.practice) this.spawnPracticeBots();
   }
 
@@ -1821,7 +1822,7 @@ export class Room {
         ps.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), p.anim, Math.ceil(p.hp), Math.floor(p.mp),
           p.flags | (p.dead ? 128 : 0) | (p.awUntil > t ? 64 : 0), Math.floor(p.awk || 0)]);
       }
-      this.broadcast({ t: 'snap', ps });
+      sendSnapshot(this, 'snap', ps, t);
     }
   }
 }

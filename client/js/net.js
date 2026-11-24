@@ -5,6 +5,8 @@ export class Net {
     this.handlers = {};
     this.ping = 0;
     this.connected = false;
+    this.snapshotAckAt = -Infinity;
+    this.snapshotAckTimer = null;
   }
 
   connect() {
@@ -23,6 +25,9 @@ export class Net {
       ws.onclose = () => {
         this.connected = false;
         clearInterval(this.pingTimer);
+        clearTimeout(this.snapshotAckTimer);
+        this.snapshotAckTimer = null;
+        this.snapshotAckAt = -Infinity;
         this.emit('close', {});
       };
       ws.onmessage = ev => {
@@ -30,8 +35,24 @@ export class Net {
         try { m = JSON.parse(ev.data); } catch { return; }
         if (m.t === 'pong') { this.ping = Math.round(performance.now() - m.c); return; }
         this.emit(m.t, m);
+        if ((m.t === 'snap' || m.t === 'ss') && Number.isSafeInteger(m.seq)) this.ackSnapshot(m);
       };
     });
+  }
+
+  ackSnapshot(frame) {
+    this.pendingAck = { t: 'snapAck', room: frame.room, seq: frame.seq };
+    if (this.snapshotAckTimer !== null) return;
+    const flush = () => {
+      this.snapshotAckTimer = null;
+      this.snapshotAckAt = performance.now();
+      this.send(this.pendingAck);
+      this.pendingAck = null;
+    };
+    // Vẫn gửi ACK cuối sau một đợt snapshot đến dồn, kể cả lúc server đang chờ ACK để gửi tiếp.
+    const delay = this.snapshotAckAt + 95 - performance.now();
+    if (delay <= 0) flush();
+    else this.snapshotAckTimer = setTimeout(flush, delay);
   }
 
   on(type, fn) { (this.handlers[type] ||= []).push(fn); }

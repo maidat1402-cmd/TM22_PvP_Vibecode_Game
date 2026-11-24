@@ -24,6 +24,9 @@ function lagProxy(delayMs) {
   return new Promise(res => {
     const srv = net.createServer(c => {
       const up = net.connect(PORT, '127.0.0.1');
+      // Mô phỏng đúng trễ đã đặt, không cộng dồn thêm trễ gom gói TCP của proxy.
+      c.setNoDelay(true);
+      up.setNoDelay(true);
       c.on('data', d => setTimeout(() => up.writable && up.write(d), delayMs));
       up.on('data', d => setTimeout(() => c.writable && c.write(d), delayMs));
       const end = () => { c.destroy(); up.destroy(); };

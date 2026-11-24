@@ -637,8 +637,10 @@ export class CardGame {
     $('cStop').title = s.stopAfter ? 'Đã hẹn dừng sau ván này — bấm để chơi tiếp' : 'Chủ phòng: dừng sau ván này, về phòng chờ';
     s.seats.forEach((p, i) => {
       if (!p) return;
+      const scoreOnly = this.game === 'xidach' && s.youDealer && p.score != null && p.cards.length > 0;
       let st = '';
-      if (lobby) st = p.bot ? 'Máy' : p.id === s.host ? 'Chủ phòng' : p.lready ? '✔ Sẵn sàng' : '… Chưa sẵn sàng';
+      if (scoreOnly) st = p.score + ' điểm';
+      else if (lobby) st = p.bot ? 'Máy' : p.id === s.host ? 'Chủ phòng' : p.lready ? '✔ Sẵn sàng' : '… Chưa sẵn sàng';
       else if (this.game === 'xidach') {
         if (s.phase === 'bet') st = `Cược ${p.bet}${p.ready ? ' ✔' : ''}`;
         else if (p.result) st = p.result.r > 0 ? `+${p.result.delta}` : p.result.r < 0 ? `${p.result.delta}` : 'Hoà';
@@ -661,7 +663,7 @@ export class CardGame {
         else if (p.rank) st = TL_RANK_NAMES[p.rank - 1];
         else st = (p.passed ? 'Bỏ lượt · ' : '') + `🂠 ${p.n}`;
       }
-      if (p.offline) st += ' · Mất kết nối';
+      if (p.offline && !scoreOnly) st += ' · Mất kết nối';
       if (i === s.you) return;   // bảng tên của mình: thông tin hiện ở khu vực dưới cùng
       const cls = (i === s.turn ? ' turn' : '') + (p.result ? (p.result.r > 0 ? ' win' : p.result.r < 0 ? ' lose' : '') : '') + (i === s.you ? ' me' : '');
       const canOpen = s.youDealer && s.phase === 'dealer' && !s.dealer.auto && s.dealer.canOpen && p.n && !p.opened;

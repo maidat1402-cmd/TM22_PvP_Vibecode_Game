@@ -2,6 +2,13 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.18.1 (2026-11-25)
+
+- Đối kháng và bắn súng giữ 30 Hz khi gửi ổn định, tự hạ xuống 20 Hz theo từng kết nối nghẽn và bỏ qua snapshot vị trí cũ. Nhịp mô phỏng giữ 30 Hz, dữ liệu trúng đạn và sự kiện trận vẫn gửi như trước.
+- Gửi pong JSON không nén. Thêm chế độ đối chứng và công cụ đo localhost, LAN hoặc tunnel.
+- Thêm log JSONL về lỗi, tải máy chủ, hàng đợi WebSocket và tình trạng điều tiết snapshot.
+- Khi nhà cái Xì dách mở bài, bảng tên ghế đã lật chỉ hiện điểm của người chơi.
+
 ## 0.18.0 (2026-11-25) · `c0f111c`
 
 - Thêm nút mời bạn ngay trong phòng chờ bàn bài và Đấu đội, đồng thời giữ địa chỉ truy cập của người chơi khi tạo link mời.

@@ -670,7 +670,7 @@ function renderRooms(list) {
 function sendHello() {
   settings.name = cleanName($('nameInput').value) || settings.name;
   saveSettings();
-  net.send({ t: 'hello', name: settings.name, char: settings.char });
+  net.send({ t: 'hello', name: settings.name, char: settings.char, snapAck: true });
 }
 
 async function loadServerInfo() {

@@ -2,6 +2,7 @@
 // Server quyết định: máu, giáp, tiền, đạn, thắng/thua vòng, bom. Client tự di chuyển và
 // tự dò trúng đích (cho mượt), server kiểm tra lại (tầm, tường chắn, tốc độ bắn, đạn).
 import { startLoop } from './loop.js';
+import { sendSnapshot, snapshotRate } from './snapshots.js';
 import { NET, Ticker } from '../shared/config.js';
 import { getMap, rayMap, inRect, newNade, stepNade, lineOfSight, NADE_STEP } from '../shared/maps.js';
 import { WEAPONS, WEAPON_LIST, weaponIndex, EQUIPMENT, GRENADES, THROW_SPEED, SHOOTER as S } from '../shared/weapons.js';
@@ -44,7 +45,7 @@ export class ShooterRoom {
     this.rsAcc = 0;
     this.snapT = new Ticker(NET.snapRate);
     if (this.mode === 'dm') { this.phase = 'live'; this.phaseEnd = now() + S.dmTime; }
-    this.stopLoop = startLoop(NET.tickRate, () => this.tick());
+    this.stopLoop = startLoop(NET.tickRate, () => this.tick(), { room: this.id });
   }
 
   get count() { return this.players.size; }
@@ -306,7 +307,7 @@ export class ShooterRoom {
     p.protectUntil = 0;
     this.broadcast({ t: 'sshot', id: p.id, w: weaponIndex(wid), o: o.map(r2), e: pellets.map(q => [r2(q[0]), r2(q[1]), r2(q[2])]) }, p.id);
     // người bắn thấy mục tiêu ở thời điểm t - rewind (theo giờ server nhận vị trí)
-    const rewind = Math.min(REWIND_MAX, (p.ws.rtt ?? DEFAULT_RTT) + NET.interp + 2 / NET.snapRate + 0.1);
+    const rewind = Math.min(REWIND_MAX, (p.ws.rtt ?? DEFAULT_RTT) + NET.interp + 2 / snapshotRate(p.ws, this.id) + 0.1);
     const dmgBy = new Map();
     for (const q of pellets) {
       const [ex, ey, ez, tid, zone] = q;
@@ -854,7 +855,7 @@ export class ShooterRoom {
         if (this.using.has(p.id)) f |= 64;
         ps.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), f, weaponIndex(p.weapons[p.cur] || 'knife')]);
       }
-      this.broadcast({ t: 'ss', ps });
+      sendSnapshot(this, 'ss', ps, t);
     }
   }
 }

@@ -39,7 +39,7 @@ export class CardRoom {
       this.xdPlayers = [];     // giữ danh sách đã chia để mọi khoản cược được tính khi kết ván
       this.xdOpened = new Map();
     }
-    this.stopLoop = startLoop(10, () => this.tick());
+    this.stopLoop = startLoop(10, () => this.tick(), { room: this.id });
   }
 
   get count() { let n = 0; for (const p of this.players.values()) if (!p.bot) n++; return n; }
