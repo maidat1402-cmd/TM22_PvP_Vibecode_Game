@@ -76,8 +76,9 @@ export function xdCompare(p, d) {
 // Bộ bài đánh ra: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2),
 // đôi thông (từ 3 đôi liên tiếp, không có 2). Chặn được khi cùng loại, cùng số lá và lá cao nhất lớn hơn.
 // Chặt heo: 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt 1 lá 2, đôi 2, 3 đôi thông, tứ quý.
-export const TL = { handSize: 13, seats: 4, turnTime: 25, payPerCard: 10, startChips: 1000 };
+export const TL = { handSize: 13, seats: 4, turnTime: 25, unit: 10, instantUnits: 4, burnUnits: 2, startChips: 1000 };
 export const TL_NAME = { single: 'Rác', pair: 'Đôi', triple: 'Sám', quad: 'Tứ quý', straight: 'Sảnh', pairs: 'Đôi thông' };
+export const TL_RANK_UNITS = { 2: [2, -2], 3: [3, -1, -2], 4: [2, 1, -1, -2] };
 
 export function tlCombo(ids) {
   const c = [...ids].sort((a, b) => a - b), n = c.length;
@@ -177,9 +178,18 @@ export function tlInstantWin(hand) {
   return null;
 }
 // Thối heo: người thua còn heo (lá 2) khi hết ván bị phạt thêm, trả cho người thắng.
-export const TL_HEO_FINE = { black: 20, red: 40 };   // heo ♠ ♣ / heo ♦ ♥, mỗi lá
+export const TL_HEO_FINE = { black: 2 * TL.unit, red: 4 * TL.unit };   // heo ♠ ♣ / heo ♦ ♥, mỗi lá
 export function tlHeoFine(hand) {
   let n = 0, xu = 0;
   for (const c of hand) if (cardRank(c) === RANK_TWO) { n++; xu += isRed(c) ? TL_HEO_FINE.red : TL_HEO_FINE.black; }
   return { n, xu };
+}
+
+// Tiền chặt tính trên bộ bị chặt. Đè heo bằng heo lớn hơn vẫn là đánh thường.
+export function tlChopValue(trick) {
+  const { combo, cards } = trick;
+  if (combo.type === 'quad') return 4 * TL.unit;
+  if (combo.type === 'pairs') return (combo.len / 2 + (combo.len >= 8 ? 1 : 0)) * TL.unit;
+  if (combo.type === 'single' || combo.type === 'pair') return tlHeoFine(cards).xu;
+  return 0;
 }

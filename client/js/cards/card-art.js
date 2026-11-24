@@ -241,7 +241,7 @@ function drawCourt(g, rank, suit, ink, style, chibi) {
   g.restore();
 }
 
-function getArt(id, styleId) {
+export function cardCanvas(id, styleId = DEFAULT_CARD_STYLE) {
   const key = styleId + ':' + id;
   if (ART.has(key)) return ART.get(key);
   const canvas = document.createElement('canvas');
@@ -262,16 +262,10 @@ function getArt(id, styleId) {
     g.rotate(Math.PI);
     drawIndex(g, rank, suit, ink);
   }
-  const art = { canvas };
-  ART.set(key, art);
-  return art;
+  ART.set(key, canvas);
+  return canvas;
 }
 
-export function cardCanvas(id, style = DEFAULT_CARD_STYLE) {
-  return getArt(id, style).canvas;
-}
-
-export function cardImage(id, style = DEFAULT_CARD_STYLE) {
-  const art = getArt(id, style);
-  return art.url ??= art.canvas.toDataURL();
+export function paintCard(canvas, id, style) {
+  canvas.getContext('2d').drawImage(cardCanvas(id, style), 0, 0, canvas.width, canvas.height);
 }

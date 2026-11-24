@@ -2,6 +2,16 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.16.2 (2026-11-24)
+
+- Tiến lên tiếp tục đánh sau khi có người về nhất. Chốt theo thứ tự hết bài và chuyển quyền hưởng sái khi người đã về thắng vòng.
+- Tính xu theo hạng, cóng, thối heo và chặt chồng. Tới trắng chốt 40 xu mỗi ghế còn lại.
+
+## 0.16.1 (2026-11-24)
+
+- Bài trên tay Tiến lên hiển thị trực tiếp từ Canvas, mỗi mặt bài chỉ có một lớp hình.
+- Tách tên phòng, đồng hồ và nút điều khiển trên màn hình hẹp để tránh chồng lên nhau.
+
 ## 0.16.0 (2026-11-24) · `7953b31`
 
 - Chủ phòng Xì dách và Tiến lên chọn bộ bài Cổ điển hoặc Chibi Clash trong cài đặt bàn.

@@ -157,14 +157,17 @@ Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức t
 5. **Đền bài:** từ **28 điểm** trở lên, người ngồi cược bị quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nhà cái quắc từ 28 điểm vẫn tính thắng, thua hoặc hòa theo luật so bài thông thường và không phải đền thêm. Ghế đã mở giữ nguyên kết quả so bài trước đó.
 6. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
 
-**🂡 Tiến lên** (miền Nam, 4 người, mỗi người 13 lá):
+**🂡 Tiến lên** (miền Nam, 2–4 người, mỗi người 13 lá):
 - Thứ tự lá: 3 nhỏ nhất … K, A, **2 (heo) lớn nhất**; cùng hạng thì so chất ♠ < ♣ < ♦ < ♥.
 - Bộ được đánh: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2), đôi thông (từ 3 đôi liên tiếp).
 - Chặn bài bằng bộ cùng loại, cùng số lá và lá cao nhất lớn hơn. **Chặt heo:** 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt cả tứ quý.
 - Ván đầu, ai cầm 3♠ đánh trước và phải đánh lá đó; các ván sau người thắng ván trước đánh trước. Bỏ lượt thì không được đánh lại cho tới khi vòng đó kết thúc; mọi người khác đã bỏ thì người đánh cuối được đánh tự do.
 - Bấm vào lá trên tay để chọn (bấm lại để bỏ), **Đánh** khi bộ chọn hợp lệ, **💡 Gợi ý** để tự chọn bộ nhỏ nhất chặn được. Mỗi lượt 25 giây, hết giờ thì tự bỏ lượt (đang đánh tự do thì tự đánh lá nhỏ nhất).
-- Ai hết bài trước thắng ván. Người còn bài trả 10 xu mỗi lá còn lại; chưa đánh được lá nào ("cháy") thì trả gấp đôi. **Thối heo:** còn lá 2 trên tay khi hết ván bị phạt thêm 20 xu mỗi heo đen (♠ ♣), 40 xu mỗi heo đỏ (♦ ♥).
-- **Tới trắng:** vừa chia bài mà có **tứ quý heo**, **sảnh rồng** (đủ 3 → A), **6 đôi** hoặc **5 đôi thông** thì thắng ngay, mỗi người còn lại trả như thua trọn 13 lá (130 xu).
+- Mỗi người được xếp hạng ngay khi đánh hết bài. Các ghế còn bài tiếp tục đánh đến khi chỉ còn một người, người đó về chót. Nếu bài cuối của người đã về không ai chặn, ghế còn bài ngồi kế tiếp được **hưởng sái** và mở vòng mới.
+- **Tiền hạng, trước các khoản đền:** bàn 4 người lần lượt **+20 / +10 / −10 / −20 xu**. Bàn 3 người **+30 / −10 / −20 xu**. Bàn 2 người **+20 / −20 xu**.
+- **Thối heo và cóng:** người về chót trả người về nhất thêm 20 xu mỗi heo đen (♠ ♣), 40 xu mỗi heo đỏ (♦ ♥), và thêm 20 xu nếu đến hết ván vẫn chưa đánh lá nào.
+- **Tiền chặt:** người bị chặt trả mức heo theo màu chất hoặc 30 xu cho ba đôi thông, 40 xu cho tứ quý, 50 xu cho bốn đôi thông. Nếu chặt chồng, người bị chặt sau cùng trả tổng khoản đền trong chuỗi cho người chặt cuối.
+- **Tới trắng:** vừa chia bài mà có **tứ quý heo**, **sảnh rồng** (đủ 3 → A), **6 đôi** hoặc **5 đôi thông** thì thắng ngay. Mỗi người còn lại trả 40 xu.
 
 ## Chế độ bắn súng
 

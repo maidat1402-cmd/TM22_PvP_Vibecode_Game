@@ -2,7 +2,7 @@
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
 import { CHARACTERS, playableChar } from '../shared/characters.js';
-import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '../shared/cards.js';
+import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, tlChopValue, isBomb, TL, TL_NAME, TL_RANK_UNITS, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
@@ -114,10 +114,10 @@ export class CardRoom {
       Object.assign(this.dealer, { pid: 0, name: this.botDealer.name, char: this.botDealer.char });
       this.dealerAuto = true;
     }
-    if (this.game === 'tienlen' && inHand) {
-      // bot chơi thay phần bài còn lại
+    if (this.game === 'tienlen' && this.phase === 'play' && (inHand || p.tlRank)) {
+      // Giữ ghế trong ván để bài, hạng và tiền chặt còn được ghi nhận.
       const b = this.makeBot(p.seat);
-      Object.assign(b, { hand: p.hand, chips: p.chips, played: p.played, name: p.name + ' (máy)' });
+      Object.assign(b, { hand: p.hand, chips: p.chips, played: p.played, tlRank: p.tlRank, tlChop: p.tlChop, name: p.name + ' (máy)' });
       this.players.delete(p.id);
       this.players.set(b.id, b);
       this.seats[p.seat] = b.id;
@@ -197,7 +197,7 @@ export class CardRoom {
     if (this.dealer) {
       this.dealer.hand = []; this.dealer.open = false; this.xdPlayers = []; this.xdOpened.clear();
     }
-    for (const q of this.players.values()) Object.assign(q, { hand: [], result: null, done: false, lready: false });
+    for (const q of this.players.values()) Object.assign(q, { hand: [], result: null, done: false, lready: false, tlRank: 0, tlChop: 0 });
     this.rebalance();
     this.msg = 'Phòng chờ — chủ phòng bấm Bắt đầu';
     this.sys('⏸ Về phòng chờ');
@@ -395,7 +395,7 @@ export class CardRoom {
           o.lready = p.id === this.hostId || !!p.lready;
           o.offline = !!p.rejoinUntil;
         }
-        if (this.game === 'tienlen') o.passed = !!this.passed?.has(i);
+        if (this.game === 'tienlen') Object.assign(o, { passed: !!this.passed?.has(i), rank: p.tlRank || null });
         if (open && this.game === 'xidach' && p.hand.length) Object.assign(o, { score: xdScore(p.hand), kind: xdKind(p.hand) });
         if (p.result) o.result = p.result;
         return o;
@@ -609,7 +609,10 @@ export class CardRoom {
     if (ps.length < 2) return this.toLobby();
     this.games++;
     this.deck = newDeck();
-    for (const p of ps) { p.hand = this.deck.splice(0, TL.handSize).sort((a, b) => a - b); p.result = null; p.played = false; }
+    for (const p of ps) {
+      const hand = this.deck.splice(0, TL.handSize).sort((a, b) => a - b);
+      Object.assign(p, { hand, result: null, played: false, tlRank: 0, tlChop: 0 });
+    }
     // ván đầu: ai cầm 3♠ đánh trước và phải đánh lá đó; các ván sau: người thắng ván trước đánh trước
     const lastWin = this.lastWinner != null ? this.bySeat(this.lastWinner) : null;
     if (lastWin?.hand.length) { this.turn = this.lastWinner; this.mustHave = -1; }
@@ -638,14 +641,29 @@ export class CardRoom {
     if (!combo) return reject('Bộ bài không hợp lệ (rác, đôi, sám, tứ quý, sảnh, đôi thông)');
     if (this.mustHave >= 0 && !cards.includes(this.mustHave)) return reject(`Lượt đầu phải đánh lá ${cardLabel(this.mustHave)}`);
     if (!tlBeats(combo, this.trick?.combo)) return reject('Không chặn được bài trên bàn');
-    const chop = this.trick && combo.type !== this.trick.combo.type;
+    const previous = this.trick;
+    const chopValue = previous && isBomb(combo) ? tlChopValue(previous) : 0;
     p.hand = p.hand.filter(c => !cards.includes(c));
     p.played = true;
     this.mustHave = -1;
     this.trick = { cards: [...cards].sort((a, b) => a - b), combo, by: p.seat };
-    this.msg = `${p.name}: ${TL_NAME[combo.type]}${chop ? ' — CHẶT!' : ''}`;
-    if (chop) this.sys(`💥 ${p.name} chặt bằng ${TL_NAME[combo.type]}!`);
-    if (!p.hand.length) return this.tlFinish(p);
+    this.msg = `${p.name}: ${TL_NAME[combo.type]}${chopValue ? ' — CHẶT!' : ''}`;
+    if (chopValue) {
+      this.trick.chop = { payer: previous.by, xu: chopValue + (previous.chop?.xu ?? 0) };
+      this.sys(`💥 ${p.name} chặt bằng ${TL_NAME[combo.type]}!`);
+    }
+    if (!p.hand.length) {
+      const seats = this.seated();
+      p.tlRank = 1 + seats.filter(q => q.tlRank).length;
+      this.passed.delete(p.seat);
+      const remaining = seats.filter(q => q.hand.length);
+      if (remaining.length === 1) {
+        remaining[0].tlRank = p.tlRank + 1;
+        return this.tlFinish(seats);
+      }
+      this.msg = `${p.name} về hạng ${p.tlRank}. Các ghế còn bài tiếp tục đánh.`;
+      this.sys(this.msg);
+    }
     this.tlNext();
   }
 
@@ -656,13 +674,25 @@ export class CardRoom {
     this.tlNext();
   }
 
-  // lượt kế tiếp theo chiều kim đồng hồ; mọi người khác đã bỏ thì người đánh cuối được đánh tự do
+  // Khép vòng khi đi qua ghế đánh cuối, kể cả ghế đó đã hết bài.
   tlNext() {
     for (let i = 1; i <= this.seatCount; i++) {
       const s = (this.turn + i) % this.seatCount, q = this.bySeat(s);
-      if (!q || !q.hand.length) continue;
-      if (this.trick && s === this.trick.by) { this.trick = null; this.passed.clear(); this.turn = s; this.msg = `${q.name} được đánh tự do`; break; }
-      if (!this.passed.has(s)) { this.turn = s; break; }
+      if (s === this.trick?.by) {
+        this.tlSettleChop();
+        this.trick = null;
+        this.passed.clear();
+        // Nếu người đánh cuối đã về, ghế còn bài kế tiếp được hưởng sái.
+        for (let offset = 0; offset < this.seatCount; offset++) {
+          const next = (s + offset) % this.seatCount, leader = this.bySeat(next);
+          if (!leader?.hand.length) continue;
+          this.turn = next;
+          this.msg = `${leader.name} ${offset ? 'hưởng sái, ' : ''}được đánh tự do`;
+          break;
+        }
+        break;
+      }
+      if (q?.hand.length && !this.passed.has(s)) { this.turn = s; break; }
     }
     this.setTurnDeadline(TL.turnTime);
     this.sendState();
@@ -680,14 +710,23 @@ export class CardRoom {
     if (mv) this.tlPlay(p, mv); else this.tlPass(p);
   }
 
-  // Tới trắng: thắng ngay khi vừa chia, mỗi người còn lại trả như thua trọn 13 lá
+  tlSettleChop() {
+    const chop = this.trick?.chop;
+    if (!chop) return;
+    const payer = this.bySeat(chop.payer), winner = this.bySeat(this.trick.by);
+    payer.tlChop = (payer.tlChop ?? 0) - chop.xu;
+    winner.tlChop = (winner.tlChop ?? 0) + chop.xu;
+    this.sys(`💥 ${payer.name} đền ${chop.xu} xu cho ${winner.name}`);
+  }
+
+  // Tới trắng: thắng ngay khi vừa chia, mỗi ghế khác trả 4 phần.
   tlInstant(w, name) {
     let total = 0;
     for (const q of this.seated()) {
       if (q === w) continue;
-      const pay = TL.handSize * TL.payPerCard;
+      const pay = TL.instantUnits * TL.unit;
       q.chips -= pay; total += pay;
-      q.result = { r: -1, delta: -pay, left: q.hand.length, rank: 2 };
+      q.result = { r: -1, delta: -pay, left: q.hand.length, instantLoss: true };
     }
     w.chips += total;
     w.result = { r: 1, delta: total, rank: 1, instant: name };
@@ -701,25 +740,25 @@ export class CardRoom {
     this.sendState();
   }
 
-  // Có người hết bài: thắng ván. Người còn bài trả tiền theo số lá còn lại (chưa đánh lá nào: "cháy", trả gấp đôi)
-  tlFinish(w) {
-    let total = 0;
-    const rest = this.seated().filter(q => q !== w).sort((a, b) => a.hand.length - b.hand.length);
-    for (const q of rest) {
-      const burn = !q.played, heo = tlHeoFine(q.hand);
-      // còn heo trên tay: thối heo, phạt thêm (heo đen 20, heo đỏ 40 mỗi lá)
-      const pay = q.hand.length * TL.payPerCard * (burn ? 2 : 1) + heo.xu;
-      q.chips -= pay; total += pay;
-      q.result = { r: -1, delta: -pay, left: q.hand.length, burn, heo: heo.n };
-      if (heo.n) this.sys(`🐷 ${q.name} thối ${heo.n} heo (phạt ${heo.xu} xu)`);
+  // Còn đúng một ghế có bài: chốt tiền theo hạng và cộng các khoản phạt.
+  tlFinish(seats) {
+    this.tlSettleChop();
+    const order = [...seats].sort((a, b) => a.tlRank - b.tlRank);
+    const first = order[0], last = order.at(-1);
+    const heo = tlHeoFine(last.hand), burn = !last.played;
+    const fine = heo.xu + (burn ? TL.burnUnits * TL.unit : 0);
+    for (const q of order) {
+      const rank = q.tlRank, rankXu = TL.unit * TL_RANK_UNITS[order.length][rank - 1];
+      const chop = q.tlChop ?? 0;
+      const delta = rankXu + chop + (q === first ? fine : q === last ? -fine : 0);
+      q.chips += delta;
+      q.result = { r: Math.sign(delta), delta, rank, rankXu, chop, left: q.hand.length,
+        burn: q === last && burn, heo: q === last ? heo.n : 0 };
+      this.refillChips(q, 0);
     }
-    w.chips += total;
-    w.result = { r: 1, delta: total, rank: 1 };
-    rest.forEach((q, i) => { q.result.rank = i + 2; });
-    for (const q of this.seated()) this.refillChips(q, 0);
-    this.lastWinner = w.seat;
-    this.msg = `🏆 ${w.name} về nhất!`;
-    this.sys(`🏆 ${w.name} thắng ván, nhận ${total} xu`);
+    if (fine) this.sys(`${last.name} đền ${fine} xu cho ${first.name} (${[burn ? 'cóng' : '', heo.n ? 'thối ' + heo.n + ' heo' : ''].filter(Boolean).join(', ')})`);
+    this.lastWinner = first.seat;
+    this.msg = `🏆 ${first.name} về nhất!`;
     this.phase = 'result';
     this.turn = -1;
     this.deadline = now() + 8;

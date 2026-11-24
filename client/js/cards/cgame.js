@@ -3,12 +3,12 @@
 // (chia bài, đánh bài, lật bài) bằng cách so trạng thái mới với vị trí lá bài đang có.
 import * as THREE from 'three';
 import { getChar } from '/shared/characters.js';
-import { RANKS, SUITS, isRed, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
+import { RANKS, SUITS, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
 import { $, esc } from '../ui.js';
 import { sfx } from '../audio.js';
-import { cardCanvas, cardImage } from './card-art.js';
+import { cardCanvas, paintCard } from './card-art.js';
 
 const now = () => performance.now() / 1000;
 const TABLE_Y = 1.0, TABLE_R = 3.2, SEAT_R = 4.25, ZONE_R = 2.2;
@@ -27,6 +27,14 @@ function cardTex(id, style) {
 }
 const CARD_GEO = new THREE.PlaneGeometry(CW, CH);
 const SAMPLE_CARDS = [RANKS.indexOf('6') * 4 + SUITS.indexOf('♦'), RANKS.indexOf('Q') * 4 + SUITS.indexOf('♣')];
+const TL_RANK_NAMES = ['Về nhất', 'Về nhì', 'Về ba', 'Về tư'];
+
+function tlResultText(result) {
+  const { rank, delta, instant, instantLoss, chop, burn, heo } = result;
+  const label = instant ? 'Tới trắng (' + instant + ')' : instantLoss ? 'Thua tới trắng' : TL_RANK_NAMES[rank - 1];
+  const amount = (delta > 0 ? '+' : '') + delta + ' xu';
+  return [label, amount, chop ? 'chặt ' + (chop > 0 ? '+' : '') + chop : '', burn ? 'cóng' : '', heo ? 'thối ' + heo + ' heo' : ''].filter(Boolean).join(' · ');
+}
 
 export class CardGame {
   constructor(net, settings, renderer, hud) {
@@ -100,12 +108,15 @@ export class CardGame {
   buildUi() {
     const el = document.createElement('div');
     el.id = 'chud'; el.hidden = true;
-    el.innerHTML = `<div class="c-top"><b id="cRoom"></b> · <span id="cGame"></span><div id="cMsg"></div></div>
-      <div id="cTimer"></div>
+    el.innerHTML = `<header class="c-header">
+        <div class="c-top"><b id="cRoom"></b><span id="cGame"></span></div>
+        <div id="cTimer"><span id="cTimerLabel"></span><span id="cTimerSeconds"></span></div>
+        <div class="c-side"><span class="c-bots" title="Số máy (AI) chơi cùng"><button class="btn small" id="cBotSub" title="Bớt 1 máy">−</button><b id="cBotN">🤖 0</b><button class="btn small" id="cBotAdd" title="Thêm 1 máy">+</button></span>
+          <button class="btn small" id="cStop" title="Chủ phòng: dừng sau ván này, về phòng chờ">⏸</button><button class="btn small" id="cMenu">☰</button><button class="btn small" id="cChatBtn">💬</button></div>
+        <div id="cMsg"></div>
+      </header>
       <div id="cPlates"></div>
       <div class="c-bottom"><div id="cInfo"></div><div id="cHand"></div><div id="cActs"></div></div>
-      <div class="c-side"><span class="c-bots" title="Số máy (AI) chơi cùng"><button class="btn small" id="cBotSub" title="Bớt 1 máy">−</button><b id="cBotN">🤖 0</b><button class="btn small" id="cBotAdd" title="Thêm 1 máy">+</button></span>
-        <button class="btn small" id="cStop" title="Chủ phòng: dừng sau ván này, về phòng chờ">⏸</button><button class="btn small" id="cMenu">☰</button><button class="btn small" id="cChatBtn">💬</button></div>
       <div id="cChat"></div><input id="cChatIn" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden>
       <dialog id="cRules" class="panel c-rules" aria-labelledby="cRulesTitle">
         <form id="cRulesForm">
@@ -120,7 +131,7 @@ export class CardGame {
               <label class="c-deck-choice">
                 <span class="c-deck-label"><input type="radio" name="cardStyle" value="${value}"> ${label}</span>
                 <span class="c-deck-preview" aria-hidden="true">
-                  ${SAMPLE_CARDS.map(id => `<img alt="" width="36" height="50" data-card="${id}" data-style="${value}">`).join('')}
+                  ${SAMPLE_CARDS.map(id => `<canvas width="72" height="101" data-card="${id}" data-style="${value}"></canvas>`).join('')}
                 </span>
               </label>`).join('')}
           </fieldset>
@@ -130,6 +141,10 @@ export class CardGame {
       </dialog>`;
     document.body.appendChild(el);
     this.ui = el;
+    this.plateMinY = 118;
+    new ResizeObserver(([entry]) => {
+      this.plateMinY = Math.max(118, entry.contentRect.height + 66);
+    }).observe(el.querySelector('.c-header'));
     $('cMenu').onclick = () => this.onUnlock?.();
     $('cChatBtn').onclick = () => this.openChat();
     // thêm / bớt máy (AI) chơi cùng: chơi một mình với bao nhiêu máy tuỳ ý
@@ -153,8 +168,9 @@ export class CardGame {
     $('cRulesBets').hidden = this.game !== 'xidach';
     Array.from($('cRulesBets').querySelectorAll('input')).forEach((input, i) => { input.value = bets[i] ?? ''; });
     $('cRulesForm').elements.cardStyle.value = this.cardStyle;
-    for (const img of $('cRules').querySelectorAll('.c-deck-preview img:not([src])')) {
-      img.src = cardImage(Number(img.dataset.card), img.dataset.style);
+    for (const canvas of $('cRules').querySelectorAll('.c-deck-preview canvas[data-card]')) {
+      paintCard(canvas, Number(canvas.dataset.card), canvas.dataset.style);
+      delete canvas.dataset.card;
     }
     $('cRules').showModal();
   }
@@ -191,6 +207,7 @@ export class CardGame {
     this.active = true; this.menuBg = false;
     this.myId = m.you; this.roomId = m.room.id; this.game = m.room.game;
     $('cRoom').textContent = m.room.name;
+    $('cRoom').title = m.room.name;
     $('cGame').textContent = CARD_GAMES[this.game];
     this.ui.hidden = false;
     this.ui.className = 'g-' + this.game;
@@ -393,20 +410,31 @@ export class CardGame {
     const key = hand.length ? this.cardStyle + ':' + hand.join(',') : '';
     if (key !== this.handKey) {
       this.handKey = key;
-      box.innerHTML = hand.map(id => `
-        <button class="hcard${isRed(id) ? ' red' : ''}" type="button" aria-label="${cardLabel(id)}" data-id="${id}">
-          <span class="hcard-index" aria-hidden="true">${cardLabel(id)}</span>
-          <img alt="" draggable="false" src="${cardImage(id, this.cardStyle)}">
-        </button>`).join('');
-      for (const button of box.children) {
+      const sameStyle = box.dataset.style === this.cardStyle;
+      const existing = new Map(sameStyle ? Array.from(box.children, button => [Number(button.dataset.id), button]) : []);
+      const cards = hand.map(id => {
+        if (existing.has(id)) return existing.get(id);
+        const button = document.createElement('button');
+        button.className = 'hcard';
+        button.type = 'button';
+        button.setAttribute('aria-label', cardLabel(id));
+        button.dataset.id = id;
+        const canvas = document.createElement('canvas');
+        canvas.width = 112;
+        canvas.height = 158;
+        canvas.setAttribute('aria-hidden', 'true');
+        paintCard(canvas, id, this.cardStyle);
+        button.append(canvas);
         button.onclick = () => {
-          const id = Number(button.dataset.id);
           if (this.sel.has(id)) this.sel.delete(id);
           else this.sel.add(id);
           sfx('ui');
           this.renderUi();
         };
-      }
+        return button;
+      });
+      box.replaceChildren(...cards);
+      box.dataset.style = this.cardStyle;
     }
     for (const button of box.children) {
       const selected = this.sel.has(Number(button.dataset.id));
@@ -440,7 +468,8 @@ export class CardGame {
         else st = `Cược ${p.bet}`;
         if (p.score != null && p.cards.length) st += ` · ${p.score}đ`;
       } else {
-        if (p.result) st = p.result.r > 0 ? `🏆 ${p.result.instant ? p.result.instant + ' ' : ''}+${p.result.delta}` : `Hạng ${p.result.rank} · ${p.result.delta}${p.result.burn ? ' (cháy)' : ''}${p.result.heo ? ` · thối ${p.result.heo} heo` : ''}`;
+        if (p.result) st = tlResultText(p.result);
+        else if (p.rank) st = TL_RANK_NAMES[p.rank - 1];
         else st = (p.passed ? 'Bỏ lượt · ' : '') + `🂠 ${p.n}`;
       }
       if (p.offline) st += ' · Mất kết nối';
@@ -528,10 +557,9 @@ export class CardGame {
         acts.push(`<button class="btn primary" data-a="play"${canPlay ? '' : ' disabled'}>Đánh ▶</button>`);
         acts.push(`<button class="btn" data-a="pass"${s.trick && s.trick.by !== s.you ? '' : ' disabled'}>Bỏ lượt</button>`);
         acts.push(`<button class="btn small" data-a="hint">💡 Gợi ý</button>`);
-      } else if (s.phase === 'play') info.push('Chờ tới lượt…');
+      } else if (s.phase === 'play') info.push(me.rank ? TL_RANK_NAMES[me.rank - 1] + ' · Chờ các ghế còn lại đánh' : 'Chờ tới lượt…');
       if (selArr.length) acts.push(`<button class="btn small" data-a="clear">Bỏ chọn</button>`);
-      if (me.result) info.push(me.result.r > 0 ? `🏆 Bạn ${me.result.instant ? 'tới trắng (' + me.result.instant + ')' : 'về nhất'}, nhận ${me.result.delta} xu`
-        : `Hạng ${me.result.rank}: trả ${-me.result.delta} xu${me.result.burn ? ' (cháy bài ×2)' : ''}${me.result.heo ? ` (thối ${me.result.heo} heo)` : ''}`);
+      if (me.result) info.push(tlResultText(me.result));
     }
     $('cInfo').innerHTML = info.join(' · ');
     $('cActs').innerHTML = acts.join('');
@@ -616,7 +644,11 @@ export class CardGame {
       } else this.turnRing.visible = false;
       const left = Math.max(0, this.deadline - t);
       const who = turnSeat === 'dealer' ? 'Nhà cái' : turnSeat != null ? s.seats[turnSeat]?.name : null;
-      $('cTimer').textContent = s.phase === 'lobby' ? '⏳ Phòng chờ' : s.phase === 'bet' ? `Đặt cược · ${Math.ceil(left)}s` : s.phase === 'result' ? `Ván mới sau ${Math.ceil(left)}s` : who ? `Lượt: ${who} · ${Math.ceil(left)}s` : '';
+      const label = s.phase === 'lobby' ? '⏳ Phòng chờ' : s.phase === 'bet' ? 'Đặt cược' : s.phase === 'result' ? 'Ván mới sau' : who ? 'Lượt: ' + who : '';
+      const seconds = label && s.phase !== 'lobby' ? Math.ceil(left) + 's' : '';
+      const timerLabel = $('cTimerLabel'), timerSeconds = $('cTimerSeconds');
+      if (timerLabel.textContent !== label) timerLabel.textContent = label;
+      if (timerSeconds.textContent !== seconds) timerSeconds.textContent = seconds;
       $('cTimer').classList.toggle('urgent', (turnSeat === s.you || (turnSeat === 'dealer' && s.youDealer)) && left < 6);
       // bảng tên bám theo đầu nhân vật
       const w = innerWidth, h = innerHeight, v = new THREE.Vector3();
@@ -628,7 +660,7 @@ export class CardGame {
         v.project(this.camera);
         // không để bảng tên đè lên đồng hồ / tràn khỏi màn hình
         const margin = this.ui.classList.contains('c-crowded') ? 44 : 70;
-        const px = Math.max(margin, Math.min(w - margin, (v.x + 1) / 2 * w)), py = Math.max(118, (1 - v.y) / 2 * h);
+        const px = Math.max(margin, Math.min(w - margin, (v.x + 1) / 2 * w)), py = Math.max(this.plateMinY, (1 - v.y) / 2 * h);
         el.style.transform = `translate(-50%, -100%) translate(${px.toFixed(0)}px, ${py.toFixed(0)}px)`;
       }
     } else this.turnRing.visible = false;
