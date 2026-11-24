@@ -3,5 +3,5 @@
 //   [FEATURE]                 → tăng số giữa (0.7.0 → 0.8.0)
 //   [UPDATE] [FIX] [PERF]     → tăng số cuối (0.7.0 → 0.7.1)
 //   [REFACTOR] [DOCS] [CHORE] → không đổi
-export const VERSION = '0.17.1';
+export const VERSION = '0.17.2';
 export const VERSION_DATE = '2026-11-24';

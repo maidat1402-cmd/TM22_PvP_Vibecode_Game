@@ -224,6 +224,7 @@ export class Game {
     const canvas = $('game');
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.cardResolution = null;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.1, 900);
     this.composer = new EffectComposer(this.renderer);
@@ -280,16 +281,53 @@ export class Game {
 
   applySettings() {
     const q = this.settings.quality;
-    const pr = q === 'low' ? 0.75 : q === 'medium' ? 1 : Math.min(devicePixelRatio, 2);
-    this.renderer.setPixelRatio(pr);
     this.bloom.enabled = q !== 'low' && this.settings.bloom;
     this.fx.quality = q === 'low' ? 0.5 : 1;
-    this.fx.parts.mat.uniforms.uScale.value = innerHeight * 0.55;
     this.resize();
+  }
+
+  setCardRendering(enabled) {
+    if (Boolean(this.cardResolution) === enabled) return;
+    this.cardResolution = enabled ? {} : null;
+    this.resize();
+  }
+
+  measureCardFrame(seconds) {
+    const scale = this.cardResolution;
+    if (!scale) return;
+    if (document.hidden || seconds > 0.4) {
+      scale.elapsed = scale.frames = scale.fast = 0;
+      return;
+    }
+    scale.elapsed += seconds;
+    scale.frames++;
+    if (scale.elapsed < 0.9) return;
+    const average = scale.elapsed / scale.frames;
+    scale.fast = average < 0.021 ? scale.fast + scale.elapsed : 0;
+    const ratio = this.renderer.getPixelRatio();
+    let next = ratio;
+    if (average > 0.037) next = Math.max(scale.min, ratio - 0.18);
+    else if (scale.fast >= 3) next = Math.min(scale.max, ratio + 0.12);
+    scale.elapsed = scale.frames = 0;
+    if (Math.abs(ratio - next) < 0.001) return;
+    scale.fast = 0;
+    this.renderer.setPixelRatio(next);
   }
 
   resize() {
     const w = innerWidth, h = innerHeight;
+    const quality = this.settings.quality;
+    let ratio = quality === 'low' ? 0.75 : quality === 'medium' ? 1 : Math.min(devicePixelRatio, 2);
+    if (this.cardResolution) {
+      // Bàn bài giữ mức 30 hình/giây mà vẫn đọc rõ trên màn hình nhỏ.
+      const area = w * h;
+      const ceiling = quality === 'low' ? 1.75 : quality === 'medium' ? 1.9 : 2;
+      const budget = quality === 'low' ? 1_400_000 : quality === 'medium' ? 2_200_000 : 3_200_000;
+      ratio = Math.max(0.75, Math.min(devicePixelRatio, ceiling, Math.sqrt(budget / area)));
+      const floor = Math.max(0.75, Math.min(1, Math.sqrt(1_050_000 / area)));
+      this.cardResolution = { min: Math.min(ratio, floor), max: ratio, elapsed: 0, frames: 0, fast: 0 };
+    }
+    if (ratio !== this.renderer.getPixelRatio()) this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.camera.aspect = w / h;

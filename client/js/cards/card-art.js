@@ -2,6 +2,7 @@
 import { RANKS, cardRank, cardSuit, isRed, DEFAULT_CARD_STYLE } from '/shared/cards.js';
 
 const WIDTH = 128, HEIGHT = 180;
+const ART_SCALE = 1.5;
 const GOLD = '#b48638';
 const RED = '#ac1c27', BLACK = '#191821';
 const STYLES = {
@@ -245,9 +246,10 @@ export function cardCanvas(id, styleId = DEFAULT_CARD_STYLE) {
   const key = styleId + ':' + id;
   if (ART.has(key)) return ART.get(key);
   const canvas = document.createElement('canvas');
-  canvas.width = WIDTH;
-  canvas.height = HEIGHT;
+  canvas.width = WIDTH * ART_SCALE;
+  canvas.height = HEIGHT * ART_SCALE;
   const g = canvas.getContext('2d');
+  g.scale(ART_SCALE, ART_SCALE);
   const chibi = styleId === 'chibi', style = STYLES[styleId];
   rounded(g, 1, 1, WIDTH - 2, HEIGHT - 2, 8);
   g.clip();
