@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.16.0 (2026-11-24)
+## 0.16.0 (2026-11-24) · `7953b31`
 
 - Chủ phòng Xì dách và Tiến lên chọn bộ bài Cổ điển hoặc Chibi Clash trong cài đặt bàn.
 - Lá bài có bố cục dấu theo số, chỉ số ở hai góc và hình nhân vật J, Q, K với huy hiệu cùng màu chất bài.
