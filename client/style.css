@@ -581,7 +581,7 @@ body.touch #tlShow kbd { display: none; }
 #cTimer.urgent { background: rgba(214,40,40,.7); animation: kbBlink .6s infinite; }
 #cPlates { position: absolute; inset: 0; }
 .cplate { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 10px; border-radius: 10px;
-  background: rgba(20,12,30,.72); border: 1px solid rgba(255,255,255,.15); color: #fff; font-size: 12px; white-space: nowrap; transition: border-color .2s; }
+  background: rgba(24,17,26,.88); border: 1px solid rgba(233,191,134,.24); color: #fff; font-size: 12px; white-space: nowrap; transition: border-color .2s; }
 .cplate b { font-size: 13px; } .cplate small { color: #ffd166; } .cplate i { font-style: normal; color: #cfd8ff; }
 .cplate.turn { border-color: #ffd166; box-shadow: 0 0 12px rgba(255,209,102,.6); }
 .cplate.win i { color: #7dff9b; font-weight: 800; } .cplate.lose i { color: #ff8a8a; }
@@ -593,9 +593,11 @@ body.touch #tlShow kbd { display: none; }
   .c-crowded .cplate { max-width: 82px; font-size: 10px; }
   .c-crowded .cplate b { font-size: 11px; }
 }
-#chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px; }
+#chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px 10px;
+  background: linear-gradient(0deg, rgba(17,12,23,.82), rgba(17,12,23,0) 100%); }
 #cTrickViewer { position: relative; z-index: 1; width: max-content; min-width: min(270px, 100%); max-width: min(580px, 100%);
-  padding: 6px 9px 8px; border: 1px solid rgba(255,209,102,.5); border-radius: 12px; background: #21192e; color: #fdfaf3; }
+  padding: 6px 9px 8px; border: 1px solid rgba(245,193,116,.62); border-radius: 12px; background: #211c29; color: #fdfaf3;
+  box-shadow: 0 8px 24px rgba(12,8,16,.28); }
 .c-trick-header { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 #cTrickTitle { min-width: 0; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #cTrickClose { flex-shrink: 0; min-height: 36px; }

@@ -2,6 +2,14 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.17.2 (2026-11-24)
+
+- Dựng phòng bài Art Deco cho Xì dách, Tiến lên và Poker, với tường ốp gỗ, ghế băng đỏ rượu, đèn vàng và thảm chữ nhật dệt xương cá.
+- Làm mới mặt nỉ, viền gỗ và ánh sáng bàn bài.
+- Tăng độ nét bàn bài trên màn hình mật độ cao và tự hạ độ phân giải 3D khi khung hình chậm.
+- Tăng độ nét của bề mặt phòng và mặt bài.
+- Làm mịn viền lá bài và giữ hoạt ảnh chia, lật bài chạy tiếp khi nhận trạng thái lặp.
+
 ## 0.17.1 (2026-11-24) · `1b204ca`
 
 - Tiến lên có khung xem lớn bộ vừa đánh, mở sẵn trên điện thoại và vẫn thao tác được với bài trên tay.

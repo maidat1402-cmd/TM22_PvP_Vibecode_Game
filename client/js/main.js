@@ -39,7 +39,7 @@ const game = new Game(net, settings);
 const shooter = new ShooterGame(net, settings, game.renderer, game.hud);
 window.__game = game; // tiện debug trong DevTools
 window.__shooter = shooter;
-const cards = new CardGame(net, settings, game.renderer, game.hud);   // đánh bài quanh bàn tròn
+const cards = new CardGame(net, settings, game.renderer, game.hud, dt => game.measureCardFrame(dt));
 window.__cards = cards;
 let inGame = false;
 let current = null;   // game đang chơi: game | shooter
@@ -761,6 +761,7 @@ net.on('joined', m => {
   shooter.setMenuMap(null); cards.setMenuBg(false);
   if (shooter.active) shooter.leave();
   if (cards.active) cards.leave();
+  game.setCardRendering(false);
   game.suspended = false;
   $('menu').hidden = true;
   game.enter(m);
@@ -772,6 +773,7 @@ net.on('sj', m => {
   cards.setMenuBg(false);
   if (cards.active) cards.leave();
   if (game.active) game.leave();
+  game.setCardRendering(false);
   game.suspended = true;     // tạm dừng render chế độ đối kháng, dùng chung canvas
   $('menu').hidden = true;
   shooter.enter(m);
@@ -788,6 +790,7 @@ net.on('cj', m => {
   shooter.setMenuMap(null);
   if (game.active) game.leave();
   if (shooter.active) shooter.leave();
+  game.setCardRendering(true);
   game.suspended = true;     // dùng chung canvas với cảnh bàn bài
   $('menu').hidden = true;
   cards.enter(m);
@@ -873,10 +876,12 @@ function updateMenuBg() {
     // đánh bài: nền là bàn bài với vài nhân vật ngồi quanh
     shooter.setMenuMap(null);
     game.suspended = true;
+    game.setCardRendering(true);
     cards.setMenuBg(true);
     return;
   }
   cards.setMenuBg(false);
+  game.setCardRendering(false);
   if (['brawl', 'team', 'practice'].includes(mode)) {
     shooter.setMenuMap(null);
     game.suspended = false;

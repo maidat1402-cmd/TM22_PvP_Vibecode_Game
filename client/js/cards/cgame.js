@@ -10,6 +10,7 @@ import { FX } from '../effects.js';
 import { $, esc } from '../ui.js';
 import { sfx } from '../audio.js';
 import { cardCanvas, paintCard } from './card-art.js';
+import { buildTableArt } from './table-art.js';
 
 const now = () => performance.now() / 1000;
 const TABLE_Y = 1.0, TABLE_R = 3.2, SEAT_R = 4.25, ZONE_R = 2.2;
@@ -30,7 +31,7 @@ function cardTex(id, style) {
   if (TEX.has(canvas)) return TEX.get(canvas);
   const t = new THREE.CanvasTexture(canvas);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   TEX.set(canvas, t);
   return t;
 }
@@ -46,8 +47,9 @@ function tlResultText(result) {
 }
 
 export class CardGame {
-  constructor(net, settings, renderer, hud) {
+  constructor(net, settings, renderer, hud, measureFrame) {
     this.net = net; this.settings = settings; this.renderer = renderer; this.hud = hud;
+    this.measureFrame = measureFrame;
     this.active = false; this.menuBg = false;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1d1428);
@@ -65,7 +67,6 @@ export class CardGame {
     this.nextLook = 0;
     this.fx = new FX(this.scene, this.camera);
     this.cardStyle = DEFAULT_CARD_STYLE; this.handKey = '';
-    this.buildRoom();
     this.cards = new Map();     // key -> { mesh, face, tw }
     this.avatars = new Map();   // seat key -> { model, char, name }
     this.st = null; this.sel = new Set(); this.deadline = 0; this.history = []; this.lastGames = -1;
@@ -107,33 +108,11 @@ export class CardGame {
   // ---------- Căn phòng + bàn tròn ----------
   buildRoom() {
     const S = this.scene;
-    S.add(new THREE.HemisphereLight(0xffe8c8, 0x3a2a4a, 1.6));
-    const key = new THREE.DirectionalLight(0xfff1d6, 1.4); key.position.set(3, 9, 5); S.add(key);
-    // đèn treo trên bàn
-    const lamp = new THREE.PointLight(0xffd59a, 40, 14, 1.6); lamp.position.set(0, 5.2, 0); S.add(lamp);
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.7, 24, 1, true), new THREE.MeshToonMaterial({ color: 0x9c2f2f, side: THREE.DoubleSide }));
-    shade.position.set(0, 5.6, 0); S.add(shade);
-    this.lampParts = [shade];
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffe9b0 })); bulb.position.set(0, 5.35, 0); S.add(bulb);
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 4), new THREE.MeshBasicMaterial({ color: 0x222222 })); cord.position.set(0, 8, 0); S.add(cord);
-    this.lampParts.push(bulb, cord);
-    // sàn gỗ + thảm tròn
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 48), new THREE.MeshToonMaterial({ color: 0x5c3d2e })); floor.rotation.x = -Math.PI / 2; S.add(floor);
-    const rug = new THREE.Mesh(new THREE.CircleGeometry(7, 48), new THREE.MeshToonMaterial({ color: 0x7b2d3b })); rug.rotation.x = -Math.PI / 2; rug.position.y = 0.01; S.add(rug);
-    const rug2 = new THREE.Mesh(new THREE.RingGeometry(6.2, 6.6, 48), new THREE.MeshBasicMaterial({ color: 0xe0b04a })); rug2.rotation.x = -Math.PI / 2; rug2.position.y = 0.02; S.add(rug2);
-    // bàn: mặt nỉ xanh, viền gỗ, chân bàn
-    const felt = new THREE.Mesh(new THREE.CylinderGeometry(TABLE_R, TABLE_R, 0.12, 48), new THREE.MeshToonMaterial({ color: 0x1f7a4d }));
-    felt.position.y = TABLE_Y - 0.06; S.add(felt);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R + 0.05, 0.16, 10, 48), new THREE.MeshToonMaterial({ color: 0x6b3f22 }));
-    rim.rotation.x = Math.PI / 2; rim.position.y = TABLE_Y; S.add(rim);
-    const line = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.5, 48), new THREE.MeshBasicMaterial({ color: 0x9fe0b8, transparent: true, opacity: 0.35 }));
-    line.rotation.x = -Math.PI / 2; line.position.y = TABLE_Y + 0.005; S.add(line);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.9, TABLE_Y - 0.12, 16), new THREE.MeshToonMaterial({ color: 0x4a2b17 }));
-    leg.position.y = (TABLE_Y - 0.12) / 2; S.add(leg);
+    this.lamp = buildTableArt(S, TABLE_Y, TABLE_R);
     // chồng bài ở giữa bàn
     this.deck = new THREE.Group();
     for (let i = 0; i < 6; i++) {
-      const m = new THREE.Mesh(CARD_GEO, new THREE.MeshBasicMaterial({ map: cardTex(-1, this.cardStyle), alphaTest: 0.5 }));
+      const m = new THREE.Mesh(CARD_GEO, new THREE.MeshBasicMaterial({ map: cardTex(-1, this.cardStyle), alphaTest: 0.42, alphaToCoverage: true }));
       m.rotation.x = -Math.PI / 2; m.position.y = TABLE_Y + 0.01 + i * 0.012; this.deck.add(m);
     }
     S.add(this.deck);
@@ -291,6 +270,7 @@ export class CardGame {
 
   // ======================= Vào / rời =======================
   enter(m) {
+    if (!this.deck) this.buildRoom();
     this.clear();
     this.active = true; this.menuBg = false;
     this.myId = m.you; this.roomId = m.room.id; this.game = m.room.game;
@@ -334,6 +314,7 @@ export class CardGame {
   setMenuBg(on) {
     this.menuBg = !!on && !this.active;
     if (!this.menuBg || this.avatars.size) return;
+    if (!this.deck) this.buildRoom();
     const ids = ['kaze', 'homura', 'raiga', 'yuki'];
     ids.forEach((c, i) => this.placeAvatar('m' + i, c, i * Math.PI / 2 + 0.4));
     const show = [44, 47, 10, 31, 3];
@@ -377,7 +358,7 @@ export class CardGame {
   cardMesh(key, face) {
     let c = this.cards.get(key);
     if (!c) {
-      const mat = new THREE.MeshBasicMaterial({ map: cardTex(face, this.cardStyle), transparent: true });
+      const mat = new THREE.MeshBasicMaterial({ map: cardTex(face, this.cardStyle), alphaTest: 0.42, alphaToCoverage: true });
       const mesh = new THREE.Mesh(CARD_GEO, mat);
       mesh.rotation.order = 'YXZ';
       mesh.rotation.x = -Math.PI / 2;
@@ -402,9 +383,14 @@ export class CardGame {
     const c = this.cardMesh(key, face);
     c.seen = true;
     if (isNew) { c.mesh.position.copy(from || to); c.mesh.rotation.y = rotY; }
-    if (c.face !== face) c.flip = { t0: now() + delay, to: face };   // lật bài
+    if (c.face !== face && c.flip?.to !== face) c.flip = { t0: now() + delay, to: face };
+    if (c.face === face && c.flip && c.flip.to !== face) {
+      c.flip = null;
+      c.mesh.scale.x = c.mesh.scale.y;
+    }
     const p = c.mesh.position;
-    if (isNew || p.distanceTo(to) > 0.01 || Math.abs(c.mesh.rotation.y - rotY) > 0.01) {
+    // Snapshot lặp trong lúc đang bay không khởi động lại hoạt ảnh cùng đích.
+    if (isNew || (c.tw?.to ?? p).distanceToSquared(to) > 0.0001 || Math.abs((c.tw?.r1 ?? c.mesh.rotation.y) - rotY) > 0.01) {
       c.tw = { from: p.clone(), to: to.clone(), r0: c.mesh.rotation.y, r1: rotY, t0: now() + delay, dur: isNew ? 0.45 : 0.3, lift: isNew ? lift : 0.15 };
       if (isNew && delay > 0) c.mesh.visible = false;
     }
@@ -779,13 +765,14 @@ export class CardGame {
   // ======================= Vòng lặp =======================
   loop() {
     requestAnimationFrame(this.loop);
-    const t = now(), dt = Math.min(0.05, t - this.lastT);
+    const t = now(), frameTime = t - this.lastT, dt = Math.min(0.05, frameTime);
     this.lastT = t;
     if (!this.active && !this.menuBg) return;
+    this.measureFrame(frameTime);
     // camera: ngồi sau lưng ghế của mình nhìn xuống bàn; nền menu thì bay vòng
     if (this.active) {
       const portrait = this.camera.aspect < 1;
-      for (const m of this.lampParts) m.visible = !portrait && !this.zoomLevel;
+      this.lamp.visible = !portrait && !this.zoomLevel;
       const desired = ZOOM_LEVELS[this.zoomLevel];
       const ease = 1 - Math.exp(-dt * 10);
       const zoom = Math.abs(this.camera.zoom - desired) < 0.002 ? desired : THREE.MathUtils.lerp(this.camera.zoom, desired, ease);
@@ -795,8 +782,9 @@ export class CardGame {
       this.camera.position.set(this.cameraAim.x, portrait ? 9.5 : 7.4, (portrait ? 8.2 : 7.6) + this.cameraAim.y);
       this.camera.lookAt(this.cameraAim.x, 0.6, (portrait ? 0.6 : 0.4) + this.cameraAim.y);
     } else {
-      const a = t * 0.08;
-      for (const m of this.lampParts) m.visible = true;
+      // Lắc nhẹ từ phía mở của căn phòng để tường và sofa luôn ở sau bàn.
+      const a = Math.sin(t * 0.3) * 0.28;
+      this.lamp.visible = true;
       this.camera.position.set(Math.sin(a) * 9, 5.5, Math.cos(a) * 9);
       this.camera.lookAt(0, 1, 0);
     }
