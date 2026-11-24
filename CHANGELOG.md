@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.17.0 (2026-11-24)
+## 0.17.0 (2026-11-24) · `0bab30c`
 
 - Thêm Poker Texas Hold’em No-Limit cho 2–6 ghế, có tiền mù tùy chỉnh, cược tất tay, hũ phụ và so bài.
 - Chủ phòng Tiến lên chỉnh một phần cược và từng khoản đền bằng xu.
