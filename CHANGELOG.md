@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.17.1 (2026-11-24)
+## 0.17.1 (2026-11-24) · `1b204ca`
 
 - Tiến lên có khung xem lớn bộ vừa đánh, mở sẵn trên điện thoại và vẫn thao tác được với bài trên tay.
 - Hướng quay đầu giữa các máy dùng cùng tọa độ và thứ tự ghế, kể cả khi người xem ngồi ở vị trí nhà cái.
