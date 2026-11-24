@@ -2,7 +2,7 @@
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
 import { CHARACTERS, playableChar } from '../shared/characters.js';
-import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, tlChopValue, isBomb, TL, TL_NAME, TL_MONEY, TL_RANK_UNITS, cardRank, RANK_TWO, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '../shared/cards.js';
+import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, tlChopValue, isBomb, TL, TL_NAME, TL_MONEY, TL_RANK_UNITS, cardRank, RANK_TWO, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_OFFLINE_TAKEOVER, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
@@ -236,12 +236,8 @@ export class CardRoom {
   setTurnDeadline(seconds) {
     const t = now();
     const rejoinUntil = this.turnPlayer()?.rejoinUntil || 0;
-    if (this.game === 'xidach' && rejoinUntil) {
-      const takeoverAt = rejoinUntil - CARD_REJOIN_SECONDS + XD.offlineTakeover;
-      this.deadline = Math.max(t + 0.9, takeoverAt);
-    } else {
-      this.deadline = Math.max(t + seconds, rejoinUntil);
-    }
+    const takeoverAt = rejoinUntil - CARD_REJOIN_SECONDS + CARD_OFFLINE_TAKEOVER;
+    this.deadline = rejoinUntil ? Math.max(t + 0.9, takeoverAt) : t + seconds;
   }
 
   defaultBet(chips, preferred = XD.bets[1]) {
@@ -378,7 +374,11 @@ export class CardRoom {
     if (t >= this.deadline) {
       if (this.phase === 'result' && this.stopAfter) return this.toLobby();
       if (this.phase === 'bet' || this.phase === 'result') return this.startRound(true);
-      if (this.phase === 'play') return this.playTimeout();
+      if (this.phase === 'play') {
+        const player = this.turnPlayer();
+        if (player?.rejoinUntil) this.sys(`⏱ Máy xử lý lượt của ${player.name} do mất kết nối`);
+        return this.playTimeout();
+      }
       if (this.phase === 'dealer') {
         if (this.dealer.pid && !this.dealerAuto && !this.turnPlayer()?.rejoinUntil) {
           this.dealerAuto = true;
@@ -411,9 +411,11 @@ export class CardRoom {
   canSeeHand(player, viewer, opened) { return player === viewer || this.phase === 'result' || !!opened; }
 
   view(viewer) {
+    const stamp = now();
+    const offlineLeft = player => Math.max(0, (player?.rejoinUntil || 0) - stamp);
     const reveal = this.phase === 'result';
     const v = {
-      t: 'cs', game: this.game, phase: this.phase, left: Math.max(0, +(this.deadline - now()).toFixed(1)), turn: this.turn, msg: this.msg,
+      t: 'cs', game: this.game, phase: this.phase, left: Math.max(0, +(this.deadline - stamp).toFixed(1)), turn: this.turn, msg: this.msg,
       you: viewer.seat, games: this.games, host: this.hostId, me: viewer.id, stopAfter: this.stopAfter,
       rules: { startChips: this.startChips, bets: this.bets, cardStyle: this.cardStyle },
       block: this.phase === 'lobby' ? this.startBlock() : null, bots: this.botCount(), botWant: this.botTarget(this.seated().filter(q => !q.bot).length), canBot: this.canChangeBots(),
@@ -427,6 +429,7 @@ export class CardRoom {
         if (!p.bot) {
           o.lready = p.id === this.hostId || !!p.lready;
           o.offline = !!p.rejoinUntil;
+          if (o.offline) o.offlineLeft = offlineLeft(p);
           o.look = p.look ?? null;
         }
         if (this.game === 'tienlen') Object.assign(o, { passed: !!this.passed?.has(i), rank: p.tlRank || null });
@@ -440,6 +443,7 @@ export class CardRoom {
       const dp = d.pid ? this.players.get(d.pid) : null;
       v.dealer = { name: d.name, char: d.char, n: d.hand.length, cards: open ? d.hand : [], pid: d.pid, chips: dp?.chips, human: !!dp, offline: !!dp?.rejoinUntil, auto: !!this.dealerAuto, result: dp?.result || null };
       if (dp) v.dealer.look = dp.look ?? null;
+      if (v.dealer.offline) v.dealer.offlineLeft = offlineLeft(dp);
       v.hostDealer = this.hostDealer;
       v.youDealer = !!dp && dp.id === viewer.id;
       if (v.youDealer && this.phase === 'dealer' && !this.dealerAuto) v.dealer.canOpen = this.xdDealerCanOpen();
@@ -762,10 +766,10 @@ export class CardRoom {
       if (q === w) continue;
       const pay = this.tlMoney.instant;
       q.chips -= pay; total += pay;
-      q.result = { r: -1, delta: -pay, left: q.hand.length, instantLoss: true };
+      q.result = { r: -1, delta: -pay, instantXu: -pay, left: q.hand.length, instantLoss: true };
     }
     w.chips += total;
-    w.result = { r: 1, delta: total, rank: 1, instant: name };
+    w.result = { r: 1, delta: total, instantXu: total, rank: 1, instant: name };
     for (const q of this.seated()) this.refillChips(q, 0);
     this.lastWinner = w.seat;
     this.msg = `🎉 ${w.name} tới trắng: ${name}!`;
@@ -782,13 +786,16 @@ export class CardRoom {
     const order = [...seats].sort((a, b) => a.tlRank - b.tlRank);
     const first = order[0], last = order.at(-1);
     const heo = tlHeoFine(last.hand, this.tlMoney), burn = !last.played;
-    const fine = heo.xu + (burn ? this.tlMoney.burn : 0);
+    const burnFine = burn ? this.tlMoney.burn : 0;
+    const fine = heo.xu + burnFine;
     for (const q of order) {
       const rank = q.tlRank, rankXu = this.tlMoney.unit * TL_RANK_UNITS[order.length][rank - 1];
       const chop = q.tlChop ?? 0;
-      const delta = rankXu + chop + (q === first ? fine : q === last ? -fine : 0);
+      const pays = q === first ? 1 : q === last ? -1 : 0;
+      const burnXu = burnFine * pays, heoXu = heo.xu * pays;
+      const delta = rankXu + chop + burnXu + heoXu;
       q.chips += delta;
-      q.result = { r: Math.sign(delta), delta, rank, rankXu, chop, left: q.hand.length,
+      q.result = { r: Math.sign(delta), delta, rank, rankXu, chop, burnXu, heoXu, left: q.hand.length,
         burn: q === last && burn, heo: q === last ? heo.n : 0 };
       this.refillChips(q, 0);
     }

@@ -61,9 +61,9 @@ Tham số khác: `--port 3001` để đổi port. Ví dụ: `npm start -- --port
 
 Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); tên được lưu lại cho lần sau.
 
-Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
+Trong phòng chờ bàn bài hoặc Đấu đội, bấm **Mời bạn** để sao chép link ngồi đúng bàn. Trong các chế độ khác, mở menu Esc và bấm **Copy link mời bạn**.
 
-Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Ở Xì dách, sau 20 giây mất kết nối, máy rút hoặc dằn thay khi tới lượt bạn, kể cả khi bạn làm nhà cái. Kết nối lại trong 60 giây để nhận lại quyền chơi với bài và xu hiện tại. Tiến lên và Poker chờ hết thời gian giữ chỗ nếu tới lượt người mất kết nối. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Cả bàn thấy số giây giữ chỗ còn lại. Từ mốc 20 giây mất mạng, máy xử lý khi tới lượt bạn: Xì dách rút hoặc dằn, Tiến lên bỏ lượt hoặc đánh bộ hợp lệ nếu phải mở vòng, Poker qua nếu được hoặc bỏ bài nếu đang phải theo cược. Kết nối lại trong 60 giây để nhận quyền chơi với trạng thái hiện tại. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
 
 ## Cách chơi
 
@@ -108,6 +108,8 @@ Combo là chuỗi phím bấm liên tiếp nhanh (cách nhau dưới 0.5 giây).
 **Máu & mana**: máu tự hồi chậm sau 5 giây không bị đánh; hồi nhanh hơn bằng chiêu Hồi Máu. Mana tự hồi nhanh hơn máu, vận khí (giữ U) hồi rất nhanh. Chiêu càng mạnh càng tốn nhiều mana và hồi chiêu lâu. Hết máu sẽ gục và hồi sinh sau 4 giây.
 
 ### Đấu tập
+
+Khi chơi Đấu tập một mình, menu ☰ có hai bài luyện phản xạ. Bấm **Tập né động đất** rồi nhảy khi Gantetsu sắp dậm đất. Bấm **Tập phá tường băng** rồi đánh trúng một đoạn tường Yuki dựng cho đến khi nó vỡ. Game báo kết quả ngay sau mỗi lần thử.
 
 Tạo phòng ở chế độ **🎯 Đấu tập** (chọn map như Đối kháng). Trong phòng có sẵn:
 
@@ -156,11 +158,12 @@ Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức t
 1. Chọn một mức cược của bàn rồi bấm **Sẵn sàng** (hết 9 giây thì tự chia). Mặc định là 50 / 100 / 200 xu.
 2. Mỗi người và nhà cái được 2 lá. Tính điểm: 2–10 theo số, J Q K = 10 điểm, A tính 1, 10 hoặc 11 (tự chọn cách có lợi nhất).
 3. Lần lượt từng người **Rút bài** (tối đa 5 lá) hoặc **Dằn** (dừng). Phải có ít nhất **16 điểm** mới được dằn. Quá 21 điểm là **quắc**. Người ngồi cược vẫn giữ lượt và có thể rút thêm hoặc dằn. Người khác chỉ thấy số lá tới khi so bài.
-4. Khi có ít nhất 15 điểm hoặc đã đủ 5 lá, nhà cái có thể chọn một ghế và bấm **Mở bài**. Kết quả ghế đó chốt theo bài nhà cái lúc mở. Nhà cái có thể rút tiếp rồi mở các ghế còn lại theo thứ tự tùy chọn, hoặc bấm **Mở hết** để chốt cùng lúc. Điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
+4. Khi có ít nhất 15 điểm hoặc đã đủ 5 lá, nhà cái có thể chạm nút **Mở bài** ngay trên bảng tên của ghế muốn mở. Kết quả ghế đó chốt theo bài nhà cái lúc mở. Nhà cái có thể rút tiếp rồi mở các ghế còn lại theo thứ tự tùy chọn, hoặc bấm **Mở hết** để chốt cùng lúc. Điểm cao hơn thắng, bằng điểm thì hoà, cả hai cùng quắc cũng hoà.
 5. **Đền bài:** từ **28 điểm** trở lên, người ngồi cược bị quắc đền cho mỗi ghế cược khác đã được chia bài một lần mức cược của ghế đó. Khoản đền được tính lúc so bài, cùng với kết quả so với nhà cái. Nhà cái quắc từ 28 điểm vẫn tính thắng, thua hoặc hòa theo luật so bài thông thường và không phải đền thêm. Ghế đã mở giữ nguyên kết quả so bài trước đó.
 6. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
 
 **🂡 Tiến lên** (miền Nam, 2–4 người, mỗi người 13 lá):
+- Cuối ván, bảng **Tính xu Tiến lên** ghi từng khoản theo hạng, cóng, thối heo, chặt và tới trắng. Bấm **Tính xu ván trước** để mở lại.
 - **Xem bài bàn** hiện riêng bộ vừa đánh với mặt bài và ký hiệu lớn. Trên điện thoại khung này mở sẵn khi vào ván. Vuốt ngang nếu bộ dài, hoặc bấm **Thu nhỏ** để xem lại bàn 3D. Bạn vẫn có thể chọn và đánh bài khi khung đang mở.
 - Thứ tự lá: 3 nhỏ nhất … K, A, **2 (heo) lớn nhất**; cùng hạng thì so chất ♠ < ♣ < ♦ < ♥.
 - Bộ được đánh: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2), đôi thông (từ 3 đôi liên tiếp).

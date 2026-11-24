@@ -2,6 +2,14 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.18.0 (2026-11-25)
+
+- Thêm nút mời bạn ngay trong phòng chờ bàn bài và Đấu đội, đồng thời giữ địa chỉ truy cập của người chơi khi tạo link mời.
+- Tiến lên có bảng tính xu theo hạng, cóng, thối heo, chặt và tới trắng, xem lại được trong ván sau.
+- Bàn bài hiện thời gian giữ chỗ và thời điểm máy xử lý lượt. Tiến lên và Poker xử lý lượt người mất mạng từ mốc 20 giây.
+- Đấu tập có hai bài khắc chế dị biến: nhảy né động đất và đánh vỡ tường băng.
+- Nhà cái Xì dách chạm tên từng người trên bàn để mở bài.
+
 ## 0.17.2 (2026-11-24)
 
 - Dựng phòng bài Art Deco cho Xì dách, Tiến lên và Poker, với tường ốp gỗ, ghế băng đỏ rượu, đèn vàng và thảm chữ nhật dệt xương cá.

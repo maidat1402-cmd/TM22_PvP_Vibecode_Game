@@ -342,6 +342,8 @@ export class Game {
     this.teamMode = !!msg.room.team;
     this.practice = !!msg.room.practice;
     $('fillAwkBtn').hidden = !this.practice;
+    $('practiceDrillActions').hidden = !this.practice;
+    $('practiceDrill').hidden = true;
     this.darkUntil = 0;
     this.ts = null;
     this.hideTeamUi();
@@ -375,6 +377,8 @@ export class Game {
 
   leave() {
     this.active = false;
+    $('practiceDrillActions').hidden = $('practiceDrill').hidden = true;
+    clearTimeout(this.drillNotice);
     this.teamMode = false;
     this.hideTeamUi();
     this.clear();
@@ -581,6 +585,19 @@ export class Game {
     });
     // công trình: tạo / mất máu / biến mất
     n.on('prop', m => this.onProp(m));
+    n.on('pdrill', m => {
+      if (!this.active || !this.practice) return;
+      const panel = $('practiceDrill'), quake = m.kind === 'quake';
+      panel.dataset.state = m.state;
+      panel.querySelector('strong').textContent = quake ? 'Né động đất của Gantetsu' : 'Phá tường băng của Yuki';
+      panel.querySelector('span').textContent = m.state === 'success' ? (quake ? '✓ Bạn đã né được động đất!' : '✓ Bạn đã phá được một đoạn tường!')
+        : m.state === 'miss' ? 'Chưa hoàn thành. Mở ☰ để thử lại.'
+        : quake ? 'Đợi gần hết nhịp tụ lực rồi nhảy lên khi Gantetsu dậm đất.'
+        : 'Nhắm vào một đoạn tường rồi đánh cho đoạn đó vỡ.';
+      panel.hidden = false;
+      clearTimeout(this.drillNotice);
+      if (m.state !== 'active') this.drillNotice = setTimeout(() => { panel.hidden = true; }, 4000);
+    });
     // hiệu ứng rời: phân thân gió, mảnh đá cột vỡ, vòng sét từ cọc
     n.on('pulse', m => {
       let i = 0;

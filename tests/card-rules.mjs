@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CardRoom } from '../server/cards.js';
-import { XD, TL_MONEY, tlCombo, xdScore } from '../shared/cards.js';
+import { CARD_OFFLINE_TAKEOVER, CARD_REJOIN_SECONDS, XD, TL_MONEY, tlCombo, xdScore } from '../shared/cards.js';
 
 function makeTable(game) {
   const room = new CardRoom('kiem-thu', 'Kiểm thử', { roomsChanged() {} }, game);
@@ -75,7 +75,7 @@ test('Tiến lên giữ bài, xu và lượt khi rớt mạng rồi vào lại',
   room.setTurnDeadline(25);
 
   room.disconnect(client);
-  assert.ok(room.deadline >= player.rejoinUntil);
+  assert.equal(player.rejoinUntil - room.deadline, CARD_REJOIN_SECONDS - CARD_OFFLINE_TAKEOVER);
   assert.equal(room.view(player).seats[player.seat].offline, true);
   const returned = connection(3);
   assert.equal(room.resume(returned.client, client.session), true);
@@ -509,4 +509,44 @@ test('Nhà cái rút lên 28 sau khi mở giữ kết quả đã chốt và khô
   assert.equal(first.result.penalty, 0);
   assert.equal(second.result.delta, 400);
   assert.equal(dealer.result.delta, -300);
+});
+
+test('Tiến lên bỏ lượt sau 20 giây và vẫn giữ ghế cho người mất mạng', t => {
+  let clock = 10_000;
+  t.mock.method(performance, 'now', () => clock);
+  const { room, join, connection } = makeTable('tienlen');
+  const { player: first } = join(1);
+  const { player, client } = join(2);
+  room.botWant = 0;
+  room.rebalance();
+  first.hand = [8, 12];
+  player.hand = [4];
+  room.phase = 'play';
+  room.turn = player.seat;
+  room.passed = new Set();
+  room.trick = { by: first.seat, cards: [0], combo: tlCombo([0]) };
+  room.disconnect(client);
+  assert.equal(room.view(first).seats[player.seat].offlineLeft, 60);
+  clock = 29_999;
+  room.tick();
+  assert.equal(room.turn, player.seat);
+  clock = 30_000;
+  room.tick();
+  assert.equal(room.turn, first.seat);
+  assert.equal(room.view(first).seats[player.seat].offlineLeft, 40);
+  assert.equal(room.bySeat(player.seat), player);
+  assert.equal(room.resume(connection(3).client, client.session), true);
+  assert.deepEqual(player.hand, [4]);
+});
+
+test('Bảng tính xu Tiến lên tách đúng cóng, thối heo và chặt cho từng ghế', () => {
+  const { room, join } = makeTable('tienlen');
+  const first = join(1).player, last = join(2).player;
+  Object.assign(first, { hand: [], tlRank: 1, tlChop: 5 });
+  Object.assign(last, { hand: [51], tlRank: 2, tlChop: -5, played: false });
+  room.tlFinish([first, last]);
+  assert.equal(last.result.burnXu, -TL_MONEY.burn);
+  assert.equal(last.result.heoXu, -TL_MONEY.red);
+  for (const { result: r } of [first, last]) assert.equal(r.delta, r.rankXu + r.chop + r.burnXu + r.heoXu);
+  assert.equal(first.result.delta + last.result.delta, 0);
 });

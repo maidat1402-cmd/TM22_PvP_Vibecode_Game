@@ -40,6 +40,7 @@ const shooter = new ShooterGame(net, settings, game.renderer, game.hud);
 window.__game = game; // tiện debug trong DevTools
 window.__shooter = shooter;
 const cards = new CardGame(net, settings, game.renderer, game.hud, dt => game.measureCardFrame(dt));
+cards.onInvite = copyRoomInvite;
 window.__cards = cards;
 let inGame = false;
 let current = null;   // game đang chơi: game | shooter
@@ -684,7 +685,8 @@ async function loadServerInfo() {
       (info.note ? `<div class="muted">${esc(info.note)}</div>` : '') +
       `<div class="muted">Đang online: ${info.online} người</div>`;
     for (const b of $('serverInfo').querySelectorAll('button')) b.onclick = () => copy(b.dataset.u);
-    window.__inviteUrl = info.publicUrl || info.lan[0] || location.origin;
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+    window.__inviteUrl = info.publicUrl || (loopback ? info.lan[0] : null) || location.origin;
   } catch { /* bỏ qua */ }
 }
 
@@ -935,7 +937,20 @@ $('leaveBtn').onclick = () => {
 };
 // đấu tập: nạp đầy thanh dị biến rồi quay lại trận
 $('fillAwkBtn').onclick = () => { game.net.send({ t: 'pfill' }); sfx('ui'); $('resumeBtn').click(); };
-$('inviteBtn').onclick = () => copy(`${window.__inviteUrl || location.origin}/?room=${(current === shooter ? shooter : current === cards ? cards : game).roomId}`);
+function copyRoomInvite() {
+  if (!current?.roomId) return;
+  const url = new URL('/', window.__inviteUrl || location.origin);
+  url.searchParams.set('room', current.roomId);
+  copy(url.href);
+}
+$('inviteBtn').onclick = $('tlInvite').onclick = copyRoomInvite;
+$('practiceDrillActions').onclick = event => {
+  const kind = event.target.closest('[data-drill]')?.dataset.drill;
+  if (!kind || current !== game || !game.practice || !game.me || game.me.dead) return;
+  const yaw = game.cam.yaw;
+  net.send({ t: 'pdrill', kind, d: [-Math.sin(yaw), 0, -Math.cos(yaw)] });
+  $('resumeBtn').click();
+};
 $('switchTeamBtn').onclick = () => { shooter.switchTeam(); $('pause').hidden = true; };
 $('fullscreenBtn').onclick = () => {
   const el = document.documentElement;
