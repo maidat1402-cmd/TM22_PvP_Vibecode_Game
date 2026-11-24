@@ -2,7 +2,7 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.18.0 (2026-11-25)
+## 0.18.0 (2026-11-25) · `c0f111c`
 
 - Thêm nút mời bạn ngay trong phòng chờ bàn bài và Đấu đội, đồng thời giữ địa chỉ truy cập của người chơi khi tạo link mời.
 - Tiến lên có bảng tính xu theo hạng, cóng, thối heo, chặt và tới trắng, xem lại được trong ván sau.
