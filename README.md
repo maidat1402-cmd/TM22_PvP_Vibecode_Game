@@ -4,7 +4,7 @@
 
 Game 3D nhân vật chibi, chơi nhiều người qua phòng (room), chạy trên trình duyệt máy tính **và điện thoại**. Server Node.js rất nhẹ.
 
-Có 7 chế độ, chia thành 3 danh mục (⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài), chọn khi tạo phòng:
+Có 8 chế độ, chia thành 3 danh mục (⚔ Chiêu thức · 🔫 Bắn súng · 🃏 Đánh bài), chọn khi tạo phòng:
 
 | Chế độ | Mô tả |
 |---|---|
@@ -14,7 +14,8 @@ Có 7 chế độ, chia thành 3 danh mục (⚔ Chiêu thức · 🔫 Bắn sú
 | 💣 **Đặt bom** | Bắn súng góc nhìn thứ nhất, 2 phe Công (Hắc Long) / Thủ (Thiên Ưng), theo vòng, có mua đồ và tiền thưởng |
 | 🔫 **Sinh tử** | Bắn súng tự do, ai cũng là đối thủ, hồi sinh nhanh, súng miễn phí |
 | 🃏 **Xì dách** | Đánh bài: các nhân vật ngồi quanh bàn tròn, đấu với nhà cái, ai gần 21 điểm nhất |
-| 🂡 **Tiến lên** | Đánh bài: 4 người quanh bàn tròn, ai đánh hết bài trước thắng |
+| 🂡 **Tiến lên** | Đánh bài: 2–4 người đánh đến khi phân đủ thứ hạng |
+| ♠ **Poker** | Texas Hold’em No-Limit cho 2–6 người, hai lá riêng và tối đa năm lá chung |
 
 - **Đồ hoạ**: nhân vật chibi dựng từ khối cơ bản + toon shading + viền đen; chiêu thức dùng particle GPU, shader năng lượng, vòng phép thuật, tia, lốc xoáy, cột lửa, mưa băng, bloom.
 - **Nhẹ**: không có file model/texture/âm thanh nào — tất cả được sinh bằng code (âm thanh tổng hợp bằng WebAudio). Toàn bộ client khoảng 370 KB code chưa nén + three.js, không có bước build.
@@ -62,7 +63,7 @@ Lần đầu vào chơi cần nhập **tên người chơi** (2–16 ký tự); 
 
 Trong game, menu Esc → **Copy link mời bạn** sẽ copy link vào thẳng phòng đang chơi (`?room=ID`).
 
-Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Ở Xì dách, sau 20 giây mất kết nối, máy rút hoặc dằn thay khi tới lượt bạn, kể cả khi bạn làm nhà cái. Kết nối lại trong 60 giây để nhận lại quyền chơi với bài và xu hiện tại. Tiến lên chờ hết thời gian giữ chỗ nếu tới lượt người mất kết nối. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
+Khi mất mạng, bấm **Kết nối lại** để thử vào phòng vừa chơi. Bàn bài giữ ghế, bài, xu và vai trò trong **60 giây** sau khi server nhận ra mất kết nối. Hãy dùng cùng tab để nhận lại chỗ. Ở Xì dách, sau 20 giây mất kết nối, máy rút hoặc dằn thay khi tới lượt bạn, kể cả khi bạn làm nhà cái. Kết nối lại trong 60 giây để nhận lại quyền chơi với bài và xu hiện tại. Tiến lên và Poker chờ hết thời gian giữ chỗ nếu tới lượt người mất kết nối. Chủ động rời phòng sẽ nhường chỗ ngay. Nếu phòng đã đóng, game đưa bạn về sảnh.
 
 ## Cách chơi
 
@@ -141,11 +142,13 @@ Các map là địa điểm tự thiết kế, chỉ lấy cảm hứng từ kh�
 
 ## Chế độ đánh bài
 
-Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân vật bạn đang chọn) ngồi quanh một bàn tròn phủ nỉ xanh; bài được chia ra, đánh ra và nằm trên bàn. Ghế của bạn luôn ở phía dưới màn hình. Thiếu người thì **máy (bot)** tự ngồi vào ghế trống; người vào lúc ván đang chơi sẽ vào bàn ở ván sau (máy nhường ghế). Nút **🤖 − / +** ở góc trên bên phải chọn số máy chơi cùng để **chơi một mình**: Xì dách cho phép tự chọn số máy trong 8 ghế cược, Tiến lên từ 1 tới 3 máy (bàn cần ít nhất 2 người). Đổi số máy lúc đang chờ, đang đặt cược hoặc lúc xem kết quả thì có tác dụng ngay, đang giữa ván thì áp dụng từ ván sau. Vốn mặc định là 1000 xu, dùng để tính điểm trong game. Mọi thao tác là nút bấm nên chơi được trên cả máy tính lẫn điện thoại; `Enter` để chat, `Esc` (hoặc ☰) mở menu.
+Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân vật bạn đang chọn) ngồi quanh một bàn tròn phủ nỉ xanh; bài được chia ra, đánh ra và nằm trên bàn. Ghế của bạn luôn ở phía dưới màn hình. Thiếu người thì **máy (bot)** tự ngồi vào ghế trống; người vào lúc ván đang chơi sẽ vào bàn ở ván sau (máy nhường ghế). Nút **🤖 − / +** ở góc trên bên phải chọn số máy chơi cùng để **chơi một mình**: Xì dách cho phép tự chọn số máy trong 8 ghế cược, Tiến lên có tối đa 3 máy, Poker có tối đa 5 máy (cả hai cần ít nhất 2 ghế có người hoặc máy). Đổi số máy trong phòng chờ có tác dụng ngay. Với Poker, thay đổi trong ván hoặc khi xem kết quả áp dụng ở ván sau. Vốn mặc định là 1000 xu, dùng để tính điểm trong game. Mọi thao tác là nút bấm nên chơi được trên cả máy tính lẫn điện thoại; `Enter` để chat, `Esc` (hoặc ☰) mở menu.
+
+Nút **Bàn ×1** lần lượt đổi mức phóng **×1, ×1.35 và ×1.65**. Khi phóng, chạm hoặc bấm vào vùng bàn muốn xem. Nhân vật quay đầu theo vị trí chạm hoặc con trỏ trên mặt bàn. Những người cùng bàn thấy hướng xấp xỉ qua chuyển động của đầu nhân vật.
 
 **Phòng chờ:** vào phòng là ngồi vào bàn nhưng chưa chia bài. Người vào trước là **chủ phòng 👑**. Những người khác bấm **✔ Sẵn sàng**; khi mọi người đã sẵn sàng, chủ phòng bấm **▶ Bắt đầu**. Sau đó các ván nối tiếp nhau tự động; chủ phòng bấm **⏸** (góc trên bên phải) để dừng sau ván đang chơi và về lại phòng chờ. Khi chủ phòng rời bàn hoặc hết thời gian giữ chỗ, quyền chủ phòng ưu tiên chuyển cho người đang kết nối đã vào sớm nhất.
 
-Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn ban đầu và chọn **Mẫu bài** cho cả hai chế độ. Chọn **Cổ điển** (mặc định) hoặc **Chibi Clash** rồi bấm **Lưu** để đổi mặt và lưng bài cho cả bàn. Các lá 2–10 có số dấu chất tương ứng, còn huy hiệu trên J, Q, K có màu đỏ hoặc đen theo chất.
+Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn ban đầu và chọn **Mẫu bài** cho cả ba chế độ. Chọn **Cổ điển** (mặc định) hoặc **Chibi Clash** rồi bấm **Lưu** để đổi mặt và lưng bài cho cả bàn. Các lá 2–10 có số dấu chất tương ứng, còn huy hiệu trên J, Q, K có màu đỏ hoặc đen theo chất.
 
 Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức từ 1 xu đến số vốn. Người mới và người được cấp lại vốn dùng cấu hình hiện tại. Trước ván đầu, đổi vốn cũng cập nhật số xu của người đã vào bàn. Sau ván đầu, người đang chơi giữ số dư của họ.
 
@@ -164,10 +167,19 @@ Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức t
 - Ván đầu, ai cầm 3♠ đánh trước và phải đánh lá đó; các ván sau người thắng ván trước đánh trước. Bỏ lượt thì không được đánh lại cho tới khi vòng đó kết thúc; mọi người khác đã bỏ thì người đánh cuối được đánh tự do.
 - Bấm vào lá trên tay để chọn (bấm lại để bỏ), **Đánh** khi bộ chọn hợp lệ, **💡 Gợi ý** để tự chọn bộ nhỏ nhất chặn được. Mỗi lượt 25 giây, hết giờ thì tự bỏ lượt (đang đánh tự do thì tự đánh lá nhỏ nhất).
 - Mỗi người được xếp hạng ngay khi đánh hết bài. Các ghế còn bài tiếp tục đánh đến khi chỉ còn một người, người đó về chót. Nếu bài cuối của người đã về không ai chặn, ghế còn bài ngồi kế tiếp được **hưởng sái** và mở vòng mới.
-- **Tiền hạng, trước các khoản đền:** bàn 4 người lần lượt **+20 / +10 / −10 / −20 xu**. Bàn 3 người **+30 / −10 / −20 xu**. Bàn 2 người **+20 / −20 xu**.
+- **Tiền hạng, trước các khoản đền:** với mặc định 10 xu/phần, bàn 4 người lần lượt **+20 / +10 / −10 / −20 xu**. Bàn 3 người **+30 / −10 / −20 xu**. Bàn 2 người **+20 / −20 xu**.
 - **Thối heo và cóng:** người về chót trả người về nhất thêm 20 xu mỗi heo đen (♠ ♣), 40 xu mỗi heo đỏ (♦ ♥), và thêm 20 xu nếu đến hết ván vẫn chưa đánh lá nào.
 - **Tiền chặt:** người bị chặt trả mức heo theo màu chất hoặc 30 xu cho ba đôi thông, 40 xu cho tứ quý, 50 xu cho bốn đôi thông. Nếu chặt chồng, người bị chặt sau cùng trả tổng khoản đền trong chuỗi cho người chặt cuối.
 - **Tới trắng:** vừa chia bài mà có **tứ quý heo**, **sảnh rồng** (đủ 3 → A), **6 đôi** hoặc **5 đôi thông** thì thắng ngay. Mỗi người còn lại trả 40 xu.
+
+- Chủ phòng đổi **một phần cược** và các khoản **cóng, tới trắng, heo đen, heo đỏ, ba đôi thông, tứ quý và bốn đôi thông** dưới mục **Cược và đền Tiến lên**. Các khoản đền là số xu riêng. Đặt 0 để tắt khoản tương ứng.
+
+**♠ Poker** (Texas Hold’em No-Limit, 2–6 ghế):
+
+- Mỗi ghế nhận hai lá riêng. Các vòng **Preflop, Flop, Turn, River** lần lượt có 0, 3, 4 và 5 lá chung. Hai ghế đặt **mù nhỏ/mù lớn**, mặc định **5/10 xu**, trước vòng đầu. Chủ phòng chỉnh tiền mù trong **Cài đặt bàn**. Nút chia và tiền mù xoay theo ván.
+- Đến lượt, chọn **Qua**, **Theo**, **Tố đến** tổng xu trong vòng, **Tất tay** hoặc **Bỏ bài** tùy tình huống. Hết giờ thì qua nếu có thể, nếu đang thiếu cược thì bỏ bài.
+- Nếu còn nhiều ghế lúc so bài, dùng năm lá mạnh nhất từ hai lá riêng và năm lá chung. Tất tay có thể tạo hũ phụ. Các ghế bằng bài chia hũ, xu lẻ đi theo chiều từ sau nút chia. Bài đã bỏ giữ úp.
+- Hết xu thì được cấp lại vốn ở đầu ván sau. Poker dùng xu ảo trong bàn.
 
 ## Chế độ bắn súng
 
@@ -298,7 +310,7 @@ tests/    awaken.mjs (kiểm tra dị biến và ngắm dọc qua WebSocket)
 ## Kiểm tra khi phát triển
 
 - Mở nhanh để test: `http://localhost:3000/?quick&mode=brawl&map=shrine` (chế độ `brawl`, `practice`, `bomb`, `dm`, `xidach`, `tienlen`; map đối kháng `shrine`, `tournament`, `wasteland`, `village`; map bắn súng `lantern`, `temple`). `/?room=<ID>` vào phòng có sẵn.
-- Kiểm tra nhanh: `npm test` kiểm tra HTTP, tạo và vào phòng ở 7 chế độ, luật đánh bài và phát bắn. Bài kiểm tra tự mở server cục bộ.
+- Kiểm tra nhanh: `npm test` kiểm tra HTTP, tạo và vào phòng ở 8 chế độ, luật đánh bài và phát bắn. Bài kiểm tra tự mở server cục bộ.
 - Test chế độ đánh bài: `node tests/cards.mjs` (cùng server cổng 3123).
 - Test dị biến và đấu tập: chạy `node server/index.js --port 3123` rồi `node tests/awaken.mjs` (cần Node ≥ 22 vì dùng `WebSocket` có sẵn, mất khoảng 5 phút).
 - Quy tắc đóng góp (commit, cân bằng, mạng, đồ hoạ) xem ở [AGENTS.md](AGENTS.md).

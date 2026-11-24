@@ -53,7 +53,7 @@ try {
     assert.ok((await response.text()).length, route);
   }
   const ids = new Set();
-  for (const [mode, joined] of [['brawl','joined'], ['team','joined'], ['practice','joined'], ['bomb','sj'], ['dm','sj'], ['xidach','cj'], ['tienlen','cj']]) {
+  for (const [mode, joined] of [['brawl','joined'], ['team','joined'], ['practice','joined'], ['bomb','sj'], ['dm','sj'], ['xidach','cj'], ['tienlen','cj'], ['poker','cj']]) {
     const hostClient = connect(), guest = connect();
     const welcomes = await Promise.all([hostClient.wait('welcome'), guest.wait('welcome')]);
     assert.ok(welcomes.every(message => message.v === info.version));
@@ -70,8 +70,18 @@ try {
     assert.equal(second.room.id, first.room.id);
     if (joined === 'cj') {
       await guest.wait('cs', state => state.rules.cardStyle === 'classic');
-      hostClient.send({ t: 'cconfig', chips: 1000, bets: mode === 'xidach' ? [50, 100, 200] : [], cardStyle: 'chibi' });
-      await Promise.all([hostClient.wait('cconfigok'), guest.wait('cs', state => state.rules.cardStyle === 'chibi')]);
+      hostClient.send({ t: 'cconfig', chips: 1000, bets: mode === 'xidach' ? [50, 100, 200] : [], cardStyle: 'chibi',
+        tl: mode === 'tienlen' ? { unit: 15 } : undefined, blinds: mode === 'poker' ? { small: 4, big: 8 } : undefined });
+      const [, configured] = await Promise.all([hostClient.wait('cconfigok'), guest.wait('cs', state => state.rules.cardStyle === 'chibi')]);
+      if (mode === 'tienlen') assert.equal(configured.rules.tl.unit, 15);
+      if (mode === 'poker') assert.equal(configured.rules.blinds.big, 8);
+      hostClient.send({ t: 'clook', x: 2, z: -3 });
+      const gaze = await guest.wait('clook', packet => packet.id === first.you);
+      assert.deepEqual(gaze.look, [2, -3]);
+      const observer = connect();
+      await observer.wait('welcome');
+      observer.send({ t: 'join', id: first.room.id });
+      await observer.wait('cs', state => state.seats.some(seat => seat?.id === first.you && seat.look?.[1] === -3));
     }
     if (mode === 'xidach') {
       hostClient.send({ t: 'cdealer' });
@@ -96,7 +106,7 @@ try {
   }
   const response = await fetch(base + '/api/info');
   const lobby = await response.json();
-  assert.equal(lobby.rooms.filter(room => ids.has(room.id)).length, 7);
+  assert.equal(lobby.rooms.filter(room => ids.has(room.id)).length, 8);
 } finally {
   for (const ws of sockets) ws.terminate();
   if (server.exitCode === null) server.kill();

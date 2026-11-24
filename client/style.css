@@ -543,6 +543,8 @@ body.touch #tlShow kbd { display: none; }
 .c-rules fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; border: 1px solid var(--line); border-radius: 8px; margin: 0; }
 .c-rules fieldset[hidden], #cRulesError:empty { display: none; }
 .c-rules input[type="number"] { width: 100%; min-width: 0; }
+.c-rules #cRulesTL { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.c-rules #cRulesBlinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .c-rules .c-deck-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .c-deck-choice { padding: 7px 8px 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .c-deck-choice:has(input:checked) { border-color: #ffd166; background: rgba(255, 209, 102, .1); }
@@ -563,6 +565,8 @@ body.touch #tlShow kbd { display: none; }
 #cRoom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
 #cGame { flex-shrink: 0; }
 #cGame::before { content: '· '; }
+.c-view-tools { grid-column: 1 / -1; justify-self: start; }
+#cZoom { min-height: 30px; background: rgba(20,12,30,.7); }
 #cMsg { grid-column: 1 / -1; font-size: 15px; font-weight: 700; color: #ffd166; overflow-wrap: anywhere; text-shadow: 0 2px 4px #000; }
 #cMsg:empty { display: none; }
 #cTimer { min-width: 0; max-width: 100%; justify-self: start; display: flex; align-items: center; gap: 6px;
@@ -595,10 +599,14 @@ body.touch #tlShow kbd { display: none; }
   background: transparent; cursor: pointer; filter: drop-shadow(0 3px 4px rgba(0,0,0,.45)); transition: transform .12s; }
 .hcard:first-child { margin-left: 0; }
 .hcard canvas { display: block; width: 100%; height: auto; }
+.hcard:disabled { cursor: default; opacity: 1; }
 @media (hover: hover) { .hcard:hover { transform: translateY(-6px); } }
 .hcard:focus-visible { z-index: 1; outline: 2px solid #fff; outline-offset: 1px; }
 .hcard.sel { transform: translateY(-16px); box-shadow: 0 0 0 2px #ffd166; }
 #cActs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+#cPokerTo { width: 82px; padding: 5px 7px; }
+.g-poker .hcard { margin-left: 3px; }
+.g-poker .hcard:first-child { margin-left: 0; }
 #cActs .btn.on { background: #ffd166; color: #1b1630; }
 #cActs .btn:disabled { opacity: .45; cursor: not-allowed; }
 #chud .c-side { display: flex; gap: 6px; align-items: center; justify-self: end; }
@@ -620,4 +628,4 @@ body.touch #tlShow kbd { display: none; }
 .mode-cats { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .mode-cats .btn.on { background: var(--accent2, #ffd23f); color: #1b1630; }
 .modes label[hidden] { display: none; }
-.room .mtag.xidach, .room .mtag.tienlen { background: rgba(31,122,77,.55); }
+.room .mtag.xidach, .room .mtag.tienlen, .room .mtag.poker { background: rgba(31,122,77,.55); }

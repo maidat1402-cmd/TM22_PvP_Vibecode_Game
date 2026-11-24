@@ -2,12 +2,18 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
-## 0.16.2 (2026-11-24)
+## 0.17.0 (2026-11-24)
+
+- Thêm Poker Texas Hold’em No-Limit cho 2–6 ghế, có tiền mù tùy chỉnh, cược tất tay, hũ phụ và so bài.
+- Chủ phòng Tiến lên chỉnh một phần cược và từng khoản đền bằng xu.
+- Cả ba chế độ bài có nút phóng bàn. Nhân vật quay đầu theo vùng được chỉ trên bàn và chia sẻ hướng cho những người cùng phòng.
+
+## 0.16.2 (2026-11-24) · `e02b4a4`
 
 - Tiến lên tiếp tục đánh sau khi có người về nhất. Chốt theo thứ tự hết bài và chuyển quyền hưởng sái khi người đã về thắng vòng.
 - Tính xu theo hạng, cóng, thối heo và chặt chồng. Tới trắng chốt 40 xu mỗi ghế còn lại.
 
-## 0.16.1 (2026-11-24)
+## 0.16.1 (2026-11-24) · `e02b4a4`
 
 - Bài trên tay Tiến lên hiển thị trực tiếp từ Canvas, mỗi mặt bài chỉ có một lớp hình.
 - Tách tên phòng, đồng hồ và nút điều khiển trên màn hình hẹp để tránh chồng lên nhau.

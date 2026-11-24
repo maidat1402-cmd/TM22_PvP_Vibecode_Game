@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CardRoom } from '../server/cards.js';
-import { XD, tlCombo, xdScore } from '../shared/cards.js';
+import { XD, TL_MONEY, tlCombo, xdScore } from '../shared/cards.js';
 
 function makeTable(game) {
   const room = new CardRoom('kiem-thu', 'Kiểm thử', { roomsChanged() {} }, game);
@@ -320,7 +320,7 @@ test('Tiến lên cấp vốn tùy chỉnh và giữ nguyên luật tính tiền
   room.onMessage(host.id, { t: 'cconfig', chips: 5, bets: [] });
   const guest = join(2).player;
   assert.equal(guest.chips, 5);
-  assert.deepEqual(room.view(guest).rules, { startChips: 5, bets: [], cardStyle: 'classic' });
+  assert.deepEqual(room.view(guest).rules, { startChips: 5, bets: [], cardStyle: 'classic', tl: TL_MONEY });
   room.botWant = 0;
   room.rebalance();
   host.hand = [4];
@@ -405,6 +405,25 @@ test('Tiến lên bàn ba người chia tiền hạng và tới trắng trả đ
   room.tlInstant(b, 'Sảnh rồng');
   assert.deepEqual([a, b, c].map(q => q.result.delta), [-40, 80, -40]);
   assert.equal(a.result.instantLoss, true);
+});
+
+test('Tiến lên dùng từng mức cược và mức đền do chủ phòng đặt', () => {
+  const { room, people } = fixedTienLenRound([[0], [49, 51]]);
+  const [a, b] = people.map(q => q.player);
+  room.phase = 'lobby';
+  const tl = { unit: 25, black: 7, red: 13, burn: 0, instant: 75, pairs3: 4, quad: 5, pairs4: 6 };
+  room.onMessage(b.id, { t: 'cconfig', chips: 1000, tl });
+  assert.deepEqual(room.tlMoney, TL_MONEY);
+  room.onMessage(a.id, { t: 'cconfig', chips: 1000, tl: { ...tl, unit: 0 } });
+  assert.deepEqual(room.tlMoney, TL_MONEY);
+  room.onMessage(a.id, { t: 'cconfig', chips: 1000, tl });
+  assert.deepEqual(room.view(b).rules.tl, tl);
+  room.phase = 'play';
+  room.onMessage(a.id, { t: 'cconfig', chips: 1000, tl: { unit: 10 } });
+  room.tlPlay(a, [0]);
+  assert.deepEqual([a.result.delta, b.result.delta], [70, -70]);
+  room.tlInstant(b, 'Sảnh rồng');
+  assert.deepEqual([a.result.delta, b.result.delta], [-75, 75]);
 });
 
 test('Mẫu bài chỉ đổi trong phòng chờ và được giữ khi khách mất kết nối', () => {

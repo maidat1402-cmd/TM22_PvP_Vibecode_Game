@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CHARACTERS, getChar, charSkills, skillLifetime } from '/shared/characters.js';
 import { VERSION } from '/shared/version.js';
+import { CARD_GAMES } from '/shared/cards.js';
 import { ACTIONS, MODE_NAMES, loadBindings, saveBindings, setBinding, resetBindings, bindingsOf, keyName, actionKeys, comboKey, SYSTEM_KEYS } from './keys.js';
 import { FX } from './effects.js';
 import { Net } from './net.js';
@@ -653,7 +654,7 @@ function renderRooms(list) {
   for (const r of list) {
     const d = document.createElement('div');
     d.className = 'room';
-    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử', xidach: '🃏 Xì dách', tienlen: '🂡 Tiến lên' }[r.mode || 'brawl']
+    const tag = { brawl: '⚔ Đối kháng', team: '👥 Đấu đội', practice: '🎯 Đấu tập', bomb: '💣 Đặt bom', dm: '🔫 Sinh tử', xidach: '🃏 Xì dách', tienlen: '🂡 Tiến lên', poker: '♠ Poker' }[r.mode || 'brawl']
       + (r.mode === 'team' ? (r.phase === 'lobby' ? ' · đang chờ' : ' · đang đấu') : '');
     d.innerHTML = `<div><b>${esc(r.name)}</b><span class="mtag ${r.mode}">${tag}</span><small>${r.mapName ? esc(r.mapName) + ' · ' : ''}${r.count} người chơi · không giới hạn</small></div>`;
     const b = document.createElement('button');
@@ -850,8 +851,8 @@ for (const r of document.querySelectorAll('input[name=mode]')) {
   r.onchange = () => { showMapPick(r.value); updateMenuBg(); };
 }
 // Danh mục chế độ: chỉ hiện các chế độ trong danh mục đang chọn
-const MODE_CAT = { brawl: 'skill', team: 'skill', practice: 'skill', bomb: 'gun', dm: 'gun', xidach: 'card', tienlen: 'card' };
-const CARD_MODES = ['xidach', 'tienlen'];
+const CARD_MODES = Object.keys(CARD_GAMES);
+const MODE_CAT = { brawl: 'skill', team: 'skill', practice: 'skill', bomb: 'gun', dm: 'gun', ...Object.fromEntries(CARD_MODES.map(mode => [mode, 'card'])) };
 function showCat(cat, pickFirst) {
   for (const b of document.querySelectorAll('#modeCats .btn')) b.classList.toggle('on', b.dataset.cat === cat);
   for (const l of document.querySelectorAll('#modeSelect label')) l.hidden = l.dataset.cat !== cat;

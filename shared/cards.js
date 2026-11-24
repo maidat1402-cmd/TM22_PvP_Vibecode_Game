@@ -9,7 +9,7 @@ export const cardRank = id => id >> 2;
 export const cardSuit = id => id & 3;
 export const cardLabel = id => RANKS[cardRank(id)] + SUITS[cardSuit(id)];
 export const isRed = id => cardSuit(id) >= 2;
-export const CARD_GAMES = { xidach: 'Xì dách', tienlen: 'Tiến lên' };
+export const CARD_GAMES = Object.freeze({ xidach: 'Xì dách', tienlen: 'Tiến lên', poker: 'Poker' });
 export const CARD_REJOIN_SECONDS = 60;
 export const CARD_CONFIG = { maxChips: 1_000_000, maxBets: 5 };
 export const CARD_STYLES = Object.freeze({ classic: 'Cổ điển', chibi: 'Chibi Clash' });
@@ -76,9 +76,14 @@ export function xdCompare(p, d) {
 // Bộ bài đánh ra: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2),
 // đôi thông (từ 3 đôi liên tiếp, không có 2). Chặn được khi cùng loại, cùng số lá và lá cao nhất lớn hơn.
 // Chặt heo: 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt 1 lá 2, đôi 2, 3 đôi thông, tứ quý.
-export const TL = { handSize: 13, seats: 4, turnTime: 25, unit: 10, instantUnits: 4, burnUnits: 2, startChips: 1000 };
+export const TL = { handSize: 13, seats: 4, turnTime: 25, startChips: 1000 };
 export const TL_NAME = { single: 'Rác', pair: 'Đôi', triple: 'Sám', quad: 'Tứ quý', straight: 'Sảnh', pairs: 'Đôi thông' };
 export const TL_RANK_UNITS = { 2: [2, -2], 3: [3, -1, -2], 4: [2, 1, -1, -2] };
+export const TL_MONEY = Object.freeze({ unit: 10, burn: 20, instant: 40, black: 20, red: 40, pairs3: 30, quad: 40, pairs4: 50 });
+export const TL_MONEY_LABELS = Object.freeze({
+  unit: 'Một phần cược', burn: 'Cóng', instant: 'Tới trắng (mỗi ghế)', black: 'Mỗi heo đen',
+  red: 'Mỗi heo đỏ', pairs3: 'Ba đôi thông', quad: 'Tứ quý', pairs4: 'Bốn đôi thông trở lên',
+});
 
 export function tlCombo(ids) {
   const c = [...ids].sort((a, b) => a - b), n = c.length;
@@ -178,18 +183,17 @@ export function tlInstantWin(hand) {
   return null;
 }
 // Thối heo: người thua còn heo (lá 2) khi hết ván bị phạt thêm, trả cho người thắng.
-export const TL_HEO_FINE = { black: 2 * TL.unit, red: 4 * TL.unit };   // heo ♠ ♣ / heo ♦ ♥, mỗi lá
-export function tlHeoFine(hand) {
+export function tlHeoFine(hand, money = TL_MONEY) {
   let n = 0, xu = 0;
-  for (const c of hand) if (cardRank(c) === RANK_TWO) { n++; xu += isRed(c) ? TL_HEO_FINE.red : TL_HEO_FINE.black; }
+  for (const c of hand) if (cardRank(c) === RANK_TWO) { n++; xu += isRed(c) ? money.red : money.black; }
   return { n, xu };
 }
 
 // Tiền chặt tính trên bộ bị chặt. Đè heo bằng heo lớn hơn vẫn là đánh thường.
-export function tlChopValue(trick) {
+export function tlChopValue(trick, money = TL_MONEY) {
   const { combo, cards } = trick;
-  if (combo.type === 'quad') return 4 * TL.unit;
-  if (combo.type === 'pairs') return (combo.len / 2 + (combo.len >= 8 ? 1 : 0)) * TL.unit;
-  if (combo.type === 'single' || combo.type === 'pair') return tlHeoFine(cards).xu;
+  if (combo.type === 'quad') return money.quad;
+  if (combo.type === 'pairs') return combo.len === 6 ? money.pairs3 : money.pairs4;
+  if (combo.type === 'single' || combo.type === 'pair') return tlHeoFine(cards, money).xu;
   return 0;
 }

@@ -10,6 +10,8 @@ import { WebSocketServer } from 'ws';
 import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
 import { CardRoom } from './cards.js';
+import { PokerRoom } from './poker.js';
+import { CARD_GAMES } from '../shared/cards.js';
 import { playableChar } from '../shared/characters.js';
 import { VERSION } from '../shared/version.js';
 
@@ -108,11 +110,13 @@ class Hub {
         case 'create': {
           this.leaveRoom(c);
           const name = String(m.name || '').replace(/[<>]/g, '').slice(0, 24).trim() || `Phòng của ${c.name}`;
-          const mode = ['bomb', 'dm', 'team', 'practice', 'xidach', 'tienlen'].includes(m.mode) ? m.mode : 'brawl';
+          const supported = typeof m.mode === 'string' && (['bomb', 'dm', 'team', 'practice'].includes(m.mode) || Object.hasOwn(CARD_GAMES, m.mode));
+          const mode = supported ? m.mode : 'brawl';
           // đấu tập: phòng đối kháng có bia tập + võ sĩ máy (chơi một mình vẫn tích được thanh dị biến)
-          // đánh bài: bàn tròn Xì dách / Tiến lên
+          // đánh bài: bàn tròn Xì dách / Tiến lên / Poker
           const id = randomUUID();
-          const r = mode === 'xidach' || mode === 'tienlen' ? new CardRoom(id, name, this, mode)
+          const r = mode === 'poker' ? new PokerRoom(id, name, this)
+            : Object.hasOwn(CARD_GAMES, mode) ? new CardRoom(id, name, this, mode)
             : mode === 'brawl' || mode === 'team' || mode === 'practice' ? new Room(id, name, this, String(m.map || ''), mode === 'team', mode === 'practice')
             : new ShooterRoom(id, name, this, mode, String(m.map || ''));
           this.rooms.set(r.id, r);

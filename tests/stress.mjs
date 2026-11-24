@@ -22,14 +22,14 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const fails = [];
 const fail = msg => { fails.push(msg); console.log('  ✗ ' + msg); };
 
-const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple'], ['xidach', ''], ['tienlen', '']];
+const MODES = [['brawl', 'shrine'], ['practice', 'village'], ['team', 'tournament'], ['dm', 'lantern'], ['bomb', 'temple'], ...Object.keys(CARD_GAMES).map(mode => [mode, ''])];
 const BUY_ITEMS = BUY_MENU.flatMap(c => c.items);
 const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', 'tready', 'tstart', 'awk', 'hold', 'pfill',
-  'cbet', 'cready', 'cbot', 'chit', 'cstand', 'cplay', 'cpass', 'cstart', 'cdealer', 'cstop', 'cconfig', 'copen', 'cresume', 'cresumeack',
+  'cbet', 'cready', 'cbot', 'chit', 'cstand', 'cplay', 'cpass', 'cstart', 'cdealer', 'cstop', 'cconfig', 'copen', 'cresume', 'cresumeack', 'cpoker', 'clook',
   'fire', 'throw', 'drop', 'pickup', 'reload', 'switch', 'buy', 'use', 'loadout', 'team',
   'hello', 'list', 'create', 'join', 'leave', 'ping', '__proto__', 'constructor', 'toString', ''];
 const FIELDS = ['p', 'd', 'a', 'r', 'f', 'sk', 'cs', 'seed', 'tg', 'team', 'on', 'msg', 'char', 'k', 'o', 'v',
-  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards', 'session', 'chips', 'bets', 'cardStyle', 'seat'];
+  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards', 'session', 'chips', 'bets', 'cardStyle', 'seat', 'action', 'to', 'tl', 'blinds', 'x', 'z'];
 const BIG = 'x'.repeat(3000);
 const JUNK = [undefined, null, true, false, 0, -1, 1, 3, 99, -99999, 1e308, -1e308, 2 ** 53, 0.5, '', 'NaN', 'Infinity',
   '__proto__', 'constructor', 'toString', 'hasOwnProperty', BIG, [], [null], [1], [1, 2], ['a', 'b', 'c'],
@@ -76,7 +76,7 @@ async function anchor(mode, map, roomId, name) {
   const c = await connect();
   const shooter = mode === 'dm' || mode === 'bomb';
   c.mode = mode; c.name = name;
-  c.cards = mode === 'xidach' || mode === 'tienlen';
+  c.cards = Object.hasOwn(CARD_GAMES, mode);
   c.send({ t: 'hello', name, char: pick(CHARACTERS).id });
   const joined = waitFor(c, c.cards ? 'cj' : shooter ? 'sj' : 'joined');
   c.send(roomId ? { t: 'join', id: roomId, char: pick(CHARACTERS).id } : { t: 'create', name, mode, map, char: pick(CHARACTERS).id });
@@ -107,6 +107,8 @@ function anchorTick(c, others) {
     else if (r < 0.095) c.send({ t: 'cbot', d: pick([1, -1]) });
     else if (r < 0.097) c.send({ t: pick(['cdealer', 'cstop']) });
     else if (r < 0.098) c.send({ t: 'char', char: pick(['treant', 'dummy', ...CHARACTERS.map(q => q.id)]) });
+    else if (r < 0.115 && c.mode === 'poker') c.send({ t: 'cpoker', action: pick(['check', 'call', 'raise', 'allin', 'fold']), to: pick([0, 20, 250, 1e308]) });
+    else if (r < 0.125) c.send({ t: 'clook', x: pick([-6, 0, 6, 100]), z: pick([-6, 0, 6, 100]) });
     return;
   }
   const shooter = c.mode === 'dm' || c.mode === 'bomb';

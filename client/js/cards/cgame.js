@@ -3,7 +3,8 @@
 // (chia bài, đánh bài, lật bài) bằng cách so trạng thái mới với vị trí lá bài đang có.
 import * as THREE from 'three';
 import { getChar } from '/shared/characters.js';
-import { RANKS, SUITS, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
+import { RANKS, SUITS, cardLabel, XD, XD_KIND, TL_NAME, TL_MONEY, TL_MONEY_LABELS, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
+import { POKER, POKER_STREETS, POKER_HANDS } from '/shared/poker.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
 import { $, esc } from '../ui.js';
@@ -13,6 +14,7 @@ import { cardCanvas, paintCard } from './card-art.js';
 const now = () => performance.now() / 1000;
 const TABLE_Y = 1.0, TABLE_R = 3.2, SEAT_R = 4.25, ZONE_R = 2.2;
 const CW = 0.5, CH = 0.7;
+const ZOOM_LEVELS = [1, 1.35, 1.65];
 
 // ---------- Texture lá bài dùng lại theo mẫu ----------
 const TEX = new Map();
@@ -44,6 +46,16 @@ export class CardGame {
     this.scene.background = new THREE.Color(0x1d1428);
     this.scene.fog = new THREE.Fog(0x1d1428, 16, 34);
     this.camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 80);
+    this.zoomLevel = 0;
+    this.viewFocus = new THREE.Vector2();
+    this.cameraAim = new THREE.Vector2();
+    this.pointer = new THREE.Vector2();
+    this.tableRay = new THREE.Raycaster();
+    this.tablePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TABLE_Y);
+    this.tablePoint = new THREE.Vector3();
+    this.look = null;
+    this.sentLook = '';
+    this.nextLook = 0;
     this.fx = new FX(this.scene, this.camera);
     this.cardStyle = DEFAULT_CARD_STYLE; this.handKey = '';
     this.buildRoom();
@@ -52,6 +64,10 @@ export class CardGame {
     this.st = null; this.sel = new Set(); this.deadline = 0; this.history = []; this.lastGames = -1;
     this.buildUi();
     this.bindNet();
+    const canvas = renderer.domElement;
+    canvas.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') this.pointAtTable(e, false); });
+    canvas.addEventListener('pointerdown', e => { if (e.isPrimary) this.pointAtTable(e, true); });
+    canvas.addEventListener('pointerleave', e => { if (this.active && e.pointerType === 'mouse') this.look = [0, 0]; });
     addEventListener('resize', () => this.resize());
     addEventListener('keydown', e => {
       if (!this.active || $('cRules').open) return;
@@ -65,6 +81,21 @@ export class CardGame {
   }
 
   resize() { this.camera.aspect = innerWidth / innerHeight; this.camera.fov = this.camera.aspect < 1 ? 68 : 50; this.camera.updateProjectionMatrix(); }
+
+  pointAtTable(event, focus) {
+    if (!this.active || $('cRules').open) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.pointer.set((event.clientX - rect.left) * 2 / rect.width - 1, 1 - (event.clientY - rect.top) * 2 / rect.height);
+    this.tableRay.setFromCamera(this.pointer, this.camera);
+    const hit = this.tableRay.ray.intersectPlane(this.tablePlane, this.tablePoint);
+    if (!hit || Math.hypot(hit.x, hit.z) > TABLE_R + 0.15) {
+      this.look = [0, 0];
+      return;
+    }
+    const quantize = v => THREE.MathUtils.clamp(Math.round(v * 2), -6, 6);
+    this.look = [quantize(hit.x), quantize(hit.z)];
+    if (focus) this.viewFocus.set(hit.x, hit.z).clampLength(0, TABLE_R);
+  }
 
   // ---------- Căn phòng + bàn tròn ----------
   buildRoom() {
@@ -113,6 +144,7 @@ export class CardGame {
         <div id="cTimer"><span id="cTimerLabel"></span><span id="cTimerSeconds"></span></div>
         <div class="c-side"><span class="c-bots" title="Số máy (AI) chơi cùng"><button class="btn small" id="cBotSub" title="Bớt 1 máy">−</button><b id="cBotN">🤖 0</b><button class="btn small" id="cBotAdd" title="Thêm 1 máy">+</button></span>
           <button class="btn small" id="cStop" title="Chủ phòng: dừng sau ván này, về phòng chờ">⏸</button><button class="btn small" id="cMenu">☰</button><button class="btn small" id="cChatBtn">💬</button></div>
+        <div class="c-view-tools"><button class="btn small" id="cZoom" type="button" aria-label="Đổi mức phóng bàn" title="Phóng bàn. Chạm hoặc bấm lên bàn để chọn vùng xem.">Bàn ×1</button></div>
         <div id="cMsg"></div>
       </header>
       <div id="cPlates"></div>
@@ -125,6 +157,14 @@ export class CardGame {
           <fieldset id="cRulesBets"><legend>Mức cược (xu)</legend>
             ${Array.from({ length: CARD_CONFIG.maxBets }, (_, i) =>
               `<input type="number" min="1" max="${CARD_CONFIG.maxChips}" inputmode="numeric" placeholder="Mức ${i + 1}" aria-label="Mức cược ${i + 1}">`).join('')}
+          </fieldset>
+          <fieldset id="cRulesTL" hidden><legend>Cược và đền Tiến lên (xu)</legend>
+            ${Object.entries(TL_MONEY_LABELS).map(([key, label]) =>
+              `<label>${label}<input name="${key}" type="number" min="${key === 'unit' ? 1 : 0}" max="${CARD_CONFIG.maxChips}" inputmode="numeric" required></label>`).join('')}
+          </fieldset>
+          <fieldset id="cRulesBlinds" hidden><legend>Tiền mù Poker (xu)</legend>
+            <label>Mù nhỏ<input name="small" type="number" min="1" max="${CARD_CONFIG.maxChips}" inputmode="numeric" required></label>
+            <label>Mù lớn<input name="big" type="number" min="2" max="${CARD_CONFIG.maxChips}" inputmode="numeric" required></label>
           </fieldset>
           <fieldset class="c-deck-picker"><legend>Mẫu bài</legend>
             ${Object.entries(CARD_STYLES).map(([value, label]) => `
@@ -147,6 +187,11 @@ export class CardGame {
     }).observe(el.querySelector('.c-header'));
     $('cMenu').onclick = () => this.onUnlock?.();
     $('cChatBtn').onclick = () => this.openChat();
+    $('cZoom').onclick = () => {
+      this.zoomLevel = (this.zoomLevel + 1) % ZOOM_LEVELS.length;
+      $('cZoom').textContent = 'Bàn ×' + ZOOM_LEVELS[this.zoomLevel];
+      if (!this.zoomLevel) this.viewFocus.set(0, 0);
+    };
     // thêm / bớt máy (AI) chơi cùng: chơi một mình với bao nhiêu máy tuỳ ý
     $('cBotAdd').onclick = () => { sfx('ui'); this.net.send({ t: 'cbot', d: 1 }); };
     $('cStop').onclick = () => { sfx('ui'); this.net.send({ t: 'cstop' }); };
@@ -158,15 +203,23 @@ export class CardGame {
       const chips = $('cRulesChips').valueAsNumber;
       const bets = Array.from($('cRulesBets').querySelectorAll('input'), input => input.valueAsNumber).filter(Number.isFinite);
       const cardStyle = new FormData(event.currentTarget).get('cardStyle');
-      this.net.send({ t: 'cconfig', chips, bets, cardStyle });
+      const settings = { t: 'cconfig', chips, bets, cardStyle };
+      if (this.game === 'tienlen') settings.tl = Object.fromEntries([...$('cRulesTL').querySelectorAll('input')].map(input => [input.name, input.valueAsNumber]));
+      if (this.game === 'poker') settings.blinds = Object.fromEntries([...$('cRulesBlinds').querySelectorAll('input')].map(input => [input.name, input.valueAsNumber]));
+      this.net.send(settings);
     };
   }
   openRules() {
-    const { startChips, bets } = this.st.rules;
+    const { startChips, bets, tl, blinds } = this.st.rules;
     $('cRulesError').textContent = '';
     $('cRulesChips').value = startChips;
     $('cRulesBets').hidden = this.game !== 'xidach';
     Array.from($('cRulesBets').querySelectorAll('input')).forEach((input, i) => { input.value = bets[i] ?? ''; });
+    for (const [id, visible, values] of [['cRulesTL', this.game === 'tienlen', tl ?? TL_MONEY], ['cRulesBlinds', this.game === 'poker', blinds ?? POKER]]) {
+      const group = $(id);
+      group.hidden = group.disabled = !visible;
+      for (const input of group.querySelectorAll('input')) input.value = values[input.name];
+    }
     $('cRulesForm').elements.cardStyle.value = this.cardStyle;
     for (const canvas of $('cRules').querySelectorAll('.c-deck-preview canvas[data-card]')) {
       paintCard(canvas, Number(canvas.dataset.card), canvas.dataset.style);
@@ -189,6 +242,10 @@ export class CardGame {
   bindNet() {
     const n = this.net;
     n.on('cs', m => { if (this.active) this.onState(m); });
+    n.on('clook', m => {
+      if (!this.active || m.id === this.myId) return;
+      for (const a of this.avatars.values()) if (a.id === m.id) a.look = m.look;
+    });
     n.on('cno', m => {
       if (!this.active) return;
       if ($('cRules').open) $('cRulesError').textContent = m.msg;
@@ -226,6 +283,13 @@ export class CardGame {
     this.avatars.clear();
     this.st = null; this.sel.clear(); this.history = []; this.lastGames = -1;
     this.handKey = '';
+    this.zoomLevel = 0;
+    this.cameraAim.set(0, 0);
+    this.viewFocus.set(0, 0);
+    this.camera.zoom = 1;
+    this.camera.updateProjectionMatrix();
+    this.look = null; this.sentLook = ''; this.nextLook = 0;
+    $('cZoom').textContent = 'Bàn ×1';
     $('cPlates').innerHTML = ''; $('cHand').innerHTML = ''; $('cActs').innerHTML = ''; $('cChat').innerHTML = '';
   }
   changeChar(id) { this.net.send({ t: 'char', char: id }); }
@@ -335,7 +399,8 @@ export class CardGame {
       const mine = i === s.you;
       const av = this.placeAvatar('s' + i, p.char, ang, mine ? 0.7 : 0);   // nhân vật của mình lùi ra sau để không che bài
       av.name = p.name;
-      if (this.game === 'xidach' || !mine) {
+      av.id = p.id; av.look = p.look;
+      if ((this.game === 'xidach' || !mine) && !p.folded) {
         // xì dách: bài mỗi người nằm trước mặt; tiến lên: bài người khác úp thành quạt
         const n = p.n, gap = this.game === 'xidach' ? 0.42 : 0.11, R = this.game === 'xidach' ? ZONE_R : ZONE_R + 0.25;
         for (let j = 0; j < n; j++) {
@@ -357,6 +422,7 @@ export class CardGame {
       const ang = this.dealerAngle(), d = this.dirOf(ang), tan = new THREE.Vector3(Math.cos(ang), 0, -Math.sin(ang));
       const av = this.placeAvatar('dealer', s.dealer.char, ang, s.youDealer ? 0.7 : 0);
       av.name = s.dealer.name;
+      av.id = s.dealer.pid; av.look = s.dealer.look;
       for (let j = 0; j < s.dealer.n; j++) {
         const off = (j - (s.dealer.n - 1) / 2) * 0.42;
         const to = new THREE.Vector3(d.x * ZONE_R + tan.x * off, TABLE_Y + 0.015, d.z * ZONE_R + tan.z * off);
@@ -391,6 +457,14 @@ export class CardGame {
         });
       });
     }
+    if (s.poker) {
+      s.poker.board.forEach((face, i) => {
+        const key = 'board' + i;
+        const to = new THREE.Vector3((i - 2) * 0.67, TABLE_Y + 0.035, 0.65);
+        this.moveCard(key, face, to, Math.PI, deckPos, this.cards.has(key) ? 0 : 0.09 * i);
+        this.cards.get(key).mesh.scale.setScalar(1.18);
+      });
+    }
     // lá bài không còn trong trạng thái: bỏ đi
     for (const [k, c] of this.cards) if (!c.seen && !k.startsWith('menu')) { c.mesh.removeFromParent(); c.mesh.material.dispose(); this.cards.delete(k); }
     for (const [k, a] of this.avatars) if (!a.seen) { a.model.dispose(); this.avatars.delete(k); }
@@ -417,6 +491,7 @@ export class CardGame {
         const button = document.createElement('button');
         button.className = 'hcard';
         button.type = 'button';
+        button.disabled = this.game === 'poker';
         button.setAttribute('aria-label', cardLabel(id));
         button.dataset.id = id;
         const canvas = document.createElement('canvas');
@@ -445,13 +520,13 @@ export class CardGame {
 
   renderUi() {
     const s = this.st, me = s.seats[s.you];
-    this.ui.classList.toggle('c-crowded', this.game === 'xidach' && s.seats.filter(Boolean).length >= 6);
+    this.ui.classList.toggle('c-crowded', s.seats.filter(Boolean).length >= 6);
     $('cMsg').textContent = s.msg || '';
     $('cBotN').textContent = `🤖 ${s.botWant ?? s.bots} máy`;
     $('cBotN').title = s.canBot ? 'Số máy (AI) chơi cùng' : 'Số máy mới áp dụng từ ván sau';
     // bảng tên trên đầu từng người
     const plates = [], lobby = s.phase === 'lobby', isHost = s.host === s.me;
-    this.renderHand(this.game === 'tienlen' && !lobby ? me?.cards ?? [] : []);
+    this.renderHand(this.game !== 'xidach' && !lobby ? me?.cards ?? [] : []);
     $('cStop').style.display = isHost && !lobby ? '' : 'none';
     $('cStop').classList.toggle('on', !!s.stopAfter);
     $('cStop').title = s.stopAfter ? 'Đã hẹn dừng sau ván này — bấm để chơi tiếp' : 'Chủ phòng: dừng sau ván này, về phòng chờ';
@@ -467,6 +542,11 @@ export class CardGame {
         else if (p.done) st = p.kind && p.kind !== 'normal' ? XD_KIND[p.kind] : 'Dằn';
         else st = `Cược ${p.bet}`;
         if (p.score != null && p.cards.length) st += ` · ${p.score}đ`;
+      } else if (s.poker) {
+        const blind = i === s.poker.smallSeat ? 'Mù nhỏ · ' : i === s.poker.bigSeat ? 'Mù lớn · ' : '';
+        if (p.result) st = this.pokerResult(p.result);
+        else if (p.folded) st = 'Đã bỏ bài';
+        else st = blind + (p.allIn ? 'Tất tay' : p.streetBet + ' xu');
       } else {
         if (p.result) st = tlResultText(p.result);
         else if (p.rank) st = TL_RANK_NAMES[p.rank - 1];
@@ -493,6 +573,8 @@ export class CardGame {
       const sd = s.youDealer ? s.dealer : null;
       const rules = s.rules;
       info.push('Vốn bàn ' + rules.startChips + ' xu' + (rules.bets.length ? ' · Cược ' + rules.bets.join(' / ') + ' xu' : ''));
+      if (rules.tl) info.push('Tiến lên · ' + rules.tl.unit + ' xu/phần');
+      if (rules.blinds) info.push('Tiền mù ' + rules.blinds.small + '/' + rules.blinds.big + ' xu');
       info.push('Mẫu bài: ' + CARD_STYLES[this.cardStyle]);
       if (me) info.push(`💰 ${me.chips} xu`);
       if (sd) info.push(`🎩 Bạn làm nhà cái · 💰 ${sd.chips} xu`);
@@ -546,6 +628,8 @@ export class CardGame {
         info.push(me.result.r > 0 ? `🎉 Thắng ${me.result.delta} xu` : me.result.r < 0 ? `Thua ${-me.result.delta} xu` : 'Hoà');
         if (me.result.penalty) info.push(`Đền bài: ${me.result.penalty > 0 ? '+' : ''}${me.result.penalty} xu`);
       }
+    } else if (s.poker) {
+      this.renderPoker(acts, info, s, me);
     } else {
       const selArr = [...this.sel], combo = selArr.length ? tlCombo(selArr) : null;
       const myTurn = s.phase === 'play' && s.turn === s.you, cur = s.trick ? tlCombo(s.trick.cards) : null;
@@ -566,9 +650,40 @@ export class CardGame {
     for (const b of $('cActs').querySelectorAll('button')) b.onclick = () => this.act(b.dataset.a, +b.dataset.v);
   }
 
+  pokerResult(result) {
+    const hand = result.hand === null ? '' : POKER_HANDS[result.hand] + ' · ';
+    const refund = result.refund ? ' · hoàn ' + result.refund + ' xu' : '';
+    return hand + (result.delta > 0 ? '+' : '') + result.delta + ' xu' + refund;
+  }
+
+  renderPoker(acts, info, state, me) {
+    const { street, pot, options } = state.poker;
+    info.push(`${POKER_STREETS[street]} · Hũ ${pot} xu`);
+    if (me.seat === state.poker.smallSeat) info.push('Mù nhỏ');
+    if (me.seat === state.poker.bigSeat) info.push('Mù lớn');
+    if (me.result) { info.push(this.pokerResult(me.result)); return; }
+    if (!options) { info.push(me.folded ? 'Bạn đã bỏ bài' : me.allIn ? 'Bạn đã tất tay' : 'Chờ đến lượt…'); return; }
+    acts.push('<button class="btn" data-a="poker-fold">Bỏ bài</button>');
+    if (options.owed) {
+      acts.push(`<button class="btn primary" data-a="poker-call">Theo ${options.call} xu</button>`);
+    } else acts.push('<button class="btn primary" data-a="poker-check">Qua</button>');
+    if (options.canRaise) {
+      acts.push(`<input id="cPokerTo" type="number" inputmode="numeric" aria-label="Tố đến tổng số xu" min="${options.minTo}" max="${options.maxTo}" value="${options.minTo}" required>`);
+      acts.push('<button class="btn" data-a="poker-raise">Tố đến</button>');
+    }
+    if (options.canAllIn) acts.push('<button class="btn" data-a="poker-allin">Tất tay</button>');
+  }
+
   act(a, v) {
     const s = this.st;
     sfx('ui');
+    if (a.startsWith('poker-')) {
+      const action = a.slice(6);
+      const amount = $('cPokerTo');
+      if (action === 'raise' && !amount?.reportValidity()) return;
+      this.net.send({ t: 'cpoker', action, to: action === 'raise' ? amount.valueAsNumber : undefined });
+      return;
+    }
     switch (a) {
       case 'rules': this.openRules(); break;
       case 'bet': this.net.send({ t: 'cbet', v }); break;
@@ -600,9 +715,15 @@ export class CardGame {
     // camera: ngồi sau lưng ghế của mình nhìn xuống bàn; nền menu thì bay vòng
     if (this.active) {
       const portrait = this.camera.aspect < 1;
-      for (const m of this.lampParts) m.visible = !portrait;   // màn dọc: camera cao hơn, chụp đèn sẽ che bàn
-      this.camera.position.set(0, portrait ? 9.5 : 7.4, portrait ? 8.2 : 7.6);
-      this.camera.lookAt(0, 0.6, portrait ? 0.6 : 0.4);
+      for (const m of this.lampParts) m.visible = !portrait && !this.zoomLevel;
+      const desired = ZOOM_LEVELS[this.zoomLevel];
+      const ease = 1 - Math.exp(-dt * 10);
+      const zoom = Math.abs(this.camera.zoom - desired) < 0.002 ? desired : THREE.MathUtils.lerp(this.camera.zoom, desired, ease);
+      if (zoom !== this.camera.zoom) { this.camera.zoom = zoom; this.camera.updateProjectionMatrix(); }
+      const focusX = this.zoomLevel ? this.viewFocus.x * 0.8 : 0, focusZ = this.zoomLevel ? this.viewFocus.y * 0.8 : 0;
+      this.cameraAim.set(THREE.MathUtils.lerp(this.cameraAim.x, focusX, ease), THREE.MathUtils.lerp(this.cameraAim.y, focusZ, ease));
+      this.camera.position.set(this.cameraAim.x, portrait ? 9.5 : 7.4, (portrait ? 8.2 : 7.6) + this.cameraAim.y);
+      this.camera.lookAt(this.cameraAim.x, 0.6, (portrait ? 0.6 : 0.4) + this.cameraAim.y);
     } else {
       const a = t * 0.08;
       for (const m of this.lampParts) m.visible = true;
@@ -631,8 +752,29 @@ export class CardGame {
         if (k >= 1) { c.flip = null; c.mesh.scale.x = c.mesh.scale.y; }
       }
     }
-    // nhân vật: thở, nhìn vào bàn
-    for (const a of this.avatars.values()) a.model.update(dt, ANIM.idle, 0);
+    // Chia sẻ một ô trên mặt bàn, đầu nhân vật tự xoay nhẹ về hướng đó.
+    if (this.active && this.look && t >= this.nextLook && this.sentLook !== this.look.join(',')) {
+      this.sentLook = this.look.join(',');
+      this.nextLook = t + 0.15;
+      this.net.send({ t: 'clook', x: this.look[0], z: this.look[1] });
+    }
+    for (const a of this.avatars.values()) {
+      a.model.update(dt, ANIM.idle, 0);
+      const look = a.id === this.myId ? this.look ?? a.look : a.look;
+      const head = a.model.rig.head;
+      let yaw = 0, pitch = 0;
+      if (look) {
+        const root = a.model.root;
+        const dx = look[0] * 0.5 - root.position.x, dz = look[1] * 0.5 - root.position.z;
+        const angle = Math.atan2(dx, dz) - root.rotation.y;
+        yaw = THREE.MathUtils.clamp(Math.atan2(Math.sin(angle), Math.cos(angle)), -0.65, 0.65);
+        pitch = THREE.MathUtils.clamp(Math.atan2(head.position.y - TABLE_Y, Math.hypot(dx, dz)), 0, 0.42);
+      }
+      const ease = Math.min(1, dt * 12);
+      head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, yaw, ease);
+      a.lookPitch = THREE.MathUtils.lerp(a.lookPitch ?? 0, pitch, ease);
+      head.rotation.x += a.lookPitch;
+    }
     // vòng sáng dưới người đang tới lượt + đồng hồ
     if (this.active && this.st) {
       const s = this.st, turnSeat = s.phase === 'play' ? s.turn : s.phase === 'dealer' ? 'dealer' : null;
@@ -661,11 +803,12 @@ export class CardGame {
         // không để bảng tên đè lên đồng hồ / tràn khỏi màn hình
         const margin = this.ui.classList.contains('c-crowded') ? 44 : 70;
         const px = Math.max(margin, Math.min(w - margin, (v.x + 1) / 2 * w)), py = Math.max(this.plateMinY, (1 - v.y) / 2 * h);
+        el.style.visibility = this.zoomLevel && (Math.abs(v.x) > 1.08 || Math.abs(v.y) > 1.08) ? 'hidden' : '';
         el.style.transform = `translate(-50%, -100%) translate(${px.toFixed(0)}px, ${py.toFixed(0)}px)`;
       }
     } else this.turnRing.visible = false;
     // chồng bài ở giữa: xì dách là "hộp bài" của nhà cái; tiến lên thì giữa bàn dành cho bộ bài vừa đánh
-    this.deck.visible = this.game !== 'tienlen' && (!this.st || this.st.phase !== 'result');
+    this.deck.visible = !this.active || (this.game === 'xidach' && this.st?.phase !== 'result');
     this.fx.update(dt);
     const r = this.renderer;
     r.autoClear = true;
