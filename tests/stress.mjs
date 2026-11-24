@@ -29,7 +29,7 @@ const TYPES = ['s', 'cast', 'dodge', 'heal', 'steer', 'char', 'chat', 'tteam', '
   'fire', 'throw', 'drop', 'pickup', 'reload', 'switch', 'buy', 'use', 'loadout', 'team',
   'hello', 'list', 'create', 'join', 'leave', 'ping', '__proto__', 'constructor', 'toString', ''];
 const FIELDS = ['p', 'd', 'a', 'r', 'f', 'sk', 'cs', 'seed', 'tg', 'team', 'on', 'msg', 'char', 'k', 'o', 'v',
-  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards', 'session', 'chips', 'bets', 'seat'];
+  'w', 'slot', 'item', 'w1', 'w2', 'pi', 'id', 'mode', 'map', 'name', 'c', 'aw', 'rp', 'hold', 'hk', 'cards', 'session', 'chips', 'bets', 'cardStyle', 'seat'];
 const BIG = 'x'.repeat(3000);
 const JUNK = [undefined, null, true, false, 0, -1, 1, 3, 99, -99999, 1e308, -1e308, 2 ** 53, 0.5, '', 'NaN', 'Infinity',
   '__proto__', 'constructor', 'toString', 'hasOwnProperty', BIG, [], [null], [1], [1, 2], ['a', 'b', 'c'],

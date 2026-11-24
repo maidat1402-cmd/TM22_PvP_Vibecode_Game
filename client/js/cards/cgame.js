@@ -3,48 +3,30 @@
 // (chia bài, đánh bài, lật bài) bằng cách so trạng thái mới với vị trí lá bài đang có.
 import * as THREE from 'three';
 import { getChar } from '/shared/characters.js';
-import { RANKS, SUITS, cardRank, cardSuit, isRed, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG } from '/shared/cards.js';
+import { RANKS, SUITS, isRed, cardLabel, XD, XD_KIND, TL_NAME, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
 import { $, esc } from '../ui.js';
 import { sfx } from '../audio.js';
+import { cardCanvas, cardImage } from './card-art.js';
 
 const now = () => performance.now() / 1000;
 const TABLE_Y = 1.0, TABLE_R = 3.2, SEAT_R = 4.25, ZONE_R = 2.2;
 const CW = 0.5, CH = 0.7;
 
-// ---------- Texture lá bài (vẽ bằng canvas, không có file ảnh) ----------
+// ---------- Texture lá bài dùng lại theo mẫu ----------
 const TEX = new Map();
-function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
-function cardTex(id) {
-  if (TEX.has(id)) return TEX.get(id);
-  const c = document.createElement('canvas'); c.width = 128; c.height = 180;
-  const g = c.getContext('2d');
-  if (id < 0) {
-    // mặt sau: nền đỏ đậm, viền vàng, hoa văn quả trám
-    rr(g, 2, 2, 124, 176, 12); g.fillStyle = '#7a1630'; g.fill();
-    g.strokeStyle = '#f2c14e'; g.lineWidth = 4; rr(g, 9, 9, 110, 162, 8); g.stroke();
-    g.strokeStyle = 'rgba(242,193,78,.45)'; g.lineWidth = 2;
-    for (let i = -180; i < 300; i += 18) { g.beginPath(); g.moveTo(i, 12); g.lineTo(i + 160, 168); g.stroke(); g.beginPath(); g.moveTo(i + 160, 12); g.lineTo(i, 168); g.stroke(); }
-    g.fillStyle = '#7a1630'; g.beginPath(); g.arc(64, 90, 24, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#f2c14e'; g.font = 'bold 22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('CC', 64, 91);
-  } else {
-    rr(g, 2, 2, 124, 176, 12); g.fillStyle = '#fdfaf2'; g.fill(); g.strokeStyle = '#b9b2a4'; g.lineWidth = 2; g.stroke();
-    const col = isRed(id) ? '#d62828' : '#1b1630', r = RANKS[cardRank(id)], s = SUITS[cardSuit(id)];
-    g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = `bold ${r === '10' ? 30 : 36}px sans-serif`; g.fillText(r, 24, 26);
-    g.font = '28px sans-serif'; g.fillText(s, 24, 56);
-    g.font = '74px sans-serif'; g.fillText(s, 70, 112);
-    g.save(); g.translate(104, 154); g.rotate(Math.PI);
-    g.font = `bold ${r === '10' ? 30 : 36}px sans-serif`; g.fillText(r, 0, -4); g.restore();
-  }
-  const t = new THREE.CanvasTexture(c);
+function cardTex(id, style) {
+  const canvas = cardCanvas(id, style);
+  if (TEX.has(canvas)) return TEX.get(canvas);
+  const t = new THREE.CanvasTexture(canvas);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
-  TEX.set(id, t);
+  TEX.set(canvas, t);
   return t;
 }
 const CARD_GEO = new THREE.PlaneGeometry(CW, CH);
+const SAMPLE_CARDS = [RANKS.indexOf('6') * 4 + SUITS.indexOf('♦'), RANKS.indexOf('Q') * 4 + SUITS.indexOf('♣')];
 
 export class CardGame {
   constructor(net, settings, renderer, hud) {
@@ -55,6 +37,7 @@ export class CardGame {
     this.scene.fog = new THREE.Fog(0x1d1428, 16, 34);
     this.camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 80);
     this.fx = new FX(this.scene, this.camera);
+    this.cardStyle = DEFAULT_CARD_STYLE; this.handKey = '';
     this.buildRoom();
     this.cards = new Map();     // key -> { mesh, face, tw }
     this.avatars = new Map();   // seat key -> { model, char, name }
@@ -104,7 +87,7 @@ export class CardGame {
     // chồng bài ở giữa bàn
     this.deck = new THREE.Group();
     for (let i = 0; i < 6; i++) {
-      const m = new THREE.Mesh(CARD_GEO, new THREE.MeshBasicMaterial({ map: cardTex(-1) }));
+      const m = new THREE.Mesh(CARD_GEO, new THREE.MeshBasicMaterial({ map: cardTex(-1, this.cardStyle), alphaTest: 0.5 }));
       m.rotation.x = -Math.PI / 2; m.position.y = TABLE_Y + 0.01 + i * 0.012; this.deck.add(m);
     }
     S.add(this.deck);
@@ -132,6 +115,15 @@ export class CardGame {
             ${Array.from({ length: CARD_CONFIG.maxBets }, (_, i) =>
               `<input type="number" min="1" max="${CARD_CONFIG.maxChips}" inputmode="numeric" placeholder="Mức ${i + 1}" aria-label="Mức cược ${i + 1}">`).join('')}
           </fieldset>
+          <fieldset class="c-deck-picker"><legend>Mẫu bài</legend>
+            ${Object.entries(CARD_STYLES).map(([value, label]) => `
+              <label class="c-deck-choice">
+                <span class="c-deck-label"><input type="radio" name="cardStyle" value="${value}"> ${label}</span>
+                <span class="c-deck-preview" aria-hidden="true">
+                  ${SAMPLE_CARDS.map(id => `<img alt="" width="36" height="50" data-card="${id}" data-style="${value}">`).join('')}
+                </span>
+              </label>`).join('')}
+          </fieldset>
           <p id="cRulesError" role="alert"></p>
           <div class="c-rules-actions"><button type="button" class="btn" id="cRulesCancel">Quay lại</button><button class="btn primary">Lưu</button></div>
         </form>
@@ -150,7 +142,8 @@ export class CardGame {
       $('cRulesError').textContent = '';
       const chips = $('cRulesChips').valueAsNumber;
       const bets = Array.from($('cRulesBets').querySelectorAll('input'), input => input.valueAsNumber).filter(Number.isFinite);
-      this.net.send({ t: 'cconfig', chips, bets });
+      const cardStyle = new FormData(event.currentTarget).get('cardStyle');
+      this.net.send({ t: 'cconfig', chips, bets, cardStyle });
     };
   }
   openRules() {
@@ -159,6 +152,10 @@ export class CardGame {
     $('cRulesChips').value = startChips;
     $('cRulesBets').hidden = this.game !== 'xidach';
     Array.from($('cRulesBets').querySelectorAll('input')).forEach((input, i) => { input.value = bets[i] ?? ''; });
+    $('cRulesForm').elements.cardStyle.value = this.cardStyle;
+    for (const img of $('cRules').querySelectorAll('.c-deck-preview img:not([src])')) {
+      img.src = cardImage(Number(img.dataset.card), img.dataset.style);
+    }
     $('cRules').showModal();
   }
   openChat() { this.chatting = true; $('cChatIn').hidden = false; $('cChatIn').focus(); }
@@ -207,9 +204,11 @@ export class CardGame {
       c.mesh.material.dispose();
     }
     this.cards.clear();
+    this.setCardStyle(DEFAULT_CARD_STYLE);
     for (const a of this.avatars.values()) a.model.dispose();
     this.avatars.clear();
     this.st = null; this.sel.clear(); this.history = []; this.lastGames = -1;
+    this.handKey = '';
     $('cPlates').innerHTML = ''; $('cHand').innerHTML = ''; $('cActs').innerHTML = ''; $('cChat').innerHTML = '';
   }
   changeChar(id) { this.net.send({ t: 'char', char: id }); }
@@ -267,7 +266,7 @@ export class CardGame {
   cardMesh(key, face) {
     let c = this.cards.get(key);
     if (!c) {
-      const mat = new THREE.MeshBasicMaterial({ map: cardTex(face), transparent: true });
+      const mat = new THREE.MeshBasicMaterial({ map: cardTex(face, this.cardStyle), transparent: true });
       const mesh = new THREE.Mesh(CARD_GEO, mat);
       mesh.rotation.order = 'YXZ';
       mesh.rotation.x = -Math.PI / 2;
@@ -276,6 +275,14 @@ export class CardGame {
       this.cards.set(key, c);
     }
     return c;
+  }
+
+  setCardStyle(style) {
+    if (style === this.cardStyle) return;
+    this.cardStyle = style;
+    const back = cardTex(-1, style);
+    for (const mesh of this.deck.children) mesh.material.map = back;
+    for (const { mesh, face } of this.cards.values()) mesh.material.map = cardTex(face, style);
   }
 
   // đưa lá bài key tới vị trí to (bay theo vòng cung từ from nếu là lá mới)
@@ -296,6 +303,8 @@ export class CardGame {
   onState(s) {
     const prev = this.st;
     this.st = s;
+    const style = s.rules.cardStyle;
+    this.setCardStyle(Object.hasOwn(CARD_STYLES, style) ? style : DEFAULT_CARD_STYLE);
     this.deadline = now() + s.left;
     if (s.games !== this.lastGames) { this.history = []; this.lastGames = s.games; this.sel.clear(); }
     for (const c of this.cards.values()) c.seen = false;
@@ -379,6 +388,33 @@ export class CardGame {
   }
 
   // ---------- Giao diện theo trạng thái ----------
+  renderHand(hand) {
+    const box = $('cHand');
+    const key = hand.length ? this.cardStyle + ':' + hand.join(',') : '';
+    if (key !== this.handKey) {
+      this.handKey = key;
+      box.innerHTML = hand.map(id => `
+        <button class="hcard${isRed(id) ? ' red' : ''}" type="button" aria-label="${cardLabel(id)}" data-id="${id}">
+          <span class="hcard-index" aria-hidden="true">${cardLabel(id)}</span>
+          <img alt="" draggable="false" src="${cardImage(id, this.cardStyle)}">
+        </button>`).join('');
+      for (const button of box.children) {
+        button.onclick = () => {
+          const id = Number(button.dataset.id);
+          if (this.sel.has(id)) this.sel.delete(id);
+          else this.sel.add(id);
+          sfx('ui');
+          this.renderUi();
+        };
+      }
+    }
+    for (const button of box.children) {
+      const selected = this.sel.has(Number(button.dataset.id));
+      button.classList.toggle('sel', selected);
+      button.setAttribute('aria-pressed', selected);
+    }
+  }
+
   renderUi() {
     const s = this.st, me = s.seats[s.you];
     this.ui.classList.toggle('c-crowded', this.game === 'xidach' && s.seats.filter(Boolean).length >= 6);
@@ -387,6 +423,7 @@ export class CardGame {
     $('cBotN').title = s.canBot ? 'Số máy (AI) chơi cùng' : 'Số máy mới áp dụng từ ván sau';
     // bảng tên trên đầu từng người
     const plates = [], lobby = s.phase === 'lobby', isHost = s.host === s.me;
+    this.renderHand(this.game === 'tienlen' && !lobby ? me?.cards ?? [] : []);
     $('cStop').style.display = isHost && !lobby ? '' : 'none';
     $('cStop').classList.toggle('on', !!s.stopAfter);
     $('cStop').title = s.stopAfter ? 'Đã hẹn dừng sau ván này — bấm để chơi tiếp' : 'Chủ phòng: dừng sau ván này, về phòng chờ';
@@ -427,6 +464,7 @@ export class CardGame {
       const sd = s.youDealer ? s.dealer : null;
       const rules = s.rules;
       info.push('Vốn bàn ' + rules.startChips + ' xu' + (rules.bets.length ? ' · Cược ' + rules.bets.join(' / ') + ' xu' : ''));
+      info.push('Mẫu bài: ' + CARD_STYLES[this.cardStyle]);
       if (me) info.push(`💰 ${me.chips} xu`);
       if (sd) info.push(`🎩 Bạn làm nhà cái · 💰 ${sd.chips} xu`);
       if (isHost) {
@@ -480,12 +518,9 @@ export class CardGame {
         if (me.result.penalty) info.push(`Đền bài: ${me.result.penalty > 0 ? '+' : ''}${me.result.penalty} xu`);
       }
     } else {
-      const hand = me.cards;
       const selArr = [...this.sel], combo = selArr.length ? tlCombo(selArr) : null;
       const myTurn = s.phase === 'play' && s.turn === s.you, cur = s.trick ? tlCombo(s.trick.cards) : null;
       const canPlay = myTurn && combo && tlBeats(combo, cur) && (s.must < 0 || this.sel.has(s.must));
-      $('cHand').innerHTML = hand.map(id => `<div class="hcard${isRed(id) ? ' red' : ''}${this.sel.has(id) ? ' sel' : ''}" data-id="${id}"><b>${RANKS[cardRank(id)]}</b><span>${SUITS[cardSuit(id)]}</span></div>`).join('');
-      for (const c of $('cHand').children) c.onclick = () => { const id = +c.dataset.id; this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); sfx('ui'); this.renderUi(); };
       if (s.trick) info.push(`Trên bàn: <b>${TL_NAME[s.trick.type]}</b> của ${esc(s.seats[s.trick.by]?.name || '')}`);
       if (selArr.length) info.push(combo ? `Đang chọn: ${TL_NAME[combo.type]}${cur && !tlBeats(combo, cur) ? ' (không chặn được)' : ''}` : 'Đang chọn: không thành bộ');
       if (s.must >= 0 && myTurn) info.push(`Lượt đầu phải có lá ${cardLabel(s.must)}`);
@@ -498,7 +533,6 @@ export class CardGame {
       if (me.result) info.push(me.result.r > 0 ? `🏆 Bạn ${me.result.instant ? 'tới trắng (' + me.result.instant + ')' : 'về nhất'}, nhận ${me.result.delta} xu`
         : `Hạng ${me.result.rank}: trả ${-me.result.delta} xu${me.result.burn ? ' (cháy bài ×2)' : ''}${me.result.heo ? ` (thối ${me.result.heo} heo)` : ''}`);
     }
-    if (this.game === 'xidach' || lobby) $('cHand').innerHTML = '';
     $('cInfo').innerHTML = info.join(' · ');
     $('cActs').innerHTML = acts.join('');
     for (const b of $('cActs').querySelectorAll('button')) b.onclick = () => this.act(b.dataset.a, +b.dataset.v);
@@ -565,7 +599,7 @@ export class CardGame {
       if (f && t >= f.t0) {
         const k = Math.min(1, (t - f.t0) / 0.3);
         c.mesh.scale.x = Math.abs(Math.cos(Math.PI * k)) * (c.mesh.scale.y || 1);
-        if (k >= 0.5 && c.face !== f.to) { c.face = f.to; c.mesh.material.map = cardTex(f.to); c.mesh.material.needsUpdate = true; }
+        if (k >= 0.5 && c.face !== f.to) { c.face = f.to; c.mesh.material.map = cardTex(f.to, this.cardStyle); }
         if (k >= 1) { c.flip = null; c.mesh.scale.x = c.mesh.scale.y; }
       }
     }

@@ -12,6 +12,8 @@ export const isRed = id => cardSuit(id) >= 2;
 export const CARD_GAMES = { xidach: 'Xì dách', tienlen: 'Tiến lên' };
 export const CARD_REJOIN_SECONDS = 60;
 export const CARD_CONFIG = { maxChips: 1_000_000, maxBets: 5 };
+export const CARD_STYLES = Object.freeze({ classic: 'Cổ điển', chibi: 'Chibi Clash' });
+export const DEFAULT_CARD_STYLE = 'classic';
 
 // Bộ bài đã xáo (rng: hàm trả 0..1)
 export function newDeck(rng = Math.random) {

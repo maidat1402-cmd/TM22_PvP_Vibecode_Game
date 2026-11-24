@@ -47,7 +47,7 @@ try {
     }
   }
   assert.equal(info?.version, VERSION);
-  for (const route of ['/', '/js/main.js', '/shared/version.js', '/vendor/three/three.module.js']) {
+  for (const route of ['/', '/js/main.js', '/js/cards/card-art.js', '/shared/version.js', '/vendor/three/three.module.js']) {
     const response = await fetch(base + route);
     assert.equal(response.status, 200, route);
     assert.ok((await response.text()).length, route);
@@ -68,6 +68,11 @@ try {
     guest.send({ t: 'join', id: first.room.id });
     const second = await guest.wait(joined);
     assert.equal(second.room.id, first.room.id);
+    if (joined === 'cj') {
+      await guest.wait('cs', state => state.rules.cardStyle === 'classic');
+      hostClient.send({ t: 'cconfig', chips: 1000, bets: mode === 'xidach' ? [50, 100, 200] : [], cardStyle: 'chibi' });
+      await Promise.all([hostClient.wait('cconfigok'), guest.wait('cs', state => state.rules.cardStyle === 'chibi')]);
+    }
     if (mode === 'xidach') {
       hostClient.send({ t: 'cdealer' });
       await guest.wait('cs', state => state.dealer.human);
@@ -78,7 +83,7 @@ try {
       assert.notEqual(welcome.session, welcomes[0].session);
       returned.send({ t: 'cresume', id: first.room.id, session: welcomes[0].session });
       assert.equal((await returned.wait('cj', packet => packet.resumed)).you, first.you);
-      await returned.wait('cs', state => state.youDealer && state.host === first.you);
+      await returned.wait('cs', state => state.youDealer && state.host === first.you && state.rules.cardStyle === 'chibi');
       returned.send({ t: 'cresumeack' });
       returned.send({ t: 'ping', c: 'resume-confirmed' });
       await returned.wait('pong', m => m.c === 'resume-confirmed');

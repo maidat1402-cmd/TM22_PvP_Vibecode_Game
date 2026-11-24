@@ -542,9 +542,21 @@ body.touch #tlShow kbd { display: none; }
 .c-rules label { display: grid; gap: 5px; }
 .c-rules fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; border: 1px solid var(--line); border-radius: 8px; margin: 0; }
 .c-rules fieldset[hidden], #cRulesError:empty { display: none; }
-.c-rules input { width: 100%; min-width: 0; }
+.c-rules input[type="number"] { width: 100%; min-width: 0; }
+.c-rules .c-deck-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.c-deck-choice { padding: 7px 8px 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.c-deck-choice:has(input:checked) { border-color: #ffd166; background: rgba(255, 209, 102, .1); }
+.c-deck-label { display: flex; align-items: center; gap: 4px; }
+.c-deck-label input { margin: 0; accent-color: #ffd166; }
+.c-deck-preview { display: flex; justify-content: center; gap: 5px; }
+.c-deck-preview img { width: 36px; max-width: calc(50% - 3px); height: auto; object-fit: contain; }
 #cRulesError { color: #ffb0b0; }
 .c-rules-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-height: 450px) and (min-width: 540px) {
+  #chud .c-rules { width: min(560px, calc(100vw - 32px)); padding: 12px; }
+  .c-rules form { gap: 8px; }
+  .c-deck-preview img { width: 31px; }
+}
 #chud .c-top { position: absolute; top: 10px; left: 14px; color: var(--text); text-shadow: 0 2px 4px #000; }
 #chud .c-top b { font-size: 16px; }
 #cMsg { margin-top: 4px; font-size: 15px; font-weight: 700; color: #ffd166; }
@@ -569,11 +581,13 @@ body.touch #tlShow kbd { display: none; }
 #chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px; }
 #cInfo { color: #fff; text-shadow: 0 2px 3px #000; text-align: center; min-height: 18px; }
 #cHand { display: flex; justify-content: center; max-width: 100%; padding-top: 14px; }
-.hcard { width: 46px; height: 66px; margin-left: -12px; border-radius: 7px; background: #fdfaf2; border: 1px solid #b9b2a4; color: #1b1630; cursor: pointer;
-  display: flex; flex-direction: column; align-items: flex-start; padding: 3px 5px; box-shadow: 0 3px 8px rgba(0,0,0,.4); transition: transform .12s; font-family: sans-serif; }
+.hcard { width: 46px; height: 66px; min-width: 0; margin-left: -12px; padding: 0; border-radius: 6px; background: #fdfaf2; border: 1px solid transparent;
+  display: flex; flex-direction: column; align-items: flex-start; color: #191821; overflow: hidden; cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0,0,0,.4); transition: transform .12s; }
 .hcard:first-child { margin-left: 0; }
-.hcard b { font-size: 17px; line-height: 1; } .hcard span { font-size: 18px; line-height: 1.1; }
-.hcard.red { color: #d62828; }
+.hcard.red { color: #ac1c27; }
+.hcard-index { margin: 2px 0 0 3px; font: 700 13px/1 sans-serif; letter-spacing: -.45px; white-space: nowrap; }
+.hcard img { display: block; flex: 1; width: 100%; min-height: 0; object-fit: contain; }
 .hcard:hover { transform: translateY(-6px); }
 .hcard.sel { transform: translateY(-16px); border-color: #ffd166; box-shadow: 0 0 0 2px #ffd166, 0 6px 12px rgba(0,0,0,.5); }
 #cActs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -585,7 +599,7 @@ body.touch #tlShow kbd { display: none; }
 #cChat { position: absolute; left: 12px; bottom: 120px; width: min(320px, 60vw); display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: #fff; text-shadow: 0 1px 2px #000; }
 #cChat div { transition: opacity 1s; } #cChat .old { opacity: 0; } #cChat .sys { color: #ffd166; }
 #cChatIn { position: absolute; left: 12px; bottom: 92px; width: min(320px, 70vw); }
-@media (max-width: 700px) { .hcard { width: 38px; height: 56px; margin-left: -14px; } .hcard b { font-size: 14px; } .hcard span { font-size: 15px; } #cChat { bottom: 150px; } }
+@media (max-width: 700px) { .hcard { width: 38px; height: 56px; margin-left: -14px; } .hcard-index { margin-left: 2px; font-size: 12px; } #cChat { bottom: 150px; } }
 /* danh mục chế độ trong menu */
 .mode-cats { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .mode-cats .btn.on { background: var(--accent2, #ffd23f); color: #1b1630; }
