@@ -95,7 +95,7 @@ const waitFor = async (c, fn, ms = 20000) => { const t0 = Date.now(); while (Dat
     ok(A.log.some(m => m.t === 'cno'), 'đánh bộ không hợp lệ: bị từ chối');
   }
   let plays = 0, guard = 0;
-  while (A.st.phase === 'play' && guard++ < 600) {
+  while (A.st.phase === 'play' && guard++ < 1500) {
     const s = A.st;
     if (s.turn === s.you) {
       const hand = s.seats[s.you].cards, cur = s.trick ? tlCombo(s.trick.cards) : null;
@@ -106,14 +106,16 @@ const waitFor = async (c, fn, ms = 20000) => { const t0 = Date.now(); while (Dat
     await sleep(100);
   }
   ok(plays > 0, `người chơi đã đánh ${plays} lượt`);
-  ok(A.st.phase === 'result', 'có người hết bài: hết ván');
-  const r = A.st, win = r.seats.find(s => s?.result?.r === 1);
-  const sum = r.seats.filter(Boolean).reduce((a, s) => a + s.result.delta, 0);
-  ok(win && win.n === 0 && sum === 0, `${win?.name} về nhất, tổng tiền thắng thua = ${sum}`);
-  ok(r.seats.filter(s => s && s !== win).every(s => s.result.delta < 0 && s.result.rank >= 2), 'người còn bài trả tiền theo số lá');
-  // thối heo: tiền phải trả = số lá × 10 (cháy ×2) + phạt heo
-  ok(r.seats.filter(s => s && s !== win).every(s => -s.result.delta === s.n * 10 * (s.result.burn ? 2 : 1) + tlHeoFine(s.cards).xu && (s.result.heo || 0) === tlHeoFine(s.cards).n),
-    `tiền trả gồm phạt thối heo (${r.seats.filter(s => s?.result?.heo).map(s => s.name + ' ' + s.result.heo + ' heo').join(', ') || 'ván này không ai thối heo'})`);
+  ok(A.st.phase === 'result', 'chỉ còn một ghế có bài: hết ván');
+  ok(A.log.some(s => s.t === 'cs' && s.phase === 'play' && s.seats.some(q => q?.rank === 1)), 'người về nhất xong thì các ghế còn lại vẫn đánh');
+  const ranked = A.st.seats.filter(Boolean).sort((a, b) => a.result.rank - b.result.rank);
+  const sum = ranked.reduce((total, s) => total + s.result.delta, 0);
+  ok(ranked.slice(0, 3).every(s => s.n === 0) && ranked[3].n > 0 && sum === 0, `${ranked[0].name} về nhất, tổng tiền thắng thua = ${sum}`);
+  const last = ranked[3], heo = tlHeoFine(last.cards);
+  const fine = heo.xu + (last.result.burn ? 20 : 0);
+  const expected = [20 + fine, 10, -10, -20 - fine];
+  ok(ranked.every((s, i) => s.result.rank === i + 1 && s.result.delta - s.result.chop === expected[i]) && last.result.heo === heo.n,
+    'số xu theo hạng, thối heo, cóng và tiền chặt');
   ok(await waitFor(A, s => s && s.games === 2 && s.phase !== 'result', 15000), 'sang ván 2');
   ok(A.st.seats.filter(Boolean).length === 2, `ván 2 chỉ còn ${A.st.seats.filter(Boolean).length} người (1 máy như đã chọn)`);
   A.ws.close(); await sleep(200);
