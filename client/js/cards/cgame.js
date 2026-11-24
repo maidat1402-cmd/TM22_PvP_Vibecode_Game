@@ -3,7 +3,7 @@
 // (chia bài, đánh bài, lật bài) bằng cách so trạng thái mới với vị trí lá bài đang có.
 import * as THREE from 'three';
 import { getChar } from '/shared/characters.js';
-import { RANKS, SUITS, cardLabel, XD, XD_KIND, TL_NAME, TL_MONEY, TL_MONEY_LABELS, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
+import { RANKS, SUITS, cardLabel, isRed, XD, XD_KIND, TL_NAME, TL_MONEY, TL_MONEY_LABELS, tlCombo, tlBeats, tlSuggest, CARD_GAMES, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '/shared/cards.js';
 import { POKER, POKER_STREETS, POKER_HANDS } from '/shared/poker.js';
 import { buildChibi, ANIM } from '../chibi.js';
 import { FX } from '../effects.js';
@@ -15,6 +15,13 @@ const now = () => performance.now() / 1000;
 const TABLE_Y = 1.0, TABLE_R = 3.2, SEAT_R = 4.25, ZONE_R = 2.2;
 const CW = 0.5, CH = 0.7;
 const ZOOM_LEVELS = [1, 1.35, 1.65];
+const TAU = Math.PI * 2;
+
+// Xoay quanh tâm bàn. Góc 0 ứng với ghế ở phía dưới màn hình.
+function rotateTablePoint(x, z, angle) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return [x * cos + z * sin, z * cos - x * sin];
+}
 
 // ---------- Texture lá bài dùng lại theo mẫu ----------
 const TEX = new Map();
@@ -83,7 +90,7 @@ export class CardGame {
   resize() { this.camera.aspect = innerWidth / innerHeight; this.camera.fov = this.camera.aspect < 1 ? 68 : 50; this.camera.updateProjectionMatrix(); }
 
   pointAtTable(event, focus) {
-    if (!this.active || $('cRules').open) return;
+    if (!this.active || !this.st || $('cRules').open) return;
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set((event.clientX - rect.left) * 2 / rect.width - 1, 1 - (event.clientY - rect.top) * 2 / rect.height);
     this.tableRay.setFromCamera(this.pointer, this.camera);
@@ -93,7 +100,7 @@ export class CardGame {
       return;
     }
     const quantize = v => THREE.MathUtils.clamp(Math.round(v * 2), -6, 6);
-    this.look = [quantize(hit.x), quantize(hit.z)];
+    this.look = rotateTablePoint(hit.x, hit.z, this.viewAngle()).map(quantize);
     if (focus) this.viewFocus.set(hit.x, hit.z).clampLength(0, TABLE_R);
   }
 
@@ -144,11 +151,24 @@ export class CardGame {
         <div id="cTimer"><span id="cTimerLabel"></span><span id="cTimerSeconds"></span></div>
         <div class="c-side"><span class="c-bots" title="Số máy (AI) chơi cùng"><button class="btn small" id="cBotSub" title="Bớt 1 máy">−</button><b id="cBotN">🤖 0</b><button class="btn small" id="cBotAdd" title="Thêm 1 máy">+</button></span>
           <button class="btn small" id="cStop" title="Chủ phòng: dừng sau ván này, về phòng chờ">⏸</button><button class="btn small" id="cMenu">☰</button><button class="btn small" id="cChatBtn">💬</button></div>
-        <div class="c-view-tools"><button class="btn small" id="cZoom" type="button" aria-label="Đổi mức phóng bàn" title="Phóng bàn. Chạm hoặc bấm lên bàn để chọn vùng xem.">Bàn ×1</button></div>
+        <div class="c-view-tools">
+          <button class="btn small" id="cZoom" type="button" aria-label="Đổi mức phóng bàn" title="Phóng bàn 3D. Chạm hoặc bấm lên bàn để chọn vùng xem.">Bàn ×1</button>
+          <button class="btn small" id="cTrickToggle" type="button" aria-controls="cTrickViewer" aria-expanded="false" hidden>Xem bài bàn</button>
+        </div>
         <div id="cMsg"></div>
       </header>
       <div id="cPlates"></div>
-      <div class="c-bottom"><div id="cInfo"></div><div id="cHand"></div><div id="cActs"></div></div>
+      <div class="c-bottom">
+        <section id="cTrickViewer" aria-label="Xem bài trên bàn Tiến lên" hidden>
+          <header class="c-trick-header">
+            <div id="cTrickTitle" aria-live="polite"></div>
+            <button class="btn small" id="cTrickClose" type="button" aria-label="Thu nhỏ bài bàn">Thu nhỏ</button>
+          </header>
+          <ul id="cTrickCards" aria-label="Các lá bài đã đánh" tabindex="0"></ul>
+          <span id="cTrickHint" hidden>Vuốt ngang để xem tiếp</span>
+        </section>
+        <div id="cInfo"></div><div id="cHand"></div><div id="cActs"></div>
+      </div>
       <div id="cChat"></div><input id="cChatIn" maxlength="140" placeholder="Nhập tin nhắn, Enter để gửi" hidden>
       <dialog id="cRules" class="panel c-rules" aria-labelledby="cRulesTitle">
         <form id="cRulesForm">
@@ -192,6 +212,17 @@ export class CardGame {
       $('cZoom').textContent = 'Bàn ×' + ZOOM_LEVELS[this.zoomLevel];
       if (!this.zoomLevel) this.viewFocus.set(0, 0);
     };
+    $('cTrickToggle').onclick = () => {
+      this.trickPreviewOpen = !this.trickPreviewOpen;
+      this.renderUi();
+    };
+    $('cTrickClose').onclick = () => {
+      this.trickPreviewOpen = false;
+      this.renderUi();
+      $('cTrickToggle').focus();
+    };
+    const trickCards = $('cTrickCards');
+    new ResizeObserver(() => this.updateTrickScroll()).observe(trickCards);
     // thêm / bớt máy (AI) chơi cùng: chơi một mình với bao nhiêu máy tuỳ ý
     $('cBotAdd').onclick = () => { sfx('ui'); this.net.send({ t: 'cbot', d: 1 }); };
     $('cStop').onclick = () => { sfx('ui'); this.net.send({ t: 'cstop' }); };
@@ -263,6 +294,7 @@ export class CardGame {
     this.clear();
     this.active = true; this.menuBg = false;
     this.myId = m.you; this.roomId = m.room.id; this.game = m.room.game;
+    this.trickPreviewOpen = this.game === 'tienlen' && matchMedia('(pointer: coarse), (max-width: 600px)').matches;
     $('cRoom').textContent = m.room.name;
     $('cRoom').title = m.room.name;
     $('cGame').textContent = CARD_GAMES[this.game];
@@ -283,6 +315,10 @@ export class CardGame {
     this.avatars.clear();
     this.st = null; this.sel.clear(); this.history = []; this.lastGames = -1;
     this.handKey = '';
+    this.trickPreviewOpen = false;
+    this.trickPreviewKey = '';
+    $('cTrickViewer').hidden = $('cTrickToggle').hidden = true;
+    $('cTrickCards').replaceChildren();
     this.zoomLevel = 0;
     this.cameraAim.set(0, 0);
     this.viewFocus.set(0, 0);
@@ -309,23 +345,17 @@ export class CardGame {
   }
 
   // ---------- Bố trí ghế ----------
-  // ghế của mình luôn ở dưới (gần camera); xì dách: nhà cái ở trên cùng
-  // Mình làm nhà cái: đặt ghế của mình ở dưới, các ghế còn lại quanh bàn.
-  dealerAngle() {
+  // Mọi máy dùng cùng thứ tự ghế quanh bàn. Hệ tọa độ cảnh xoay để ghế của mình nằm dưới.
+  roomSeatAngle(seat) {
     const n = this.st.seats.length;
-    return this.st.youDealer ? 0 : Math.ceil(n / 2) * (2 * Math.PI / (n + 1));
+    if (this.game !== 'xidach') return seat * TAU / n;
+    const dealer = Math.ceil(n / 2);
+    const slot = seat === 'dealer' ? dealer : seat + Number(seat >= dealer);
+    return slot * TAU / (n + 1);
   }
-  seatAngle(seat) {
-    const st = this.st, n = st.seats.length, you = st.you >= 0 ? st.you : 0, k = (seat - you + n) % n;
-    if (this.game === 'xidach' && st.youDealer) {
-      // các ghế có người dàn đều quanh phía trên bàn, đối diện nhà cái
-      const occ = st.seats.map((q, i) => q ? i : -1).filter(i => i >= 0), idx = Math.max(0, occ.indexOf(seat));
-      const spacing = Math.min(Math.PI / 3, 2 * Math.PI / (occ.length + 1));
-      return Math.PI + (idx - (occ.length - 1) / 2) * spacing;
-    }
-    if (this.game === 'xidach') return (k >= Math.ceil(n / 2) ? k + 1 : k) * (2 * Math.PI / (n + 1));
-    return k * (Math.PI * 2 / n);
-  }
+  viewAngle() { return this.roomSeatAngle(this.st.youDealer ? 'dealer' : Math.max(0, this.st.you)); }
+  dealerAngle() { return this.seatAngle('dealer'); }
+  seatAngle(seat) { return this.roomSeatAngle(seat) - this.viewAngle(); }
   dirOf(a) { return new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); }
 
   placeAvatar(key, charId, angle, back = 0) {
@@ -518,6 +548,45 @@ export class CardGame {
     }
   }
 
+  updateTrickScroll() {
+    const row = $('cTrickCards');
+    $('cTrickHint').hidden = row.scrollWidth <= row.clientWidth + 1;
+  }
+
+  renderTrickPreview(state) {
+    const toggle = $('cTrickToggle'), panel = $('cTrickViewer');
+    const available = this.game === 'tienlen' && state.phase !== 'lobby';
+    const open = available && this.trickPreviewOpen;
+    toggle.hidden = !available;
+    toggle.textContent = open ? 'Thu nhỏ bài bàn' : 'Xem bài bàn';
+    toggle.setAttribute('aria-expanded', open);
+    panel.hidden = !open;
+    if (!open) return;
+
+    const trick = state.trick, row = $('cTrickCards'), title = $('cTrickTitle');
+    const info = trick ? TL_NAME[trick.type] + ' · ' + (state.seats[trick.by]?.name ?? '') : 'Vòng mới · Chưa có bài trên bàn';
+    if (title.textContent !== info) title.textContent = info;
+    const key = trick ? this.cardStyle + ':' + trick.cards.join(',') : '';
+    if (key !== this.trickPreviewKey) {
+      this.trickPreviewKey = key;
+      row.replaceChildren(...(trick?.cards ?? []).map(id => {
+        const item = document.createElement('li');
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 180;
+        canvas.setAttribute('aria-hidden', 'true');
+        paintCard(canvas, id, this.cardStyle);
+        const label = document.createElement('b');
+        label.textContent = cardLabel(id);
+        if (isRed(id)) label.className = 'red';
+        item.append(canvas, label);
+        return item;
+      }));
+      row.scrollLeft = 0;
+    }
+    this.updateTrickScroll();
+  }
+
   renderUi() {
     const s = this.st, me = s.seats[s.you];
     this.ui.classList.toggle('c-crowded', s.seats.filter(Boolean).length >= 6);
@@ -527,6 +596,7 @@ export class CardGame {
     // bảng tên trên đầu từng người
     const plates = [], lobby = s.phase === 'lobby', isHost = s.host === s.me;
     this.renderHand(this.game !== 'xidach' && !lobby ? me?.cards ?? [] : []);
+    this.renderTrickPreview(s);
     $('cStop').style.display = isHost && !lobby ? '' : 'none';
     $('cStop').classList.toggle('on', !!s.stopAfter);
     $('cStop').title = s.stopAfter ? 'Đã hẹn dừng sau ván này — bấm để chơi tiếp' : 'Chủ phòng: dừng sau ván này, về phòng chờ';
@@ -634,7 +704,7 @@ export class CardGame {
       const selArr = [...this.sel], combo = selArr.length ? tlCombo(selArr) : null;
       const myTurn = s.phase === 'play' && s.turn === s.you, cur = s.trick ? tlCombo(s.trick.cards) : null;
       const canPlay = myTurn && combo && tlBeats(combo, cur) && (s.must < 0 || this.sel.has(s.must));
-      if (s.trick) info.push(`Trên bàn: <b>${TL_NAME[s.trick.type]}</b> của ${esc(s.seats[s.trick.by]?.name || '')}`);
+      if (s.trick && !this.trickPreviewOpen) info.push(`Trên bàn: <b>${TL_NAME[s.trick.type]}</b> của ${esc(s.seats[s.trick.by]?.name || '')}`);
       if (selArr.length) info.push(combo ? `Đang chọn: ${TL_NAME[combo.type]}${cur && !tlBeats(combo, cur) ? ' (không chặn được)' : ''}` : 'Đang chọn: không thành bộ');
       if (s.must >= 0 && myTurn) info.push(`Lượt đầu phải có lá ${cardLabel(s.must)}`);
       if (myTurn) {
@@ -752,12 +822,13 @@ export class CardGame {
         if (k >= 1) { c.flip = null; c.mesh.scale.x = c.mesh.scale.y; }
       }
     }
-    // Chia sẻ một ô trên mặt bàn, đầu nhân vật tự xoay nhẹ về hướng đó.
+    // Chia sẻ ô trong hệ tọa độ phòng. Mỗi máy xoay lại theo ghế của người đang xem.
     if (this.active && this.look && t >= this.nextLook && this.sentLook !== this.look.join(',')) {
       this.sentLook = this.look.join(',');
       this.nextLook = t + 0.15;
       this.net.send({ t: 'clook', x: this.look[0], z: this.look[1] });
     }
+    const viewAngle = this.active && this.st ? this.viewAngle() : 0;
     for (const a of this.avatars.values()) {
       a.model.update(dt, ANIM.idle, 0);
       const look = a.id === this.myId ? this.look ?? a.look : a.look;
@@ -765,7 +836,8 @@ export class CardGame {
       let yaw = 0, pitch = 0;
       if (look) {
         const root = a.model.root;
-        const dx = look[0] * 0.5 - root.position.x, dz = look[1] * 0.5 - root.position.z;
+        const [x, z] = rotateTablePoint(look[0] * 0.5, look[1] * 0.5, -viewAngle);
+        const dx = x - root.position.x, dz = z - root.position.z;
         const angle = Math.atan2(dx, dz) - root.rotation.y;
         yaw = THREE.MathUtils.clamp(Math.atan2(Math.sin(angle), Math.cos(angle)), -0.65, 0.65);
         pitch = THREE.MathUtils.clamp(Math.atan2(head.position.y - TABLE_Y, Math.hypot(dx, dz)), 0, 0.42);
