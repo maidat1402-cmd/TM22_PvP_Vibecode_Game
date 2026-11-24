@@ -565,8 +565,9 @@ body.touch #tlShow kbd { display: none; }
 #cRoom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
 #cGame { flex-shrink: 0; }
 #cGame::before { content: '· '; }
-.c-view-tools { grid-column: 1 / -1; justify-self: start; }
+.c-view-tools { grid-column: 1 / -1; justify-self: start; display: flex; gap: 6px; align-items: center; }
 #cZoom { min-height: 30px; background: rgba(20,12,30,.7); }
+#cTrickToggle { min-height: 40px; color: #1d1428; background: #ffd166; }
 #cMsg { grid-column: 1 / -1; font-size: 15px; font-weight: 700; color: #ffd166; overflow-wrap: anywhere; text-shadow: 0 2px 4px #000; }
 #cMsg:empty { display: none; }
 #cTimer { min-width: 0; max-width: 100%; justify-self: start; display: flex; align-items: center; gap: 6px;
@@ -593,6 +594,19 @@ body.touch #tlShow kbd { display: none; }
   .c-crowded .cplate b { font-size: 11px; }
 }
 #chud .c-bottom { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 10px; }
+#cTrickViewer { position: relative; z-index: 1; width: max-content; min-width: min(270px, 100%); max-width: min(580px, 100%);
+  padding: 6px 9px 8px; border: 1px solid rgba(255,209,102,.5); border-radius: 12px; background: #21192e; color: #fdfaf3; }
+.c-trick-header { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#cTrickTitle { min-width: 0; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cTrickClose { flex-shrink: 0; min-height: 36px; }
+#cTrickCards { display: flex; gap: 8px; max-width: 100%; margin: 4px 0 0; padding: 1px 1px 3px; list-style: none;
+  overflow-x: auto; overscroll-behavior-x: contain; pointer-events: auto; touch-action: pan-x; }
+#cTrickCards:empty { display: none; }
+#cTrickCards li { flex: 0 0 68px; text-align: center; }
+#cTrickCards canvas { display: block; width: 100%; height: auto; }
+#cTrickCards b { display: block; margin-top: 2px; font-size: 18px; line-height: 1.12; }
+#cTrickCards .red { color: #ff8e97; }
+#cTrickHint { color: #e1d2ba; font-size: 12px; }
 #cInfo { color: #fff; text-shadow: 0 2px 3px #000; text-align: center; min-height: 18px; }
 #cHand { display: flex; justify-content: center; max-width: 100%; padding-top: 16px; }
 .hcard { position: relative; width: 62px; min-width: 0; margin-left: -22px; padding: 0; border-radius: 6px; border: 0;
@@ -623,6 +637,13 @@ body.touch #tlShow kbd { display: none; }
   .c-side .btn { padding-inline: 7px; }
   .hcard { width: 54px; margin-left: -30px; }
   #cChat { bottom: 150px; }
+}
+@media (max-height: 450px) {
+  #chud.g-tienlen .c-bottom { gap: 4px; }
+  .g-tienlen #cHand { padding-top: 10px; }
+  .g-tienlen .hcard { width: 48px; }
+  #cTrickCards li { flex-basis: 48px; }
+  #cTrickCards b { font-size: 16px; }
 }
 /* danh mục chế độ trong menu */
 .mode-cats { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }

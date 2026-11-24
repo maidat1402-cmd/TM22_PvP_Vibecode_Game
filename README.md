@@ -161,6 +161,7 @@ Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức t
 6. Bài đặc biệt (xếp từ mạnh tới yếu): **Xì bàng** (2 lá A, ăn ×3), **Xì dách** (A + 10/J/Q/K, ăn ×2), **Ngũ linh** (5 lá không quá 21 điểm, ăn ×2). Nhà cái có xì bàng / xì dách ngay từ 2 lá đầu thì lật bài và tính tiền luôn.
 
 **🂡 Tiến lên** (miền Nam, 2–4 người, mỗi người 13 lá):
+- **Xem bài bàn** hiện riêng bộ vừa đánh với mặt bài và ký hiệu lớn. Trên điện thoại khung này mở sẵn khi vào ván. Vuốt ngang nếu bộ dài, hoặc bấm **Thu nhỏ** để xem lại bàn 3D. Bạn vẫn có thể chọn và đánh bài khi khung đang mở.
 - Thứ tự lá: 3 nhỏ nhất … K, A, **2 (heo) lớn nhất**; cùng hạng thì so chất ♠ < ♣ < ♦ < ♥.
 - Bộ được đánh: rác (1 lá), đôi, sám (3 lá cùng hạng), tứ quý (4 lá), sảnh (từ 3 lá liên tiếp, không có 2), đôi thông (từ 3 đôi liên tiếp).
 - Chặn bài bằng bộ cùng loại, cùng số lá và lá cao nhất lớn hơn. **Chặt heo:** 3 đôi thông chặt 1 lá 2; tứ quý chặt 1 lá 2, đôi 2, 3 đôi thông; 4 đôi thông chặt cả tứ quý.
