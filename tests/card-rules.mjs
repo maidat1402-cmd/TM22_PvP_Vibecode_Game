@@ -288,7 +288,7 @@ test('Chủ bàn Xì dách đặt vốn và mức cược cho cả người mớ
   assert.equal(room.startChips, 1000);
 
   room.onMessage(host.player.id, { t: 'cconfig', chips: 3300, bets: [300, 75, 125] });
-  assert.deepEqual(room.view(guest.player).rules, { startChips: 3300, bets: [75, 125, 300] });
+  assert.deepEqual(room.view(guest.player).rules, { startChips: 3300, bets: [75, 125, 300], cardStyle: 'classic' });
   assert.equal(guest.player.chips, 3300);
   const newcomer = join(3).player;
   assert.equal(newcomer.chips, 3300);
@@ -320,12 +320,45 @@ test('Tiến lên cấp vốn tùy chỉnh và giữ nguyên luật tính tiền
   room.onMessage(host.id, { t: 'cconfig', chips: 5, bets: [] });
   const guest = join(2).player;
   assert.equal(guest.chips, 5);
-  assert.deepEqual(room.view(guest).rules, { startChips: 5, bets: [] });
+  assert.deepEqual(room.view(guest).rules, { startChips: 5, bets: [], cardStyle: 'classic' });
   guest.hand = [0];
   guest.played = true;
   room.tlFinish(host);
   assert.equal(guest.result.delta, -10);
   assert.equal(guest.chips, 5);
+});
+
+test('Mẫu bài chỉ đổi trong phòng chờ và được giữ khi khách mất kết nối', () => {
+  for (const mode of ['xidach', 'tienlen']) {
+    const { room, join, connection } = makeTable(mode);
+    const host = join(1), guest = join(2);
+    const edit = { t: 'cconfig', chips: 2000, bets: [50, 100], cardStyle: 'chibi' };
+    room.onMessage(guest.player.id, edit);
+    assert.equal(guest.log.at(-1).t, 'cno');
+    assert.equal(room.cardStyle, 'classic');
+
+    room.onMessage(host.player.id, { ...edit, cardStyle: 'constructor' });
+    assert.equal(host.log.at(-1).t, 'cno');
+    assert.equal(room.startChips, 1000);
+    room.onMessage(host.player.id, edit);
+    assert.equal(guest.log.at(-1).rules.cardStyle, 'chibi');
+    assert.equal(join(3).log.at(-1).rules.cardStyle, 'chibi');
+
+    room.disconnect(guest.client);
+    const back = connection(4);
+    assert.equal(room.resume(back.client, guest.client.session), true);
+    assert.equal(back.log.at(-1).rules.cardStyle, 'chibi');
+    room.phase = 'play';
+    room.onMessage(host.player.id, { ...edit, cardStyle: 'classic' });
+    assert.equal(host.log.at(-1).t, 'cno');
+    assert.equal(room.cardStyle, 'chibi');
+
+    room.phase = 'lobby';
+    room.onMessage(host.player.id, { t: 'cconfig', chips: 2500, bets: [200] });
+    assert.equal(room.cardStyle, 'chibi');
+    room.onMessage(host.player.id, { ...edit, cardStyle: 'classic' });
+    assert.equal(back.log.at(-1).rules.cardStyle, 'classic');
+  }
 });
 
 test('Nhà cái mở từng người và giữ nguyên kết quả sau khi rút thêm', () => {

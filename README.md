@@ -145,7 +145,9 @@ Chọn danh mục **🃏 Đánh bài** khi tạo phòng. Các nhân vật (nhân
 
 **Phòng chờ:** vào phòng là ngồi vào bàn nhưng chưa chia bài. Người vào trước là **chủ phòng 👑**. Những người khác bấm **✔ Sẵn sàng**; khi mọi người đã sẵn sàng, chủ phòng bấm **▶ Bắt đầu**. Sau đó các ván nối tiếp nhau tự động; chủ phòng bấm **⏸** (góc trên bên phải) để dừng sau ván đang chơi và về lại phòng chờ. Khi chủ phòng rời bàn hoặc hết thời gian giữ chỗ, quyền chủ phòng ưu tiên chuyển cho người đang kết nối đã vào sớm nhất.
 
-Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn ban đầu cho cả hai chế độ. Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức từ 1 xu đến số vốn. Người mới và người được cấp lại vốn dùng cấu hình hiện tại. Trước ván đầu, đổi vốn cũng cập nhật số xu của người đã vào bàn. Sau ván đầu, người đang chơi giữ số dư của họ.
+Nút **Cài đặt bàn** trong phòng chờ cho phép chủ phòng đổi vốn ban đầu và chọn **Mẫu bài** cho cả hai chế độ. Chọn **Cổ điển** (mặc định) hoặc **Chibi Clash** rồi bấm **Lưu** để đổi mặt và lưng bài cho cả bàn. Các lá 2–10 có số dấu chất tương ứng, còn huy hiệu trên J, Q, K có màu đỏ hoặc đen theo chất.
+
+Xì dách cho đặt từ **1 đến 5 mức cược** khác nhau, mỗi mức từ 1 xu đến số vốn. Người mới và người được cấp lại vốn dùng cấu hình hiện tại. Trước ván đầu, đổi vốn cũng cập nhật số xu của người đã vào bàn. Sau ván đầu, người đang chơi giữ số dư của họ.
 
 **🃏 Xì dách** (8 ghế cược + 1 nhà cái; có ít hơn 3 người thì bot ngồi cho đủ 3). **Nhà cái** do chủ phòng chọn trong phòng chờ: **🤖 máy** (mặc định) hoặc **🎩 chính chủ phòng**. Chủ phòng làm nhà cái thì ngồi ở phía dưới, thấy bài của mình, tới lượt nhà cái thì tự **Rút bài** hoặc mở bài để so với từng ghế. Có 20 giây mỗi thao tác, hết giờ máy đánh thay:
 1. Chọn một mức cược của bàn rồi bấm **Sẵn sàng** (hết 9 giây thì tự chia). Mặc định là 50 / 100 / 200 xu.

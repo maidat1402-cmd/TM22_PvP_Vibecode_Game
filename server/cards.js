@@ -2,7 +2,7 @@
 // client chỉ gửi hành động. Thiếu người thì bot tự ngồi vào ghế trống; người rời giữa ván Tiến lên thì bot chơi thay.
 import { startLoop } from './loop.js';
 import { CHARACTERS, playableChar } from '../shared/characters.js';
-import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG } from '../shared/cards.js';
+import { newDeck, xdScore, xdKind, xdCompare, XD, XD_KIND, tlCombo, tlBeats, tlSuggest, tlInstantWin, tlHeoFine, TL, TL_NAME, cardLabel, CARD_GAMES, CARD_REJOIN_SECONDS, CARD_CONFIG, CARD_STYLES, DEFAULT_CARD_STYLE } from '../shared/cards.js';
 
 let nextBotId = 80000;  // id bot ngồi bàn
 const BOT_NAMES = ['Mèo Mun', 'Bác Ba', 'Cô Tư', 'Anh Hai', 'Bé Út', 'Ông Sáu', 'Chị Bảy', 'Cậu Tám'];
@@ -17,6 +17,7 @@ export class CardRoom {
     this.game = game === 'tienlen' ? 'tienlen' : 'xidach';
     this.startChips = this.game === 'xidach' ? XD.startChips : TL.startChips;
     this.bets = this.game === 'xidach' ? [...XD.bets] : [];
+    this.cardStyle = DEFAULT_CARD_STYLE;
     this.players = new Map();          // id -> người ngồi bàn (cả bot)
     this.seatCount = this.game === 'tienlen' ? TL.seats : XD.seats;
     this.seats = Array(this.seatCount).fill(null);   // id người ngồi từng ghế
@@ -253,7 +254,9 @@ export class CardRoom {
 
   configure(p, m) {
     const reject = msg => this.send(p, { t: 'cno', msg });
-    if (p.id !== this.hostId || this.phase !== 'lobby') return reject('Chỉ chủ phòng được đổi vốn và mức cược trong phòng chờ.');
+    if (p.id !== this.hostId || this.phase !== 'lobby') return reject('Chỉ chủ phòng được sửa cài đặt bàn trong phòng chờ.');
+    const cardStyle = m.cardStyle === undefined ? this.cardStyle : m.cardStyle;
+    if (typeof cardStyle !== 'string' || !Object.hasOwn(CARD_STYLES, cardStyle)) return reject('Mẫu bài không hợp lệ.');
     const chips = m.chips;
     if (!Number.isInteger(chips) || chips < 1 || chips > CARD_CONFIG.maxChips) return reject('Vốn phải là số nguyên từ 1 đến ' + CARD_CONFIG.maxChips + ' xu.');
     if (this.game === 'xidach') {
@@ -265,6 +268,7 @@ export class CardRoom {
       this.bets = [...bets].sort((a, b) => a - b);
     }
     this.startChips = chips;
+    this.cardStyle = cardStyle;
     for (const q of this.players.values()) {
       if (!this.games) q.chips = chips;
       q.bet = this.defaultBet(q.chips, q.bet);
@@ -378,7 +382,7 @@ export class CardRoom {
     const v = {
       t: 'cs', game: this.game, phase: this.phase, left: Math.max(0, +(this.deadline - now()).toFixed(1)), turn: this.turn, msg: this.msg,
       you: viewer.seat, games: this.games, host: this.hostId, me: viewer.id, stopAfter: this.stopAfter,
-      rules: { startChips: this.startChips, bets: this.bets },
+      rules: { startChips: this.startChips, bets: this.bets, cardStyle: this.cardStyle },
       block: this.phase === 'lobby' ? this.startBlock() : null, bots: this.botCount(), botWant: this.botTarget(this.seated().filter(q => !q.bot).length), canBot: this.canChangeBots(),
       seats: this.seats.map((id, i) => {
         const p = id == null ? null : this.players.get(id);

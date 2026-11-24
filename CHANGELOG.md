@@ -2,6 +2,11 @@
 
 Số phiên bản nằm ở `shared/version.js` (hiện ở góc menu và trong bảng Esc của game). Quy tắc tăng số xem `AGENTS.md`, mục 1.
 
+## 0.16.0 (2026-11-24) · `7953b31`
+
+- Chủ phòng Xì dách và Tiến lên chọn bộ bài Cổ điển hoặc Chibi Clash trong cài đặt bàn.
+- Lá bài có bố cục dấu theo số, chỉ số ở hai góc và hình nhân vật J, Q, K với huy hiệu cùng màu chất bài.
+
 ## 0.15.1 (2026-11-24) · `686d586`
 
 - Xì dách giữ chỗ 60 giây. Sau 20 giây mất mạng, máy rút hoặc dằn thay đến khi người chơi quay lại.
