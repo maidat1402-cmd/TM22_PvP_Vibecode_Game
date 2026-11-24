@@ -142,6 +142,7 @@
       <div class="tl-actions">
         <button id="tlReady" class="btn">✔ Sẵn sàng</button>
         <button id="tlStart" class="btn primary">▶ Bắt đầu</button>
+        <button id="tlInvite" class="btn">🔗 Mời bạn</button>
         <button id="tlHide" class="btn">🏃 Khởi động</button>
       </div>
       <p class="tl-hint" id="tlHint"></p>
@@ -150,6 +151,7 @@
   <button id="tlShow" class="btn small" hidden>👥 Phòng chờ <kbd>T</kbd></button>
   <div id="teamScore" hidden><b class="A" id="tsA">0</b><span id="tsMid"></span><b class="B" id="tsB">0</b></div>
   <div id="teamBanner" hidden></div>
+  <aside id="practiceDrill" aria-live="polite" hidden><strong></strong><span></span></aside>
 
   <div id="scoreboard" class="modal-lite" hidden>
     <h3>Bảng tỉ số</h3>
@@ -173,6 +175,10 @@
       <button id="pauseSettingsBtn" class="btn">⚙ Cài đặt</button>
       <button id="pauseHelpBtn" class="btn">❔ Cách chơi</button>
       <button id="inviteBtn" class="btn">🔗 Copy link mời bạn</button>
+      <div id="practiceDrillActions" hidden>
+        <button data-drill="quake" class="btn">Tập né động đất</button>
+        <button data-drill="wall" class="btn">Tập phá tường băng</button>
+      </div>
       <button id="fillAwkBtn" class="btn" hidden>⚡ Nạp đầy thanh dị biến (P)</button>
       <button id="leaveBtn" class="btn danger">⟵ Rời phòng</button>
       <p class="muted">Lưu ý: trận đấu vẫn tiếp diễn khi bạn mở menu.</p>

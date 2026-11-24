@@ -135,6 +135,7 @@ export class CardGame {
           <button class="btn small" id="cTrickToggle" type="button" aria-controls="cTrickViewer" aria-expanded="false" hidden>Xem bài bàn</button>
         </div>
         <div id="cMsg"></div>
+        <p id="cOffline" hidden></p>
       </header>
       <div id="cPlates"></div>
       <div class="c-bottom">
@@ -145,6 +146,18 @@ export class CardGame {
           </header>
           <ul id="cTrickCards" aria-label="Các lá bài đã đánh" tabindex="0"></ul>
           <span id="cTrickHint" hidden>Vuốt ngang để xem tiếp</span>
+        </section>
+        <section id="cSettlement" aria-labelledby="cSettlementTitle" hidden>
+          <header class="c-trick-header">
+            <h2 id="cSettlementTitle">Tính xu Tiến lên</h2>
+            <button class="btn small" id="cSettlementClose" type="button">Thu nhỏ</button>
+          </header>
+          <div id="cSettlementScroll" tabindex="0" aria-label="Bảng tính xu">
+            <table>
+              <thead><tr><th scope="col">Người chơi</th><th scope="col">Theo hạng</th><th scope="col">Cóng</th><th scope="col">Thối heo</th><th scope="col">Chặt</th><th scope="col">Tới trắng</th><th scope="col">Tổng</th></tr></thead>
+              <tbody id="cSettlementRows"></tbody>
+            </table>
+          </div>
         </section>
         <div id="cInfo"></div><div id="cHand"></div><div id="cActs"></div>
       </div>
@@ -192,7 +205,8 @@ export class CardGame {
       if (!this.zoomLevel) this.viewFocus.set(0, 0);
     };
     $('cTrickToggle').onclick = () => {
-      this.trickPreviewOpen = !this.trickPreviewOpen;
+      this.trickPreviewOpen = this.settlementOpen || !this.trickPreviewOpen;
+      this.settlementOpen = false;
       this.renderUi();
     };
     $('cTrickClose').onclick = () => {
@@ -202,6 +216,15 @@ export class CardGame {
     };
     const trickCards = $('cTrickCards');
     new ResizeObserver(() => this.updateTrickScroll()).observe(trickCards);
+    $('cSettlementClose').onclick = () => {
+      this.settlementOpen = false;
+      this.renderUi();
+      $('cSettlementToggle')?.focus();
+    };
+    $('cPlates').onclick = event => {
+      const seat = event.target.closest('button[data-seat]');
+      if (seat) this.act('open', Number(seat.dataset.seat));
+    };
     // thêm / bớt máy (AI) chơi cùng: chơi một mình với bao nhiêu máy tuỳ ý
     $('cBotAdd').onclick = () => { sfx('ui'); this.net.send({ t: 'cbot', d: 1 }); };
     $('cStop').onclick = () => { sfx('ui'); this.net.send({ t: 'cstop' }); };
@@ -297,6 +320,10 @@ export class CardGame {
     this.handKey = '';
     this.trickPreviewOpen = false;
     this.trickPreviewKey = '';
+    this.settlementGame = null;
+    this.settlementOpen = false;
+    $('cSettlement').hidden = $('cOffline').hidden = true;
+    $('cSettlementRows').replaceChildren();
     $('cTrickViewer').hidden = $('cTrickToggle').hidden = true;
     $('cTrickCards').replaceChildren();
     this.zoomLevel = 0;
@@ -402,7 +429,9 @@ export class CardGame {
     this.st = s;
     const style = s.rules.cardStyle;
     this.setCardStyle(Object.hasOwn(CARD_STYLES, style) ? style : DEFAULT_CARD_STYLE);
-    this.deadline = now() + s.left;
+    if (prev?.phase === 'result' && s.phase !== 'result') this.settlementOpen = false;
+    this.receivedAt = now();
+    this.deadline = this.receivedAt + s.left;
     if (s.games !== this.lastGames) { this.history = []; this.lastGames = s.games; this.sel.clear(); }
     for (const c of this.cards.values()) c.seen = false;
     for (const a of this.avatars.values()) a.seen = false;
@@ -542,7 +571,7 @@ export class CardGame {
   renderTrickPreview(state) {
     const toggle = $('cTrickToggle'), panel = $('cTrickViewer');
     const available = this.game === 'tienlen' && state.phase !== 'lobby';
-    const open = available && this.trickPreviewOpen;
+    const open = available && !this.settlementOpen && this.trickPreviewOpen;
     toggle.hidden = !available;
     toggle.textContent = open ? 'Thu nhỏ bài bàn' : 'Xem bài bàn';
     toggle.setAttribute('aria-expanded', open);
@@ -573,6 +602,25 @@ export class CardGame {
     this.updateTrickScroll();
   }
 
+  renderSettlement(s) {
+    if (s.phase === 'result' && s.games !== this.settlementGame) {
+      const results = s.seats.filter(p => p?.result);
+      if (results.length) {
+        this.settlementGame = s.games;
+        this.settlementOpen = true;
+        results.sort((a, b) => (a.result.rank ?? 99) - (b.result.rank ?? 99));
+        const rows = results.map(p => {
+          const r = p.result;
+          const values = [r.rankXu, r.burnXu, r.heoXu, r.chop, r.instantXu, r.delta];
+          const cells = values.map(v => `<td class="${v > 0 ? 'win' : v < 0 ? 'lose' : ''}">${v > 0 ? '+' + v : v ?? '—'}</td>`).join('');
+          return `<tr><th scope="row">${esc(p.name)}${p.id === s.me ? ' (bạn)' : ''}${r.rank ? '<small>Hạng ' + r.rank + '</small>' : ''}</th>${cells}</tr>`;
+        });
+        $('cSettlementRows').innerHTML = rows.join('');
+      }
+    }
+    $('cSettlement').hidden = !this.settlementOpen;
+  }
+
   renderUi() {
     const s = this.st, me = s.seats[s.you];
     this.ui.classList.toggle('c-crowded', s.seats.filter(Boolean).length >= 6);
@@ -582,6 +630,7 @@ export class CardGame {
     // bảng tên trên đầu từng người
     const plates = [], lobby = s.phase === 'lobby', isHost = s.host === s.me;
     this.renderHand(this.game !== 'xidach' && !lobby ? me?.cards ?? [] : []);
+    if (this.game === 'tienlen') this.renderSettlement(s);
     this.renderTrickPreview(s);
     $('cStop').style.display = isHost && !lobby ? '' : 'none';
     $('cStop').classList.toggle('on', !!s.stopAfter);
@@ -604,14 +653,22 @@ export class CardGame {
         else if (p.folded) st = 'Đã bỏ bài';
         else st = blind + (p.allIn ? 'Tất tay' : p.streetBet + ' xu');
       } else {
-        if (p.result) st = tlResultText(p.result);
+        if (p.result) {
+          const r = p.result;
+          const place = r.instant ? 'Tới trắng' : r.instantLoss ? 'Thua tới trắng' : TL_RANK_NAMES[r.rank - 1];
+          st = place + ' · ' + (r.delta > 0 ? '+' : '') + r.delta + ' xu';
+        }
         else if (p.rank) st = TL_RANK_NAMES[p.rank - 1];
         else st = (p.passed ? 'Bỏ lượt · ' : '') + `🂠 ${p.n}`;
       }
       if (p.offline) st += ' · Mất kết nối';
       if (i === s.you) return;   // bảng tên của mình: thông tin hiện ở khu vực dưới cùng
       const cls = (i === s.turn ? ' turn' : '') + (p.result ? (p.result.r > 0 ? ' win' : p.result.r < 0 ? ' lose' : '') : '') + (i === s.you ? ' me' : '');
-      plates.push(`<div class="cplate${cls}${lobby && p.lready ? ' win' : ''}" data-seat="${i}"><b>${p.id === s.host ? '👑 ' : ''}${esc(p.name)}${p.bot ? ' 🤖' : ''}</b><small>💰 ${p.chips}</small><i>${esc(st)}</i></div>`);
+      const canOpen = s.youDealer && s.phase === 'dealer' && !s.dealer.auto && s.dealer.canOpen && p.n && !p.opened;
+      const tag = canOpen ? 'button' : 'div';
+      const name = esc(p.name);
+      const label = canOpen ? ` type="button" aria-label="Mở bài của ${name}"` : '';
+      plates.push(`<${tag} class="cplate${cls}${lobby && p.lready ? ' win' : ''}${canOpen ? ' c-open-seat' : ''}" data-seat="${i}"${label}><b>${p.id === s.host ? '👑 ' : ''}${name}${p.bot ? ' 🤖' : ''}</b><small>💰 ${p.chips}</small><i>${canOpen ? 'Mở bài' : esc(st)}</i></${tag}>`);
     });
     if (this.game === 'xidach' && s.dealer && !s.youDealer) {
       const d = s.dealer;
@@ -621,10 +678,16 @@ export class CardGame {
       const cls = (s.phase === 'dealer' ? ' turn' : '') + (d.result ? (d.result.r > 0 ? ' win' : d.result.r < 0 ? ' lose' : '') : '');
       plates.push(`<div class="cplate dealer${cls}" data-seat="dealer"><b>🎩 ${esc(d.name)}${d.human ? '' : ' 🤖'}</b>${d.human ? `<small>💰 ${d.chips}</small>` : ''}<i>${esc(st)}</i></div>`);
     }
+    const openSeatFocus = document.activeElement?.closest('#cPlates button[data-seat]')?.dataset.seat;
     $('cPlates').innerHTML = plates.join('');
+    if (openSeatFocus !== undefined) {
+      const next = $('cPlates').querySelector('button[data-seat="' + openSeatFocus + '"]') ?? $('cPlates').querySelector('button');
+      next?.focus({ preventScroll: true });
+    }
     // khu vực của mình
     const acts = [], info = [];
     if (lobby) {
+      acts.push('<button class="btn" data-a="invite">🔗 Mời bạn</button>');
       // phòng chờ: người chơi bấm Sẵn sàng, chủ phòng bấm Bắt đầu (và chọn ai làm nhà cái)
       const sd = s.youDealer ? s.dealer : null;
       const rules = s.rules;
@@ -653,11 +716,7 @@ export class CardGame {
       else if (s.phase === 'dealer' && !d.auto) {
         acts.push(`<button class="btn primary" data-a="hit"${d.n >= XD.maxCards || d.score >= 21 ? ' disabled' : ''}>🂠 Rút bài</button>`);
         const closed = s.seats.filter(p => p?.n && !p.opened);
-        if (closed.length) {
-          const options = closed.map(p => `<option value="${p.seat}">${esc(p.name)}</option>`).join('');
-          acts.push(`<select id="cOpenSeat" aria-label="Người chơi cần mở bài"${d.canOpen ? '' : ' disabled'}>${options}</select>`);
-          acts.push(`<button class="btn" data-a="open"${d.canOpen ? '' : ' disabled'}>Mở bài</button>`);
-        }
+        if (closed.length && d.canOpen) info.push('Chạm tên người chơi để mở bài từng ghế');
         acts.push(`<button class="btn" data-a="stand"${d.canOpen ? '' : ' disabled'}>Mở hết</button>`);
         if (!d.canOpen) info.push(`Nhà cái cần ít nhất ${XD.dealerMin} điểm để mở bài`);
       } else if (s.phase === 'dealer') info.push('Máy đang đánh thay nhà cái…');
@@ -701,6 +760,10 @@ export class CardGame {
       if (selArr.length) acts.push(`<button class="btn small" data-a="clear">Bỏ chọn</button>`);
       if (me.result) info.push(tlResultText(me.result));
     }
+    if (this.game === 'tienlen' && this.settlementGame !== null && !this.settlementOpen) {
+      const label = s.phase === 'result' ? 'Tính xu' : 'Tính xu ván trước';
+      acts.push('<button class="btn small" id="cSettlementToggle" data-a="settlement">' + label + '</button>');
+    }
     $('cInfo').innerHTML = info.join(' · ');
     $('cActs').innerHTML = acts.join('');
     for (const b of $('cActs').querySelectorAll('button')) b.onclick = () => this.act(b.dataset.a, +b.dataset.v);
@@ -742,12 +805,18 @@ export class CardGame {
     }
     switch (a) {
       case 'rules': this.openRules(); break;
+      case 'invite': this.onInvite?.(); break;
+      case 'settlement':
+        this.settlementOpen = true;
+        this.renderUi();
+        $('cSettlementClose').focus();
+        break;
       case 'bet': this.net.send({ t: 'cbet', v }); break;
       case 'ready': this.net.send({ t: 'cready' }); break;
       case 'start': this.net.send({ t: 'cstart' }); break;
       case 'dealer': this.net.send({ t: 'cdealer' }); break;
       case 'hit': this.net.send({ t: 'chit' }); break;
-      case 'open': this.net.send({ t: 'copen', seat: Number($('cOpenSeat').value) }); break;
+      case 'open': this.net.send({ t: 'copen', seat: v }); break;
       case 'stand': this.net.send({ t: 'cstand' }); break;
       case 'play': this.net.send({ t: 'cplay', cards: [...this.sel] }); this.sel.clear(); break;
       case 'pass': this.net.send({ t: 'cpass' }); this.sel.clear(); break;
@@ -760,6 +829,18 @@ export class CardGame {
         break;
       }
     }
+  }
+
+  updateOffline(s, t, left, turnSeat) {
+    const offline = $('cOffline');
+    const active = turnSeat === 'dealer' ? (s.dealer.auto ? null : s.dealer) : s.seats[turnSeat];
+    const elapsed = t - this.receivedAt;
+    const names = [s.dealer, ...s.seats].filter(p => p?.offline).map(p =>
+      `${p.name} ${Math.max(0, Math.ceil((p.offlineLeft ?? 0) - elapsed))}s`);
+    const takeover = active?.offline ? ' · Máy xử lý lượt sau ' + Math.ceil(left) + 's' : '';
+    const notice = names.length ? 'Giữ chỗ: ' + names.join(' · ') + takeover : '';
+    if (offline.textContent !== notice) offline.textContent = notice;
+    offline.hidden = !notice;
   }
 
   // ======================= Vòng lặp =======================
@@ -848,6 +929,7 @@ export class CardGame {
       const who = turnSeat === 'dealer' ? 'Nhà cái' : turnSeat != null ? s.seats[turnSeat]?.name : null;
       const label = s.phase === 'lobby' ? '⏳ Phòng chờ' : s.phase === 'bet' ? 'Đặt cược' : s.phase === 'result' ? 'Ván mới sau' : who ? 'Lượt: ' + who : '';
       const seconds = label && s.phase !== 'lobby' ? Math.ceil(left) + 's' : '';
+      this.updateOffline(s, t, left, turnSeat);
       const timerLabel = $('cTimerLabel'), timerSeconds = $('cTimerSeconds');
       if (timerLabel.textContent !== label) timerLabel.textContent = label;
       if (timerSeconds.textContent !== seconds) timerSeconds.textContent = seconds;

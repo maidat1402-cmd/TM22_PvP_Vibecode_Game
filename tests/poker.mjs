@@ -132,3 +132,25 @@ test('Poker chỉ chủ bàn đặt tiền mù hợp lệ trong phòng chờ', (
   assert.ok(room.resume(reconnect, turn.session));
   assert.deepEqual(room.view(turn).seats[turn.seat].cards, turn.hand);
 });
+
+test('Poker qua khi miễn phí và bỏ khi phải theo sau 20 giây mất mạng', t => {
+  let clock = 10_000;
+  t.mock.method(performance, 'now', () => clock);
+  for (const action of ['check', 'fold']) {
+    const { room, players: [a, b], clients } = roomWith([1000, 1000]);
+    room.startRound();
+    const player = action === 'check' ? b : a;
+    if (action === 'check') room.playPoker(a, 'call');
+    room.disconnect(clients[player.seat].client);
+    const until = room.deadline;
+    assert.equal(player.rejoinUntil - until, 40);
+    clock = (until - 0.001) * 1000;
+    room.tick();
+    assert.equal(room.turn, player.seat);
+    clock = (until + 0.001) * 1000;
+    room.tick();
+    assert.equal(room.bySeat(player.seat), player);
+    if (action === 'check') assert.equal(room.board.length, 3);
+    else assert.equal(room.pokerSeats.get(player.seat).folded, true);
+  }
+});

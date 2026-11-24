@@ -652,3 +652,37 @@ body.touch #tlShow kbd { display: none; }
 .mode-cats .btn.on { background: var(--accent2, #ffd23f); color: #1b1630; }
 .modes label[hidden] { display: none; }
 .room .mtag.xidach, .room .mtag.tienlen, .room .mtag.poker { background: rgba(31,122,77,.55); }
+
+#cOffline { grid-column: 1 / -1; justify-self: start; margin: 0; padding: 4px 8px; max-width: 100%;
+  border: 1px solid rgba(255,209,102,.38); border-radius: 8px; background: #281e26; color: #ffe0a5; font-size: 12px; }
+#chud .c-open-seat { border: 1px solid #ffd166; background: #3b2830; color: #fff; cursor: pointer; min-height: 44px; }
+.c-open-seat i { color: #ffd166; font-weight: 800; }
+.c-open-seat:focus-visible, .c-open-seat:hover { outline: 2px solid #ffd166; outline-offset: 2px; }
+#cSettlement { position: relative; z-index: 1; width: min(660px, 100%); padding: 8px 10px; border: 1px solid #ad8453;
+  border-radius: 12px; background: #211c29; color: #fff9ef; box-shadow: 0 8px 24px #0d081477; }
+#cSettlementTitle { margin: 0; font-size: 15px; }
+#cSettlementScroll { pointer-events: auto; touch-action: pan-x pan-y; overflow: auto; max-height: min(32dvh, 190px); }
+#cSettlement table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+#cSettlement td, #cSettlement th { padding: 5px 6px; border-bottom: 1px solid #ffffff26; text-align: right; white-space: nowrap; }
+#cSettlement th:first-child { position: sticky; left: 0; background: #211c29; text-align: left; }
+#cSettlement th small { display: block; font-weight: 400; color: #d2bfaa; }
+#cSettlement td:last-child { font-weight: 800; }
+#cSettlement td.win { color: #9bf1ae; }
+#cSettlement td.lose { color: #ffaeac; }
+#practiceDrill { position: fixed; z-index: 7; top: 68px; left: 50%; translate: -50% 0; width: max-content; max-width: calc(100% - 24px);
+  padding: 8px 12px; display: grid; gap: 4px; text-align: center; background: #201a2bed; border: 1px solid #ffd166;
+  color: #fff5e0; border-radius: 10px; font-size: 13px; pointer-events: none; }
+#practiceDrill[hidden], #practiceDrillActions[hidden] { display: none; }
+#practiceDrill strong { font-size: 15px; color: #ffd166; }
+#practiceDrill[data-state="success"] { border-color: #9bf1ae; }
+#practiceDrillActions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+#cSettlement thead th { white-space: normal; line-height: 1.2; }
+#cSettlement tbody th { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 450px) {
+  #cSettlement table { font-size: 11px; }
+  #cSettlement td, #cSettlement th { padding: 5px 4px; }
+  #cSettlement tbody th { max-width: 74px; }
+  .cplate { max-width: 136px; }
+  .cplate > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}

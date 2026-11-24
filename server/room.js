@@ -151,6 +151,43 @@ export class Room {
     this.addFake({ fake: 'bot', sideId: 'bots', name: '🤖 Võ sĩ tập', char: chars[(Math.random() * chars.length) | 0], x: cx, z: cz, home: [cx, cz], ai: { range: 5 } });
   }
 
+  startPracticeDrill(p, m, t) {
+    if (!this.practice || p.dead || this.drill) return;
+    if (this.count !== 1) {
+      return this.send(p, { t: 'sys', msg: 'Bài tập khắc chế chỉ mở khi bạn ở một mình trong phòng Đấu tập.' });
+    }
+    const quake = m.kind === 'quake';
+    if (!quake && m.kind !== 'wall') return;
+    const aim = validAim(m.d);
+    if (!aim || Math.hypot(aim[0], aim[2]) < 0.5) return;
+    const h = hlen(aim[0], aim[2]), dx = aim[0] / h, dz = aim[2] / h;
+    // Yuki đứng lệch bên để người tập nhìn thấy tường và nhân vật của mình.
+    const offset = quake ? 4.5 : 0.3, side = quake ? 0 : 2.4;
+    const [cx, cz] = this.clampToArena(p.x + dx * offset + dz * side, p.z + dz * offset - dx * side);
+    const [x, z] = this.freeSpot(cx, cz, p.x, p.z);
+    const dirX = quake ? -dx : (p.x + dx * 3.5 - x);
+    const dirZ = quake ? -dz : (p.z + dz * 3.5 - z);
+    const char = quake ? 'gantetsu' : 'yuki';
+    const trainer = this.addFake({ fake: 'trainer', sideId: 'bots', char, name: quake ? 'Gantetsu · Đấu tập' : 'Yuki · Đấu tập',
+      x, z, yaw: Math.atan2(dirX, dirZ), awUntil: t + 12 });
+    const skills = charSkills(getChar(char), true);
+    const sk = skills.findIndex(s => s.type === (quake ? 'quake' : 'icewall'));
+    const s = skills[sk];
+    this.drill = { player: p.id, source: trainer.id, kind: m.kind, until: t + s.delay + (quake ? 0.45 : s.dur) };
+    this.send(p, { t: 'pdrill', kind: m.kind, state: 'active' });
+    this.handleCast(trainer, { sk, aw: 1, p: [x, 0, z], d: [dirX, 0, dirZ] }, t);
+  }
+
+  finishPracticeDrill(state) {
+    const drill = this.drill;
+    this.drill = null;
+    for (const prop of this.props.filter(prop => prop.owner === drill.source)) this.removeProp(prop, 'time');
+    const trainer = this.players.get(drill.source);
+    if (trainer) this.removeFake(trainer, 'expire');
+    const player = this.players.get(drill.player);
+    if (player) this.send(player, { t: 'pdrill', kind: drill.kind, state });
+  }
+
   // Vật lý đơn giản cho người chơi giả: (wx, wz) là vận tốc muốn đi; bị đánh thì văng theo đòn
   stepFake(p, dt, wx, wz, t) {
     const v = p.vel;
@@ -185,7 +222,10 @@ export class Room {
         this.stepFake(p, dt, v ? dx / d * v : 0, v ? dz / d * v : 0, t);
         break;
       }
-      case 'bot': this.botAI(p, t, dt, stun); break;
+      case 'bot':
+        if (this.drill) this.stepFake(p, dt, 0, 0, t);
+        else this.botAI(p, t, dt, stun);
+        break;
       case 'decoy': {
         // phân thân mồi: chạy thẳng, máu hiện y như chủ
         const M = this.players.get(p.master);
@@ -602,6 +642,7 @@ export class Room {
         this.broadcast({ t: 'hold', id: p.id, sk: m.sk | 0, max: hs.hold.max }, p.id);
         break;
       }
+      case 'pdrill': return this.startPracticeDrill(p, m, t);
       case 'pfill': // đấu tập: nạp đầy thanh dị biến
         if (!this.practice || p.dead || p.awUntil > t) return;
         p.awk = AWAKEN.max; p.mp = GAME.maxMana;
@@ -909,7 +950,12 @@ export class Room {
   damageProp(src, pr, amount) {
     if (pr.dead) return false;
     pr.hp -= Math.max(1, Math.round(amount));
-    if (pr.hp <= 0) this.removeProp(pr, 'break');
+    if (pr.hp <= 0) {
+      this.removeProp(pr, 'break');
+      if (this.drill?.kind === 'wall' && pr.owner === this.drill.source && src?.id === this.drill.player) {
+        this.finishPracticeDrill('success');
+      }
+    }
     else this.broadcast({ t: 'prop', id: pr.id, hp: Math.ceil(pr.hp) });
     return true;
   }
@@ -1601,7 +1647,9 @@ export class Room {
         for (const q of this.targets(e, false)) {
           if (Math.hypot(q.x - px, q.z - pz) > s.range) continue;
           const g = arenaGround(this.arena, q.x, q.z, q.y + 0.1, BODY_R);
-          if (q.y - g > s.airTol) { this.broadcast({ t: 'evade', id: q.id }); continue; }
+          const dodged = q.y - g > s.airTol;
+          if (this.drill?.source === e.owner && this.drill.player === q.id) this.drill.outcome = dodged ? 'success' : 'miss';
+          if (dodged) { this.broadcast({ t: 'evade', id: q.id }); continue; }
           this.damage(src, q, s.dmg, [0, s.kbUp, 0], s, [q.x, q.y + 1, q.z]);
         }
         // cột đá của mình vỡ tung, mảnh đá bắn ra xung quanh
@@ -1694,6 +1742,9 @@ export class Room {
     const t = now();
     const dt = Math.min(0.1, t - this.lastTick);
     this.lastTick = t;
+    if (this.drill && (this.count !== 1 || !this.players.has(this.drill.player) || t >= this.drill.until || this.drill.outcome)) {
+      this.finishPracticeDrill(this.drill.outcome || 'miss');
+    }
 
     for (const p of [...this.players.values()]) {
       if (p.dead) {
