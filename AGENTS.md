@@ -119,8 +119,8 @@ node server/index.js --port 3123   # chạy cổng khác để test, không đ�
   - Hành động có hồi chiêu phải giữ mốc ở server (ví dụ `dodge` dùng `p.dodgeAt`), nếu không spam gói là bất tử.
 - **Nhịp tim** (`server/index.js`): server ping mỗi 5 s; kết nối không trả pong trước lượt sau thì bị `terminate()` và rời phòng. Ping/pong cũng dùng để đo RTT (`ws.rtt`, trung bình trượt). Chỉ gửi ping mới khi đã nhận pong của ping trước (`ws.pingAt`), không thì RTT đo từ mốc sai.
 - **Id phòng** do hub cấp (`randomUUID()` ở gói `create` trong `server/index.js`) rồi truyền vào constructor của mọi loại phòng (`Room`, `ShooterRoom`, `CardRoom`). Đừng thêm bộ đếm riêng trong từng loại phòng: hai bộ đếm sẽ trùng id sau vài nghìn phòng.
-- **Nhịp mạng** chỉnh tập trung ở `NET` trong `shared/config.js`. Hiện tại: tick 30 Hz, snapshot 30 Hz, client gửi vị trí 30 Hz, nội suy trễ 70 ms.
-- **Nén gói tin:** server bật `permessage-deflate`, gói nhỏ hơn 128 byte gửi thẳng không nén. Nén giảm khoảng 70% băng thông nhưng tốn gần gấp đôi CPU.
+- **Nhịp mạng** chỉnh tập trung ở `NET` trong `shared/config.js`. Tick và nhịp client gửi vị trí đều 30 Hz, nội suy trễ 70 ms. Server gửi snapshot vị trí 30 Hz khi ổn định, hạ từng kết nối nghẽn xuống 20 Hz trong server/snapshots.js. Chỉ snapshot đầy đủ được bỏ qua. Sự kiện trận đấu giữ thứ tự gửi.
+- **Nén gói tin:** server bật `permessage-deflate` và giữ từ điển phía gửi. Gói pong JSON tắt nén tường minh. Đo chi phí nén bằng `--compression off` trên server thử.
 
 ### Ai quyết định cái gì
 

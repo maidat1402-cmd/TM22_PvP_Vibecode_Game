@@ -4,6 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -11,6 +12,8 @@ import { Room } from './room.js';
 import { ShooterRoom } from './shooter.js';
 import { CardRoom } from './cards.js';
 import { PokerRoom } from './poker.js';
+import { acknowledgeSnapshot, snapshotStats } from './snapshots.js';
+import { startServerLog, closeServerLog, logEvent, logError, logFatal } from './log.js';
 import { CARD_GAMES } from '../shared/cards.js';
 import { playableChar } from '../shared/characters.js';
 import { VERSION } from '../shared/version.js';
@@ -29,6 +32,11 @@ const PORT = +(arg('port', process.env.PORT || 3000));
 const HOST = String(arg('host', process.env.HOST || '0.0.0.0'));
 const USE_UPNP = !!arg('upnp', false);
 const USE_TUNNEL = !!arg('tunnel', false);
+const LEGACY_SNAPSHOTS = arg('snapshot-policy') === 'legacy';
+const COMPRESSION = arg('compression') !== 'off';
+const logDir = arg('log-dir');
+const logFile = arg('no-log', false) ? null : startServerLog(typeof logDir === 'string' ? logDir : path.join(ROOT, 'logs'));
+if (logFile) process.on('uncaughtExceptionMonitor', logFatal);
 
 const publicInfo = { version: VERSION, port: PORT, lan: [], publicUrl: null, note: null };
 
@@ -79,6 +87,7 @@ class Hub {
     this.clients = new Set(); // các kết nối đang mở
     this.rooms = new Map();
     this.nextId = 1;
+    this.legacySnapshots = LEGACY_SNAPSHOTS;
   }
   roomList() { return [...this.rooms.values()].map(r => r.info()); }
   roomsChanged() {
@@ -88,6 +97,7 @@ class Hub {
   }
   leaveRoom(c) {
     if (c.room) { const r = c.room; c.room = null; r.remove(c.id); }
+    c.ws.snapshotFlow = null;
   }
   onConnection(ws) {
     const c = { id: this.nextId++, ws, name: 'Player', char: 'kaze', room: null, session: randomUUID() };
@@ -101,8 +111,15 @@ class Hub {
       try { m = JSON.parse(raw, (k, v) => (k === 'toString' || k === 'valueOf' ? undefined : v)); } catch { return; }
       if (!m || typeof m.t !== 'string') return;
       switch (m.t) {
-        case 'ping': return send({ t: 'pong', c: m.c });
+        case 'ping':
+          return ws.send(JSON.stringify({ t: 'pong', c: m.c,
+            at: m.measure === true ? Date.now() : undefined,
+            queue: m.measure === true ? ws.bufferedAmount : undefined }), { compress: false });
+        case 'snapAck':
+          if (ws.wantsSnapAck && c.room?.id === m.room) acknowledgeSnapshot(ws, m.room, m.seq);
+          return;
         case 'hello':
+          ws.wantsSnapAck ||= m.snapAck === true;
           c.name = String(m.name || 'Player').replace(/[<>]/g, '').slice(0, 16).trim() || 'Player';
           c.char = playableChar(m.char).id;
           return send({ t: 'rooms', list: this.roomList() });
@@ -148,15 +165,24 @@ class Hub {
     };
     // gói tin dị dạng làm code xử lý ném lỗi thì chỉ bỏ gói đó, không để văng cả server (mọi người bị out)
     ws.on('message', raw => {
-      try { onMsg(raw); } catch (e) { if (!c.errLogged) { c.errLogged = true; console.error('[msg]', e); } }  // chỉ ghi 1 lần/kết nối, tránh spam log
+      try { onMsg(raw); } catch (error) {
+        if (!c.errLogged) {
+          c.errLogged = true;
+          console.error('[msg]', error);
+          logError('message_error', error, { client: c.id, room: c.room?.id });
+        }
+      }
     });
-    ws.on('close', () => {
+    ws.on('close', code => {
+      closedSocketBytes += ws._socket?.bytesWritten ?? 0;
+      disconnects++;
+      if (code !== 1000 && code !== 1001) abnormalDisconnects++;
       this.clients.delete(c);
       if (c.room instanceof CardRoom) c.room.disconnect(c);
       else this.leaveRoom(c);
       c.room = null;
     });
-    ws.on('error', () => {});
+    ws.on('error', error => logError('socket_error', error, { client: c.id, room: c.room?.id }));
     // nhịp tim: trình duyệt tự trả lời ping (kể cả khi tab bị ẩn)
     // Đồng thời đo RTT (giây) từ ping/pong của WebSocket: phòng bắn súng dùng để bù trễ khi kiểm tra trúng đạn.
     // Trình duyệt tự trả pong, client không giả được giá trị nhỏ hơn thực tế.
@@ -167,14 +193,16 @@ class Hub {
       const s = (performance.now() - ws.pingAt) / 1000;
       ws.pingAt = 0;
       ws.rtt = ws.rtt == null ? s : ws.rtt * 0.6 + s * 0.4;
+      ws.rttMin = Math.min(ws.rttMin ?? Infinity, s);
     });
     sendPing(ws);
   }
 }
 
 const hub = new Hub();
-const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
-  // Nén gói tin. Gói < 128 byte (lệnh bắn, ping…) gửi thẳng, không nén, để không thêm trễ.
+let disconnects = 0, abnormalDisconnects = 0, heartbeatTimeouts = 0, closedSocketBytes = 0;
+const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: COMPRESSION && {
+  // Giữ từ điển cho snapshot. Ping/pong JSON được gửi không nén bằng tùy chọn riêng.
   threshold: 128,
   zlibDeflateOptions: { level: 1, memLevel: 8 },
   serverNoContextTakeover: false,   // giữ từ điển giữa các gói → snapshot lặp lại nén rất tốt
@@ -182,7 +210,7 @@ const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: {
   concurrencyLimit: 16,
 }, maxPayload: 16 * 1024 });
 wss.on('connection', ws => hub.onConnection(ws));
-wss.on('error', () => {});   // lỗi cổng đã do server.on('error') báo; không có listener thì process chết trước khi in thông báo
+wss.on('error', error => logError('websocket_server_error', error));
 // Ngắt kết nối "ma": tải lại trang / mất mạng mà trình duyệt không kịp báo đóng.
 // Không trả lời ping trong 2 lượt (~10 giây) thì cắt. Bàn bài giữ chỗ cho người mất kết nối.
 function sendPing(ws) {
@@ -191,11 +219,43 @@ function sendPing(ws) {
 }
 setInterval(() => {
   for (const ws of wss.clients) {
-    if (!ws.isAlive) { ws.terminate(); continue; }
+    if (!ws.isAlive) { heartbeatTimeouts++; ws.terminate(); continue; }
     ws.isAlive = false;
     if (!ws.pingAt) sendPing(ws);   // ping trước chưa có pong: gửi lại sẽ đo RTT từ mốc sai (quá nhỏ)
   }
 }, 5000);
+
+// Mẫu tổng hợp giúp phân biệt hàng đợi Node, ACK chậm và trễ trên event loop.
+const loopDelay = monitorEventLoopDelay({ resolution: 10 });
+loopDelay.enable();
+let cpuStart = process.cpuUsage(), sampleAt = performance.now(), sampledSocketBytes = 0;
+
+function logNetworkSample() {
+  const t = performance.now(), elapsed = t - sampleAt;
+  const cpu = process.cpuUsage(cpuStart);
+  let slow = 0, socketBytes = closedSocketBytes;
+  for (const { ws, room } of hub.clients) {
+    socketBytes += ws._socket?.bytesWritten ?? 0;
+    if (room && ws.snapshotFlow?.room === room.id && ws.snapshotFlow.slow) slow++;
+  }
+  const sample = {
+    intervalMs: Math.round(elapsed), online: hub.clients.size, rooms: hub.rooms.size, slow,
+    cpuOneCorePct: Math.round((cpu.user + cpu.system) / Math.max(1, elapsed) / 10),
+    wsOutMbps: +(Math.max(0, socketBytes - sampledSocketBytes) * 8 / Math.max(1, elapsed) / 1000).toFixed(3),
+    rssMiB: Math.round(process.memoryUsage().rss / 1048576),
+    loopP95Ms: Math.round(loopDelay.percentile(95) / 10000) / 100,
+    loopMaxMs: Math.round(loopDelay.max / 10000) / 100,
+    snapshots: snapshotStats(), disconnects, abnormalDisconnects, heartbeatTimeouts,
+  };
+  logEvent('network_sample', sample);
+  disconnects = abnormalDisconnects = heartbeatTimeouts = 0;
+  sampleAt = t;
+  sampledSocketBytes = socketBytes;
+  cpuStart = process.cpuUsage();
+  loopDelay.reset();
+}
+const logTimer = setInterval(logNetworkSample, 10000);
+logTimer.unref();
 
 // ---------- Khởi động ----------
 function lanAddresses() {
@@ -211,6 +271,8 @@ function lanAddresses() {
 server.listen(PORT, HOST, async () => {
   const lan = HOST === '0.0.0.0' ? lanAddresses() : [];
   publicInfo.lan = lan.map(ip => `http://${ip}:${PORT}`);
+  logEvent('server_started', { version: VERSION, port: PORT, tunnel: USE_TUNNEL, compression: COMPRESSION, adaptive: !LEGACY_SNAPSHOTS });
+  if (logFile) console.log('  Log         : ' + logFile);
   console.log(`\n=== CHIBI CLASH SERVER v${VERSION} ===`);
   console.log(`  Máy này     : http://localhost:${PORT}`);
   for (const u of publicInfo.lan) console.log(`  Mạng nội bộ : ${u}`);
@@ -227,6 +289,7 @@ server.listen(PORT, HOST, async () => {
       console.log(`  Internet    : ${publicInfo.publicUrl || '(đã mở port ' + PORT + ', không lấy được IP ngoài)'}`);
       console.log('                (Nếu mạng dùng CGNAT thì UPnP không đủ — hãy dùng --tunnel)');
     } catch (e) {
+      logError('upnp_error', e);
       publicInfo.note = 'UPnP lỗi: ' + e.message;
       console.log('  UPnP lỗi    : ' + e.message);
     }
@@ -235,11 +298,13 @@ server.listen(PORT, HOST, async () => {
     console.log('  Tunnel      : đang khởi tạo cloudflared...');
     try {
       const { startTunnel } = await import('./tunnel.js');
-      const r = await startTunnel(PORT, ROOT);
+      const r = await startTunnel(PORT, ROOT, logEvent);
+      logEvent('tunnel_ready');
       cleanups.push(r.close);
       publicInfo.publicUrl = r.url;
       console.log(`  Internet    : ${r.url}`);
     } catch (e) {
+      logError('tunnel_start_error', e);
       publicInfo.note = 'Tunnel lỗi: ' + e.message;
       console.log('  Tunnel lỗi  : ' + e.message);
       console.log('                Cài cloudflared (winget install Cloudflare.cloudflared) hoặc đặt cloudflared.exe vào thư mục tools/');
@@ -253,14 +318,20 @@ server.listen(PORT, HOST, async () => {
     closing = true;
     console.log('\nĐang tắt server...');
     await Promise.all(cleanups.map(f => Promise.resolve(f()).catch(() => {})));
+    clearInterval(logTimer);
+    logNetworkSample();
+    logEvent('server_stopped');
+    await closeServerLog();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 });
 
-server.on('error', e => {
+server.on('error', async e => {
+  logError('server_error', e, { port: PORT });
   if (e.code === 'EADDRINUSE') console.error(`Port ${PORT} đang được dùng. Thử: npm start -- --port 3001`);
   else console.error(e);
+  await closeServerLog();
   process.exit(1);
 });

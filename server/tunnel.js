@@ -9,7 +9,7 @@ function findCloudflared(root) {
   return fs.existsSync(local) ? local : 'cloudflared';
 }
 
-export function startTunnel(port, root) {
+export function startTunnel(port, root, onEvent = () => {}) {
   return new Promise((resolve, reject) => {
     const bin = findCloudflared(root);
     let proc;
@@ -23,8 +23,14 @@ export function startTunnel(port, root) {
     };
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
-    proc.on('error', err => { if (!done) { done = true; reject(err); } });
-    proc.on('exit', code => { if (!done) { done = true; reject(new Error('cloudflared thoát với mã ' + code)); } });
+    proc.on('error', err => {
+      onEvent('tunnel_process_error', { code: err.code });
+      if (!done) { done = true; reject(err); }
+    });
+    proc.on('exit', (code, signal) => {
+      onEvent('tunnel_process_exit', { code, signal });
+      if (!done) { done = true; reject(new Error('cloudflared thoát với mã ' + code)); }
+    });
     setTimeout(() => { if (!done) { done = true; proc.kill(); reject(new Error('Hết thời gian chờ cloudflared')); } }, 30000);
   });
 }
